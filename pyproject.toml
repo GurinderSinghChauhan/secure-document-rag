@@ -1,0 +1,27 @@
+[project]
+name = "secure-document-rag"
+version = "0.1.0"
+description = "Local-first, multi-tenant RAG for regulated documents"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi==0.115.6",
+    "httpx==0.28.1",
+    "pydantic-settings==2.7.0",
+    "pypdf==5.1.0",
+    "python-docx==1.1.2",
+    "qdrant-client==1.12.1",
+    "sqlalchemy[asyncio]==2.0.36",
+    "asyncpg==0.30.0",
+    "uvicorn[standard]==0.34.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest==8.3.4",
+    "pytest-asyncio==0.25.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+asyncio_default_fixture_loop_scope = "function"
