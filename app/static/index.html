@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="dark">
+    <title>Secure Document RAG</title>
+    <link rel="stylesheet" href="/assets/app.css">
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">SELF-HOSTED · PRIVATE</p>
+          <h1>Document Assistant</h1>
+        </div>
+        <button id="settings-toggle" class="secondary-button" type="button" aria-expanded="false">Connection settings</button>
+      </header>
+
+      <section id="settings-panel" class="settings-panel" hidden>
+        <label>
+          Tenant ID
+          <input id="tenant-id" autocomplete="organization" placeholder="acme-health" required>
+        </label>
+        <label>
+          API key
+          <input id="api-key" type="password" autocomplete="off" placeholder="Stored only for this browser session" required>
+        </label>
+        <p>For this development UI, credentials stay only in browser session storage. Production deployments should use gateway-issued SSO cookies or short-lived tokens.</p>
+      </section>
+
+      <section id="chat-log" class="chat-log" aria-live="polite">
+        <article class="message assistant-message">
+          <p>Ask a question about documents you are authorized to access. Answers include source citations when evidence is found.</p>
+        </article>
+      </section>
+
+      <form id="chat-form" class="composer">
+        <label class="sr-only" for="question">Question</label>
+        <textarea id="question" rows="2" maxlength="8000" placeholder="Ask about your documents…" required></textarea>
+        <div class="composer-actions">
+          <span id="status" role="status">Ready</span>
+          <button id="send-button" type="submit">Send</button>
+        </div>
+      </form>
+    </main>
+    <script src="/assets/app.js" defer></script>
+  </body>
+</html>

@@ -1,7 +1,7 @@
 [project]
 name = "secure-document-rag"
 version = "0.1.0"
-description = "Local-first, multi-tenant RAG for regulated documents"
+description = "Self-hosted, multi-tenant RAG for regulated documents"
 requires-python = ">=3.12"
 dependencies = [
     "fastapi==0.115.6",

@@ -1,6 +1,6 @@
 # Secure Document RAG
 
-Local-first, multi-tenant retrieval-augmented generation (RAG) for sensitive healthcare, legal, and financial documents. Documents, embeddings, vector search, and generation stay inside your controlled network.
+Self-hosted, multi-tenant retrieval-augmented generation (RAG) for sensitive healthcare, legal, and financial documents. Documents, embeddings, vector search, and generation stay inside your controlled network.
 
 ## What this starter provides
 
@@ -11,6 +11,11 @@ Local-first, multi-tenant retrieval-augmented generation (RAG) for sensitive hea
 - Docker deployment that exposes the application only on `127.0.0.1` by default; Qdrant and Ollama are private to the Docker network.
 
 This is an application foundation, not a compliance certification. HIPAA, GLBA, PCI DSS, SEC, GDPR, and legal-hold obligations require organization-specific controls, policies, reviews, and evidence.
+
+## Documentation
+
+- [Functional guide](docs/functional-guide.md): user roles, document lifecycle, expected behavior, and operational limitations.
+- [Technical guide](docs/technical-guide.md): architecture, data flow, API contract, configuration, operations, and production gaps.
 
 ## Quick start
 
@@ -71,6 +76,12 @@ curl -X POST http://127.0.0.1:8080/v1/query \
 `DELETE /v1/documents/{document_id}` removes a document's chunks from Qdrant and soft-deletes its PostgreSQL record. It requires the `admin` role. Implement a legal-hold workflow before enabling deletion for regulated records.
 
 `GET /healthz` reports process liveness. `GET /readyz` checks PostgreSQL, Qdrant, and Ollama readiness; it must be used by the deployment platform before routing traffic.
+
+## Chat UI
+
+The API serves a basic same-origin chat UI at `http://127.0.0.1:8080/`. It calls only `POST /v1/query` and renders the returned citations; it never connects to Ollama or Qdrant from the browser.
+
+The basic UI retains the API key in browser session storage for development convenience. Put the API behind an SSO-enabled gateway and replace this development credential flow with short-lived, HTTP-only session credentials before providing it to end users.
 
 ## Production deployment
 

@@ -5,6 +5,8 @@ from uuid import uuid4
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request, status
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -33,6 +35,7 @@ async def lifespan(_: FastAPI):
 
 app = FastAPI(title="Secure Document RAG", version="0.2.0", docs_url=None, redoc_url=None, lifespan=lifespan)
 app.add_middleware(TrustedHostMiddleware, allowed_hosts=get_settings().allowed_host_list)
+app.mount("/assets", StaticFiles(directory="app/static"), name="assets")
 
 
 @app.middleware("http")
@@ -74,6 +77,11 @@ async def read_limited_body(request: Request) -> bytes:
 @app.get("/healthz")
 async def healthz() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@app.get("/", include_in_schema=False)
+async def chat_ui() -> FileResponse:
+    return FileResponse("app/static/index.html")
 
 
 @app.get("/readyz", response_model=ReadinessResponse)
