@@ -16,6 +16,8 @@ button, input, textarea { font: inherit; }
 
 h1 { margin: 2px 0 0; font-size: clamp(1.35rem, 3vw, 2rem); letter-spacing: -0.04em; }
 
+h2 { margin: 2px 0 0; font-size: 1.05rem; letter-spacing: -0.02em; }
+
 .eyebrow { margin: 0; color: #aeb7ff; font-size: .72rem; font-weight: 800; letter-spacing: .13em; }
 
 .secondary-button, #send-button { border: 0; border-radius: 10px; cursor: pointer; font-weight: 700; }
@@ -34,6 +36,32 @@ h1 { margin: 2px 0 0; font-size: clamp(1.35rem, 3vw, 2rem); letter-spacing: -0.0
 
 .settings-panel p { grid-column: 1 / -1; margin: 0; color: #959dbf; font-size: .79rem; line-height: 1.45; }
 
+.upload-panel { display: grid; gap: 14px; padding: 16px; border: 1px solid #313657; border-radius: 14px; background: #171925; }
+
+.section-heading, .upload-actions { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+
+.section-heading > span { color: #959dbf; font-size: .78rem; }
+
+.upload-form { display: grid; gap: 13px; }
+
+.file-picker { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 11px; border: 1px dashed #5e6996; border-radius: 9px; color: #dce1ff; font-size: .9rem; font-weight: 700; }
+
+.file-picker input { max-width: 64%; color: #c7cdf2; font-size: .8rem; }
+
+.acl-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+.acl-fields label { display: grid; gap: 7px; color: #bec4e8; font-size: .84rem; font-weight: 700; }
+
+.acl-fields span { color: #8991b5; font-weight: 500; }
+
+.acl-fields input { padding: 10px 11px; }
+
+.upload-actions p { margin: 0; color: #959dbf; font-size: .79rem; line-height: 1.4; }
+
+#upload-button { padding: 10px 14px; border: 0; border-radius: 10px; color: #fff; background: #3477a7; cursor: pointer; font-weight: 700; white-space: nowrap; }
+
+#upload-button:disabled { cursor: wait; opacity: .55; }
+
 .chat-log { display: grid; align-content: start; gap: 14px; min-height: 200px; padding: 4px 0; overflow-y: auto; }
 
 .message { max-width: 82%; padding: 13px 15px; border-radius: 14px; line-height: 1.55; }
@@ -43,12 +71,6 @@ h1 { margin: 2px 0 0; font-size: clamp(1.35rem, 3vw, 2rem); letter-spacing: -0.0
 .assistant-message { justify-self: start; border: 1px solid #303655; background: #1a1d2b; }
 
 .user-message { justify-self: end; color: #fff; background: #5158d6; }
-
-.citation-list { display: grid; gap: 8px; margin: 12px 0 0; }
-
-.citation { padding: 9px 10px; border-left: 3px solid #8692ff; border-radius: 4px 8px 8px 4px; color: #c6cbed; background: #10121d; font-size: .82rem; }
-
-.citation strong { color: #f0f1ff; }
 
 .composer { display: grid; gap: 10px; padding: 12px; border: 1px solid #363c5d; border-radius: 14px; background: #191c2a; }
 
@@ -71,5 +93,9 @@ textarea { min-height: 58px; resize: vertical; padding: 12px; line-height: 1.45;
   .topbar { align-items: flex-start; flex-direction: column; }
   .settings-panel { grid-template-columns: 1fr; }
   .settings-panel p { grid-column: auto; }
+  .acl-fields { grid-template-columns: 1fr; }
+  .section-heading, .upload-actions { align-items: flex-start; flex-direction: column; }
+  .file-picker { align-items: flex-start; flex-direction: column; }
+  .file-picker input { max-width: 100%; }
   .message { max-width: 94%; }
 }

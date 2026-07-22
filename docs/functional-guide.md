@@ -4,7 +4,7 @@
 
 Secure Document RAG lets authorized users ask questions over private document collections. It is designed for internal healthcare, legal, and financial workflows where document text, embeddings, retrieval, and answer generation must remain within an approved environment.
 
-The service is evidence-first: it returns the answer together with the document chunks used to create it. If it cannot find authorized, relevant material, it declines to answer rather than guessing.
+The service is evidence-first internally: it generates answers only from retrieved document chunks. If it cannot find authorized, relevant material, it declines to answer rather than guessing.
 
 ## Roles and access
 
@@ -43,12 +43,7 @@ The service retains extracted chunks in Qdrant and metadata in PostgreSQL, but d
 
 An authorized user sends `POST /v1/query` with a question and optional `top_k` value. The system embeds the question through the self-hosted model service, retrieves only chunks that match the tenant and document ACL, then asks the self-hosted chat model to answer from that context.
 
-The response includes:
-
-- `answer`: grounded response from the self-hosted model.
-- `citations`: document ID, document name, chunk index, and similarity score for the context used.
-
-If there are no permitted results above the configured similarity threshold, the response says it does not have enough information and returns no citations.
+The response includes only `answer`, a grounded response from the self-hosted model. If there are no permitted results above the configured similarity threshold, the response says it does not have enough information.
 
 ## Deleting a document
 
@@ -59,6 +54,5 @@ Do not enable this operation for records subject to legal hold, healthcare reten
 ## User-facing behavior and expectations
 
 - Answers may be incomplete if source documents are incomplete, poorly scanned, inaccessible to the caller, or not retrieved.
-- Citations show supporting chunks, not a legal, medical, or financial determination.
 - Users should review source documents before relying on answers for clinical care, legal advice, trading, lending, compliance, or other high-impact decisions.
 - The service is not a substitute for professional review or a compliance certification.

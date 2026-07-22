@@ -30,7 +30,7 @@ class VectorStore:
     async def search(self, principal: Principal, embedding: list[float], limit: int) -> list[models.ScoredPoint]:
         role_match = [models.FieldCondition(key="allowed_roles", match=models.MatchAny(any=principal.roles))] if principal.roles else []
         user_match = models.FieldCondition(key="allowed_users", match=models.MatchValue(value=principal.user_id))
-        access_filter = models.Filter(should=[*role_match, user_match], min_should=models.MinShould(conditions=1))
+        access_filter = models.Filter(min_should=models.MinShould(conditions=[*role_match, user_match], min_count=1))
         collection = self.collection_name(principal.tenant_id)
         if not await self.client.collection_exists(collection):
             return []

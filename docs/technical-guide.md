@@ -16,7 +16,7 @@ All services are intended to run in a private network. Docker Compose publishes 
 | --- | --- | --- |
 | FastAPI | Authentication, authorization, parsing, orchestration, lifecycle API | None |
 | Model server | Self-hosted OpenAI-compatible embedding and chat inference | Model weights |
-| Qdrant | Cosine similarity search over text chunks and ACL payload filters | Vectors, chunk text, citations metadata |
+| Qdrant | Cosine similarity search over text chunks and ACL payload filters | Vectors, chunk text, and source metadata |
 | PostgreSQL | Document registry, SHA-256 deduplication, soft-delete state, audit events | Metadata only |
 
 ## Data flow
@@ -40,7 +40,7 @@ All services are intended to run in a private network. Docker Compose publishes 
 4. Results below `MIN_RETRIEVAL_SCORE` are excluded.
 5. The API includes only as many chunks as fit within `MAX_CONTEXT_CHARACTERS`.
 6. The chat prompt instructs the model server to answer only from supplied context and disregard instructions found in documents.
-7. The API returns the answer and citations; the query text is never added to the audit record.
+7. The API returns only the answer; retrieved source metadata and the query text are not added to the audit record or response.
 
 ## API contract
 

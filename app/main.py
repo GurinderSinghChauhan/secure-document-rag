@@ -16,7 +16,7 @@ from .chunking import chunk_text
 from .config import get_settings
 from .database import DocumentRecord, dispose_database, get_session, initialize_database
 from .document_parser import extract_text
-from .models import DeleteResponse, Citation, IngestResponse, Principal, QueryRequest, QueryResponse, ReadinessResponse
+from .models import DeleteResponse, IngestResponse, Principal, QueryRequest, QueryResponse, ReadinessResponse
 from .providers import ModelClient
 from .repository import database_is_ready, document_exists, get_document, mark_document_deleted
 from .vector_store import VectorStore
@@ -162,7 +162,7 @@ async def query_documents(
     matches = await vectors.search(principal, embedding, payload.top_k)
     if not matches:
         await record(session, "query_completed", principal.tenant_id, principal.user_id, result_count=0)
-        return QueryResponse(answer="I do not have enough information in the documents you are allowed to access.", citations=[])
+        return QueryResponse(answer="I do not have enough information in the documents you are allowed to access.")
     context_parts: list[str] = []
     context_size = 0
     for index, match in enumerate(matches, start=1):
@@ -172,6 +172,5 @@ async def query_documents(
         context_parts.append(source)
         context_size += len(source)
     answer = await model_server.answer(payload.question, "\n\n".join(context_parts))
-    citations = [Citation(document_id=match.payload["document_id"], document_name=match.payload["document_name"], chunk_index=match.payload["chunk_index"], score=round(match.score, 4)) for match in matches[:len(context_parts)]]
-    await record(session, "query_completed", principal.tenant_id, principal.user_id, result_count=len(citations))
-    return QueryResponse(answer=answer, citations=citations)
+    await record(session, "query_completed", principal.tenant_id, principal.user_id, result_count=len(context_parts))
+    return QueryResponse(answer=answer)

@@ -29,15 +29,45 @@
         <p>For this development UI, credentials stay only in browser session storage. Production deployments should use gateway-issued SSO cookies or short-lived tokens.</p>
       </section>
 
+      <section class="upload-panel" aria-labelledby="upload-title">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">ADMIN</p>
+            <h2 id="upload-title">Index a document</h2>
+          </div>
+          <span id="upload-status" role="status">PDF, DOCX, or TXT</span>
+        </div>
+        <form id="upload-form" class="upload-form">
+          <label class="file-picker" for="document-file">
+            <span>Select document</span>
+            <input id="document-file" type="file" accept="text/plain,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" required>
+          </label>
+          <div class="acl-fields">
+            <label>
+              Allowed roles <span>(optional)</span>
+              <input id="allowed-roles" placeholder="clinician, legal-reviewer">
+            </label>
+            <label>
+              Allowed users <span>(optional)</span>
+              <input id="allowed-users" placeholder="user-123, user-456">
+            </label>
+          </div>
+          <div class="upload-actions">
+            <p>Without an ACL, the document inherits the uploading admin's roles.</p>
+            <button id="upload-button" type="submit">Upload and index</button>
+          </div>
+        </form>
+      </section>
+
       <section id="chat-log" class="chat-log" aria-live="polite">
         <article class="message assistant-message">
-          <p>Ask a question about documents you are authorized to access. Answers include source citations when evidence is found.</p>
+          <p>Ask a question about documents you are authorized to access.</p>
         </article>
       </section>
 
       <form id="chat-form" class="composer">
         <label class="sr-only" for="question">Question</label>
-        <textarea id="question" rows="2" maxlength="8000" placeholder="Ask about your documents…" required></textarea>
+        <textarea id="question" rows="2" minlength="3" maxlength="8000" placeholder="Ask about your documents…" required></textarea>
         <div class="composer-actions">
           <span id="status" role="status">Ready</span>
           <button id="send-button" type="submit">Send</button>

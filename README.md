@@ -7,7 +7,7 @@ Self-hosted, multi-tenant retrieval-augmented generation (RAG) for sensitive hea
 - A self-hosted OpenAI-compatible model server for embeddings and answer generation.
 - Self-hosted **Qdrant** for vector storage, with one collection per tenant.
 - **PostgreSQL** system of record for document lifecycle and metadata-only audit events.
-- FastAPI service with API-key authentication, tenant enforcement, document-level ACLs, bounded retrieval context, source citations, and readiness probes.
+- FastAPI service with API-key authentication, tenant enforcement, document-level ACLs, bounded retrieval context, and readiness probes.
 - Docker deployment that exposes the application only on `127.0.0.1` by default; Qdrant and Ollama are private to the Docker network.
 
 This is an application foundation, not a compliance certification. HIPAA, GLBA, PCI DSS, SEC, GDPR, and legal-hold obligations require organization-specific controls, policies, reviews, and evidence.
@@ -47,7 +47,7 @@ curl -X POST http://127.0.0.1:8080/v1/query \
 2. **Tenant boundary:** An API key is bound to exactly one tenant, and each tenant receives a distinct Qdrant collection.
 3. **Document ACL:** Uploads can be restricted to roles and/or explicit users. Retrieval applies those filters before generation.
 4. **No sensitive content in logs:** PostgreSQL audit records include only timestamps, actor/tenant IDs, action, and document IDs; queries and chunk text are never logged.
-5. **Grounded responses:** The model is told to use only retrieved context and returns citations for every answer.
+5. **Grounded responses:** The model is told to use only retrieved context. Retrieved sources remain internal and are not returned to the client.
 6. **Private network:** PostgreSQL and Qdrant have no host port mappings. The model server remains on the host at `127.0.0.1:1234` and is reached only by the API container. Do not add telemetry, cloud fallback, or third-party observability exporters for regulated workloads without a reviewed data-flow assessment.
 7. **Safe lifecycle:** Content is SHA-256 de-duplicated per tenant, tracked in PostgreSQL, and can be removed through an admin-only delete endpoint.
 
@@ -69,7 +69,7 @@ curl -X POST http://127.0.0.1:8080/v1/query \
 - `X-Allowed-Roles`: comma-separated role list
 - `X-Allowed-Users`: comma-separated user IDs
 
-`POST /v1/query` accepts `{ "question": "...", "top_k": 5 }` and returns `answer` plus source citations. A caller must provide `X-API-Key` and matching `X-Tenant-ID` for both routes.
+`POST /v1/query` accepts `{ "question": "...", "top_k": 5 }` and returns only the final `answer`. A caller must provide `X-API-Key` and matching `X-Tenant-ID` for both routes.
 
 `DELETE /v1/documents/{document_id}` removes a document's chunks from Qdrant and soft-deletes its PostgreSQL record. It requires the `admin` role. Implement a legal-hold workflow before enabling deletion for regulated records.
 
@@ -77,13 +77,13 @@ curl -X POST http://127.0.0.1:8080/v1/query \
 
 ## Chat UI
 
-The API serves a basic same-origin chat UI at `http://127.0.0.1:8080/`. It calls only `POST /v1/query` and renders the returned citations; it never connects to Ollama or Qdrant from the browser.
+The API serves a basic same-origin chat UI at `http://127.0.0.1:8080/`. An administrator can upload and index PDF, DOCX, and TXT documents from the UI, while users can ask questions and see only the final answer. The browser calls only the secured RAG API; it never connects to the model server or Qdrant directly.
 
 The basic UI retains the API key in browser session storage for development convenience. Put the API behind an SSO-enabled gateway and replace this development credential flow with short-lived, HTTP-only session credentials before providing it to end users.
 
 ## Production deployment
 
-- The Compose file is intended for a single-node private deployment. It binds only the API to loopback; place an authenticated TLS/mTLS gateway in front of it.
+- The Compose file is intended for a single-node private deployment. It binds only the API to loopback; PostgreSQL and Qdrant have no host-port mappings. Place an authenticated TLS/mTLS gateway in front of the API.
 - Replace Compose volumes with encrypted, backed-up storage in your deployment platform. Test restores, not only backups.
 - Move schema initialization to reviewed Alembic migrations before multi-replica production rollout. The included startup initialization is safe for the initial schema but is not a migration process.
 - Use a secrets manager to inject database credentials and API keys. Rotate credentials and model images on a defined schedule.

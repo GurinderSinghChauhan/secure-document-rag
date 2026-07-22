@@ -12,16 +12,8 @@ class QueryRequest(BaseModel):
     top_k: int = Field(default=5, ge=1, le=20)
 
 
-class Citation(BaseModel):
-    document_id: str
-    document_name: str
-    chunk_index: int
-    score: float
-
-
 class QueryResponse(BaseModel):
     answer: str
-    citations: list[Citation]
 
 
 class IngestResponse(BaseModel):
