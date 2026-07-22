@@ -9,10 +9,10 @@ services:
         condition: service_healthy
       qdrant:
         condition: service_healthy
-      ollama:
-        condition: service_started
     networks:
       - private
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     read_only: true
     tmpfs:
       - /tmp
@@ -62,21 +62,10 @@ services:
       - no-new-privileges:true
     restart: unless-stopped
 
-  ollama:
-    image: ollama/ollama:0.5.4
-    volumes:
-      - ollama-data:/root/.ollama
-    networks:
-      - private
-    security_opt:
-      - no-new-privileges:true
-    restart: unless-stopped
-
 networks:
   private:
     internal: true
 
 volumes:
-  ollama-data:
   postgres-data:
   qdrant-data:

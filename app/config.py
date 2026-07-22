@@ -11,9 +11,9 @@ class Settings(BaseSettings):
     tenant_api_keys_json: str
     database_url: str = "postgresql+asyncpg://secure_rag:secure_rag@postgres:5432/secure_rag"
     qdrant_url: str = "http://localhost:6333"
-    ollama_url: str = "http://localhost:11434"
-    embedding_model: str = "nomic-embed-text"
-    chat_model: str = "llama3.2:3b"
+    model_server_url: str = "http://localhost:1234/v1"
+    embedding_model: str = "text-embedding-nomic-embed-text-v1.5"
+    chat_model: str = "qwen/qwen3-4b-2507"
     max_upload_bytes: int = 26_214_400
     max_document_chunks: int = 2_000
     max_context_characters: int = 24_000

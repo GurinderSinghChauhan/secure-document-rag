@@ -4,7 +4,7 @@ Self-hosted, multi-tenant retrieval-augmented generation (RAG) for sensitive hea
 
 ## What this starter provides
 
-- Self-hosted **Ollama** for embeddings and answer generation.
+- A self-hosted OpenAI-compatible model server for embeddings and answer generation.
 - Self-hosted **Qdrant** for vector storage, with one collection per tenant.
 - **PostgreSQL** system of record for document lifecycle and metadata-only audit events.
 - FastAPI service with API-key authentication, tenant enforcement, document-level ACLs, bounded retrieval context, source citations, and readiness probes.
@@ -22,8 +22,6 @@ This is an application foundation, not a compliance certification. HIPAA, GLBA, 
 ```bash
 cp .env.example .env
 docker compose up --build -d
-docker compose exec ollama ollama pull nomic-embed-text
-docker compose exec ollama ollama pull llama3.2:3b
 ```
 
 Before starting, replace the example `TENANT_API_KEYS_JSON` and `POSTGRES_PASSWORD` values in `.env`. The service refuses to start with an example API key. Use secrets supplied by your secret manager in real deployments; do not commit `.env`.
@@ -50,7 +48,7 @@ curl -X POST http://127.0.0.1:8080/v1/query \
 3. **Document ACL:** Uploads can be restricted to roles and/or explicit users. Retrieval applies those filters before generation.
 4. **No sensitive content in logs:** PostgreSQL audit records include only timestamps, actor/tenant IDs, action, and document IDs; queries and chunk text are never logged.
 5. **Grounded responses:** The model is told to use only retrieved context and returns citations for every answer.
-6. **Private network:** PostgreSQL, Ollama, and Qdrant have no host port mappings. Do not add telemetry, cloud fallback, or third-party observability exporters for regulated workloads without a reviewed data-flow assessment.
+6. **Private network:** PostgreSQL and Qdrant have no host port mappings. The model server remains on the host at `127.0.0.1:1234` and is reached only by the API container. Do not add telemetry, cloud fallback, or third-party observability exporters for regulated workloads without a reviewed data-flow assessment.
 7. **Safe lifecycle:** Content is SHA-256 de-duplicated per tenant, tracked in PostgreSQL, and can be removed through an admin-only delete endpoint.
 
 ## Production hardening
@@ -75,7 +73,7 @@ curl -X POST http://127.0.0.1:8080/v1/query \
 
 `DELETE /v1/documents/{document_id}` removes a document's chunks from Qdrant and soft-deletes its PostgreSQL record. It requires the `admin` role. Implement a legal-hold workflow before enabling deletion for regulated records.
 
-`GET /healthz` reports process liveness. `GET /readyz` checks PostgreSQL, Qdrant, and Ollama readiness; it must be used by the deployment platform before routing traffic.
+`GET /healthz` reports process liveness. `GET /readyz` checks PostgreSQL, Qdrant, and the model server readiness; it must be used by the deployment platform before routing traffic.
 
 ## Chat UI
 

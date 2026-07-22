@@ -17,11 +17,11 @@ from .config import get_settings
 from .database import DocumentRecord, dispose_database, get_session, initialize_database
 from .document_parser import extract_text
 from .models import DeleteResponse, Citation, IngestResponse, Principal, QueryRequest, QueryResponse, ReadinessResponse
-from .providers import OllamaClient
+from .providers import ModelClient
 from .repository import database_is_ready, document_exists, get_document, mark_document_deleted
 from .vector_store import VectorStore
 
-ollama = OllamaClient()
+model_server = ModelClient()
 vectors = VectorStore()
 
 
@@ -89,7 +89,7 @@ async def readyz(session: AsyncSession = Depends(get_session)) -> ReadinessRespo
     components = {
         "database": "ready" if await database_is_ready(session) else "unavailable",
         "qdrant": "ready" if await vectors.is_ready() else "unavailable",
-        "ollama": "ready" if await ollama.is_ready() else "unavailable",
+        "model_server": "ready" if await model_server.is_ready() else "unavailable",
     }
     if any(component != "ready" for component in components.values()):
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail={"status": "unavailable", "components": components})
@@ -123,7 +123,7 @@ async def ingest_document(
     allowed_roles = parse_acl(x_allowed_roles) or principal.roles
     allowed_users = parse_acl(x_allowed_users)
     document_id = str(uuid4())
-    embeddings = await ollama.embed(chunks)
+    embeddings = await model_server.embed(chunks)
     await vectors.upsert_document(principal.tenant_id, document_id, document_name, chunks, embeddings, allowed_roles, allowed_users)
     try:
         session.add(DocumentRecord(document_id=document_id, tenant_id=principal.tenant_id, document_name=document_name, content_type=content_type, content_sha256=content_sha256, size_bytes=len(content), chunk_count=len(chunks), allowed_roles=allowed_roles, allowed_users=allowed_users, created_by=principal.user_id))
@@ -158,7 +158,7 @@ async def query_documents(
     principal: Principal = Depends(require_principal),
     session: AsyncSession = Depends(get_session),
 ) -> QueryResponse:
-    embedding = (await ollama.embed([payload.question]))[0]
+    embedding = (await model_server.embed([payload.question]))[0]
     matches = await vectors.search(principal, embedding, payload.top_k)
     if not matches:
         await record(session, "query_completed", principal.tenant_id, principal.user_id, result_count=0)
@@ -171,7 +171,7 @@ async def query_documents(
             break
         context_parts.append(source)
         context_size += len(source)
-    answer = await ollama.answer(payload.question, "\n\n".join(context_parts))
+    answer = await model_server.answer(payload.question, "\n\n".join(context_parts))
     citations = [Citation(document_id=match.payload["document_id"], document_name=match.payload["document_name"], chunk_index=match.payload["chunk_index"], score=round(match.score, 4)) for match in matches[:len(context_parts)]]
     await record(session, "query_completed", principal.tenant_id, principal.user_id, result_count=len(citations))
     return QueryResponse(answer=answer, citations=citations)
