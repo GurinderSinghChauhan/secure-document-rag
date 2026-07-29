@@ -7,27 +7,100 @@ const sendButton = document.querySelector("#send-button");
 const status = document.querySelector("#status");
 const settingsToggle = document.querySelector("#settings-toggle");
 const settingsPanel = document.querySelector("#settings-panel");
+const settingsClose = document.querySelector("#settings-close");
+const settingsDone = document.querySelector("#settings-done");
+const tenantChip = document.querySelector("#tenant-chip");
 const uploadForm = document.querySelector("#upload-form");
 const documentFile = document.querySelector("#document-file");
+const fileDropzone = document.querySelector("#file-dropzone");
+const fileLabel = document.querySelector("#file-label");
 const allowedRoles = document.querySelector("#allowed-roles");
 const allowedUsers = document.querySelector("#allowed-users");
 const uploadButton = document.querySelector("#upload-button");
 const uploadStatus = document.querySelector("#upload-status");
+const promptSuggestions = document.querySelectorAll("[data-prompt]");
 
 tenantId.value = sessionStorage.getItem("secure-rag.tenant-id") || "";
 apiKey.value = sessionStorage.getItem("secure-rag.api-key") || "";
 
-settingsToggle.addEventListener("click", () => {
-  settingsPanel.hidden = !settingsPanel.hidden;
-  settingsToggle.setAttribute("aria-expanded", String(!settingsPanel.hidden));
+function updateTenantChip() {
+  tenantChip.textContent = tenantId.value.trim() || "Not configured";
+}
+
+function setSettingsOpen(isOpen) {
+  settingsPanel.hidden = !isOpen;
+  settingsToggle.setAttribute("aria-expanded", String(isOpen));
+  if (isOpen) tenantId.focus();
+}
+
+function saveConnectionSettings() {
+  const selectedTenant = tenantId.value.trim();
+  const selectedApiKey = apiKey.value.trim();
+  if (selectedTenant) sessionStorage.setItem("secure-rag.tenant-id", selectedTenant);
+  else sessionStorage.removeItem("secure-rag.tenant-id");
+  if (selectedApiKey) sessionStorage.setItem("secure-rag.api-key", selectedApiKey);
+  else sessionStorage.removeItem("secure-rag.api-key");
+  updateTenantChip();
+}
+
+settingsToggle.addEventListener("click", () => setSettingsOpen(settingsPanel.hidden));
+settingsClose.addEventListener("click", () => setSettingsOpen(false));
+settingsDone.addEventListener("click", () => {
+  saveConnectionSettings();
+  setSettingsOpen(false);
+  settingsToggle.focus();
+});
+tenantId.addEventListener("input", saveConnectionSettings);
+apiKey.addEventListener("input", saveConnectionSettings);
+
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && !settingsPanel.hidden) {
+    setSettingsOpen(false);
+    settingsToggle.focus();
+  }
 });
 
+document.addEventListener("click", (event) => {
+  if (!settingsPanel.hidden && !settingsPanel.contains(event.target) && !settingsToggle.contains(event.target)) {
+    setSettingsOpen(false);
+  }
+});
+
+function messageTime() {
+  return new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" }).format(new Date());
+}
+
 function addMessage(text, type) {
+  chatLog.querySelector(".empty-state")?.remove();
+
   const message = document.createElement("article");
   message.className = `message ${type}-message`;
-  const content = document.createElement("p");
-  content.textContent = text;
-  message.append(content);
+
+  const avatar = document.createElement("span");
+  avatar.className = "message-avatar";
+  avatar.setAttribute("aria-hidden", "true");
+  avatar.textContent = type === "user" ? "You" : type === "error" ? "!" : "AI";
+
+  const body = document.createElement("div");
+  body.className = "message-body";
+
+  const meta = document.createElement("p");
+  meta.className = "message-meta";
+  const author = document.createElement("strong");
+  author.textContent = type === "user" ? "You" : type === "error" ? "Request failed" : "Document assistant";
+  const time = document.createElement("span");
+  time.textContent = messageTime();
+  meta.append(author, time);
+
+  const content = document.createElement("div");
+  content.className = "message-content";
+  const paragraph = document.createElement("p");
+  paragraph.textContent = text;
+  content.append(paragraph);
+  body.append(meta, content);
+
+  if (type === "user") message.append(body, avatar);
+  else message.append(avatar, body);
 
   chatLog.append(message);
   chatLog.scrollTop = chatLog.scrollHeight;
@@ -36,7 +109,8 @@ function addMessage(text, type) {
 function setBusy(isBusy) {
   sendButton.disabled = isBusy;
   question.disabled = isBusy;
-  status.textContent = isBusy ? "Searching authorized documents…" : "Ready";
+  status.classList.toggle("busy", isBusy);
+  status.lastChild.textContent = isBusy ? " Searching authorized documents…" : " Ready to search";
 }
 
 function requestHeaders(selectedTenant, selectedApiKey) {
@@ -54,13 +128,16 @@ function connectionSettings() {
 }
 
 function showConnectionError() {
-  settingsPanel.hidden = false;
-  settingsToggle.setAttribute("aria-expanded", "true");
-  addMessage("Enter a tenant ID and API key in Connection settings before continuing.", "error");
+  setSettingsOpen(true);
+  addMessage("Enter a tenant ID and API key in Connection before continuing.", "error");
 }
 
-form.addEventListener("submit", async (event) => {
-  event.preventDefault();
+function responseError(payload, fallback) {
+  const detail = Array.isArray(payload.detail) ? payload.detail[0]?.msg : payload.detail;
+  return typeof detail === "string" ? detail : fallback;
+}
+
+async function submitQuestion() {
   const userQuestion = question.value.trim();
   const { tenant: selectedTenant, apiKey: selectedApiKey } = connectionSettings();
 
@@ -70,12 +147,11 @@ form.addEventListener("submit", async (event) => {
   }
 
   if (userQuestion.length < 3) {
-    addMessage("Please enter a question with at least three characters.", "error");
+    addMessage("Enter a question with at least three characters.", "error");
     return;
   }
 
-  sessionStorage.setItem("secure-rag.tenant-id", selectedTenant);
-  sessionStorage.setItem("secure-rag.api-key", selectedApiKey);
+  saveConnectionSettings();
   addMessage(userQuestion, "user");
   question.value = "";
   setBusy(true);
@@ -90,10 +166,7 @@ form.addEventListener("submit", async (event) => {
       body: JSON.stringify({ question: userQuestion }),
     });
     const payload = await response.json();
-    if (!response.ok) {
-      const detail = Array.isArray(payload.detail) ? payload.detail[0]?.msg : payload.detail;
-      throw new Error(typeof detail === "string" ? detail : "Unable to complete the request.");
-    }
+    if (!response.ok) throw new Error(responseError(payload, "Unable to complete the request."));
     addMessage(payload.answer, "assistant");
   } catch (error) {
     addMessage(error.message || "Unable to connect to the RAG service.", "error");
@@ -101,6 +174,58 @@ form.addEventListener("submit", async (event) => {
     setBusy(false);
     question.focus();
   }
+}
+
+form.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  await submitQuestion();
+});
+
+question.addEventListener("keydown", (event) => {
+  if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
+    event.preventDefault();
+    form.requestSubmit();
+  }
+});
+
+promptSuggestions.forEach((button) => {
+  button.addEventListener("click", () => {
+    question.value = button.dataset.prompt;
+    question.focus();
+  });
+});
+
+function setUploadStatus(message, state = "") {
+  uploadStatus.className = `upload-status ${state}`.trim();
+  uploadStatus.lastChild.textContent = ` ${message}`;
+}
+
+function updateSelectedFile() {
+  const file = documentFile.files[0];
+  fileLabel.textContent = file ? file.name : "Choose a document";
+  setUploadStatus(file ? `${file.name} is ready to upload.` : "Select a file to begin.");
+}
+
+documentFile.addEventListener("change", updateSelectedFile);
+
+["dragenter", "dragover"].forEach((eventName) => {
+  fileDropzone.addEventListener(eventName, (event) => {
+    event.preventDefault();
+    fileDropzone.classList.add("dragging");
+  });
+});
+
+["dragleave", "drop"].forEach((eventName) => {
+  fileDropzone.addEventListener(eventName, (event) => {
+    event.preventDefault();
+    fileDropzone.classList.remove("dragging");
+  });
+});
+
+fileDropzone.addEventListener("drop", (event) => {
+  if (!event.dataTransfer.files.length) return;
+  documentFile.files = event.dataTransfer.files;
+  updateSelectedFile();
 });
 
 uploadForm.addEventListener("submit", async (event) => {
@@ -113,14 +238,13 @@ uploadForm.addEventListener("submit", async (event) => {
     return;
   }
   if (!file) {
-    uploadStatus.textContent = "Select a document first.";
+    setUploadStatus("Select a document first.", "error");
     return;
   }
 
-  sessionStorage.setItem("secure-rag.tenant-id", selectedTenant);
-  sessionStorage.setItem("secure-rag.api-key", selectedApiKey);
+  saveConnectionSettings();
   uploadButton.disabled = true;
-  uploadStatus.textContent = `Indexing ${file.name}…`;
+  setUploadStatus(`Indexing ${file.name}…`, "busy");
 
   try {
     const headers = {
@@ -133,15 +257,15 @@ uploadForm.addEventListener("submit", async (event) => {
 
     const response = await fetch("/v1/documents", { method: "POST", headers, body: file });
     const payload = await response.json();
-    if (!response.ok) {
-      const detail = Array.isArray(payload.detail) ? payload.detail[0]?.msg : payload.detail;
-      throw new Error(typeof detail === "string" ? detail : "Unable to index the document.");
-    }
-    uploadStatus.textContent = `Indexed ${payload.chunks_indexed} chunks.`;
+    if (!response.ok) throw new Error(responseError(payload, "Unable to index the document."));
+    setUploadStatus(`${file.name} is searchable (${payload.chunks_indexed} chunks).`, "success");
     documentFile.value = "";
+    fileLabel.textContent = "Choose another document";
   } catch (error) {
-    uploadStatus.textContent = error.message || "Unable to index the document.";
+    setUploadStatus(error.message || "Unable to index the document.", "error");
   } finally {
     uploadButton.disabled = false;
   }
 });
+
+updateTenantChip();

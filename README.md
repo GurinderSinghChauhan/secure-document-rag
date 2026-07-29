@@ -16,6 +16,7 @@ This is an application foundation, not a compliance certification. HIPAA, GLBA, 
 
 - [Functional guide](docs/functional-guide.md): user roles, document lifecycle, expected behavior, and operational limitations.
 - [Technical guide](docs/technical-guide.md): architecture, data flow, API contract, configuration, operations, and production gaps.
+- [Design system](docs/design-system.md): visual tokens, accessible components, regulated workflows, privacy rules, and UI review criteria.
 
 ## Quick start
 
