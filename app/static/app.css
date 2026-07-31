@@ -580,9 +580,12 @@ textarea:focus {
 }
 
 .assistant-workspace {
+  position: sticky;
+  top: 102px;
   display: flex;
+  height: calc(100vh - 130px);
   min-width: 0;
-  min-height: calc(100vh - 130px);
+  min-height: 0;
   flex-direction: column;
 }
 
@@ -625,12 +628,14 @@ textarea:focus {
 
 .chat-log {
   display: grid;
-  min-height: 350px;
+  min-height: 0;
   flex: 1;
   align-content: start;
   gap: 22px;
   padding: 8px 4px 30px;
   overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
 }
 
 .empty-state {
@@ -790,6 +795,7 @@ textarea:focus {
 
 .composer {
   position: relative;
+  flex: 0 0 auto;
   padding: 5px;
   border: 1px solid var(--border-strong);
   border-radius: 14px;
@@ -1268,7 +1274,9 @@ kbd {
   }
 
   .assistant-workspace {
-    min-height: calc(100vh - 116px);
+    position: static;
+    height: calc(100vh - 116px);
+    min-height: 0;
   }
 
   .document-panel {
