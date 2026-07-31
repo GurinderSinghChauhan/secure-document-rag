@@ -57,6 +57,7 @@ X-Tenant-ID: <tenant-id>
 | `GET` | `/readyz` | None | Dependency readiness for PostgreSQL, Qdrant, and Ollama |
 | `POST` | `/v1/documents` | Admin | Ingest a document body |
 | `POST` | `/v1/query` | Authorized user | Retrieve and generate a cited answer |
+| `POST` | `/v1/query/stream` | Authorized user | Retrieve and stream an NDJSON answer |
 | `DELETE` | `/v1/documents/{document_id}` | Admin | Remove vectors and soft-delete metadata |
 
 ## Configuration

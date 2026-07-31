@@ -104,6 +104,7 @@ function addMessage(text, type) {
 
   chatLog.append(message);
   chatLog.scrollTop = chatLog.scrollHeight;
+  return paragraph;
 }
 
 function setBusy(isBusy) {
@@ -157,7 +158,7 @@ async function submitQuestion() {
   setBusy(true);
 
   try {
-    const response = await fetch("/v1/query", {
+    const response = await fetch("/v1/query/stream", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -165,9 +166,42 @@ async function submitQuestion() {
       },
       body: JSON.stringify({ question: userQuestion }),
     });
-    const payload = await response.json();
-    if (!response.ok) throw new Error(responseError(payload, "Unable to complete the request."));
-    addMessage(payload.answer, "assistant");
+    if (!response.ok) {
+      const payload = await response.json();
+      throw new Error(responseError(payload, "Unable to complete the request."));
+    }
+    if (!response.body) throw new Error("Streaming is not supported by this browser.");
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    let answer = "";
+    let answerElement;
+
+    while (true) {
+      const { value, done } = await reader.read();
+      buffer += decoder.decode(value || new Uint8Array(), { stream: !done });
+      const lines = buffer.split("\n");
+      buffer = done ? "" : lines.pop();
+
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        const event = JSON.parse(line);
+        if (event.type === "error") throw new Error(event.detail || "Unable to generate an answer.");
+        if (event.type !== "delta" || typeof event.text !== "string") continue;
+        if (!answerElement) {
+          answerElement = addMessage("", "assistant");
+          status.lastChild.textContent = " Generating answer…";
+        }
+        answer += event.text;
+        answerElement.textContent = answer;
+        chatLog.scrollTop = chatLog.scrollHeight;
+      }
+
+      if (done) break;
+    }
+
+    if (!answerElement) throw new Error("The model returned an empty answer.");
   } catch (error) {
     addMessage(error.message || "Unable to connect to the RAG service.", "error");
   } finally {

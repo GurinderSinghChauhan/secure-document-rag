@@ -43,6 +43,8 @@ The service retains extracted chunks in Qdrant and metadata in PostgreSQL, but d
 
 An authorized user sends `POST /v1/query` with a question and optional `top_k` value. The system embeds the question through the self-hosted model service, retrieves only chunks that match the tenant and document ACL, then asks the self-hosted chat model to answer from that context.
 
+The chat interface uses `POST /v1/query/stream`, so the answer appears incrementally as soon as the model emits text instead of waiting for the full response. Retrieval and authorization still complete before generation begins.
+
 The response includes only `answer`, a grounded response from the self-hosted model. If there are no permitted results above the configured similarity threshold, the response says it does not have enough information.
 
 ## Deleting a document

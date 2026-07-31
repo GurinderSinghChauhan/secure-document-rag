@@ -1,11 +1,12 @@
 from contextlib import asynccontextmanager
 from hashlib import sha256
+import json
 from pathlib import PurePath
 from uuid import uuid4
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request, status
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -174,3 +175,52 @@ async def query_documents(
     answer = await model_server.answer(payload.question, "\n\n".join(context_parts))
     await record(session, "query_completed", principal.tenant_id, principal.user_id, result_count=len(context_parts))
     return QueryResponse(answer=answer)
+
+
+@app.post("/v1/query/stream")
+async def stream_query_documents(
+    payload: QueryRequest,
+    principal: Principal = Depends(require_principal),
+    session: AsyncSession = Depends(get_session),
+) -> StreamingResponse:
+    embedding = (await model_server.embed([payload.question]))[0]
+    matches = await vectors.search(principal, embedding, payload.top_k)
+    context_parts: list[str] = []
+    context_size = 0
+    for index, match in enumerate(matches, start=1):
+        source = f"[Source {index}] {match.payload['text']}"
+        if context_size + len(source) > get_settings().max_context_characters:
+            break
+        context_parts.append(source)
+        context_size += len(source)
+
+    async def events():
+        if not context_parts:
+            yield json.dumps(
+                {
+                    "type": "delta",
+                    "text": "I do not have enough information in the documents you are allowed to access.",
+                }
+            ) + "\n"
+            await record(session, "query_completed", principal.tenant_id, principal.user_id, result_count=0)
+            yield json.dumps({"type": "done"}) + "\n"
+            return
+        try:
+            async for content in model_server.answer_stream(payload.question, "\n\n".join(context_parts)):
+                yield json.dumps({"type": "delta", "text": content}) + "\n"
+            await record(
+                session,
+                "query_completed",
+                principal.tenant_id,
+                principal.user_id,
+                result_count=len(context_parts),
+            )
+            yield json.dumps({"type": "done"}) + "\n"
+        except HTTPException as error:
+            yield json.dumps({"type": "error", "detail": error.detail}) + "\n"
+
+    return StreamingResponse(
+        events(),
+        media_type="application/x-ndjson",
+        headers={"X-Accel-Buffering": "no"},
+    )

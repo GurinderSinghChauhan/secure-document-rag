@@ -17,6 +17,7 @@ This is an application foundation, not a compliance certification. HIPAA, GLBA, 
 - [Functional guide](docs/functional-guide.md): user roles, document lifecycle, expected behavior, and operational limitations.
 - [Technical guide](docs/technical-guide.md): architecture, data flow, API contract, configuration, operations, and production gaps.
 - [Design system](docs/design-system.md): visual tokens, accessible components, regulated workflows, privacy rules, and UI review criteria.
+- [PDF test dataset](docs/test-dataset.md): download and batch-index a licensed 500-document healthcare and legal corpus.
 
 ## Quick start
 
@@ -70,7 +71,7 @@ curl -X POST http://127.0.0.1:8080/v1/query \
 - `X-Allowed-Roles`: comma-separated role list
 - `X-Allowed-Users`: comma-separated user IDs
 
-`POST /v1/query` accepts `{ "question": "...", "top_k": 5 }` and returns only the final `answer`. A caller must provide `X-API-Key` and matching `X-Tenant-ID` for both routes.
+`POST /v1/query` accepts `{ "question": "...", "top_k": 5 }` and returns only the final `answer`. `POST /v1/query/stream` accepts the same payload and emits newline-delimited JSON `delta`, `done`, or `error` events as the self-hosted model generates the answer. A caller must provide `X-API-Key` and matching `X-Tenant-ID` for all routes.
 
 `DELETE /v1/documents/{document_id}` removes a document's chunks from Qdrant and soft-deletes its PostgreSQL record. It requires the `admin` role. Implement a legal-hold workflow before enabling deletion for regulated records.
 
@@ -98,3 +99,5 @@ uv run uvicorn app.main:app --reload
 ```
 
 Run `uv run pytest` for the local unit tests. The app requires Qdrant and Ollama for ingestion/query operations.
+
+Create the default 500-PDF evaluation corpus with `uv run python -m tools.rag_dataset download`. See the [PDF test dataset guide](docs/test-dataset.md) before downloading or indexing the corpus.
