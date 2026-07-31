@@ -71,7 +71,9 @@ curl -X POST http://127.0.0.1:8080/v1/query \
 - `X-Allowed-Roles`: comma-separated role list
 - `X-Allowed-Users`: comma-separated user IDs
 
-`POST /v1/query` accepts `{ "question": "...", "top_k": 5 }` and returns only the final `answer`. `POST /v1/query/stream` accepts the same payload and emits newline-delimited JSON `delta`, `done`, or `error` events as the self-hosted model generates the answer. A caller must provide `X-API-Key` and matching `X-Tenant-ID` for all routes.
+`POST /v1/query` accepts `{ "question": "...", "top_k": 5 }` and returns only the final `answer`. `POST /v1/query/stream` accepts the same payload and emits newline-delimited JSON `delta`, `done`, or `error` events as the self-hosted model generates the answer. `POST /v1/documents/stream` accepts the same raw document body and headers as `/v1/documents`, then emits NDJSON indexing `progress`, `complete`, or `error` events. A caller must provide `X-API-Key` and matching `X-Tenant-ID` for all routes.
+
+Chat conversations are stored in PostgreSQL and scoped to the authenticated tenant and user. `GET /v1/chats` lists the current user's recent conversations, while `GET /v1/chats/{chat_id}` restores its messages. Pass the returned `chat_id` in subsequent query requests to continue the same conversation.
 
 `DELETE /v1/documents/{document_id}` removes a document's chunks from Qdrant and soft-deletes its PostgreSQL record. It requires the `admin` role. Implement a legal-hold workflow before enabling deletion for regulated records.
 

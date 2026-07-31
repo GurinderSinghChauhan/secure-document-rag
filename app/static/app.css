@@ -183,10 +183,105 @@ svg {
   background: rgba(255, 255, 255, .1);
 }
 
+.chat-history {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  margin-top: 24px;
+  padding-top: 18px;
+  border-top: 1px solid rgba(255, 255, 255, .08);
+}
+
+.chat-history-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 7px 9px 10px;
+  color: var(--sidebar-muted);
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.chat-history-header button {
+  display: grid;
+  width: 27px;
+  height: 27px;
+  place-items: center;
+  border: 0;
+  border-radius: 7px;
+  color: var(--sidebar-muted);
+  background: transparent;
+  cursor: pointer;
+}
+
+.chat-history-header button:hover {
+  color: #ffffff;
+  background: rgba(255, 255, 255, .08);
+}
+
+.chat-history-header button:disabled {
+  cursor: not-allowed;
+  opacity: .45;
+}
+
+.chat-history-header svg {
+  width: 16px;
+  height: 16px;
+}
+
+.chat-history-list {
+  display: grid;
+  gap: 3px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, .2) transparent;
+}
+
+.chat-history-item {
+  display: grid;
+  width: 100%;
+  gap: 2px;
+  padding: 9px 10px;
+  border: 0;
+  border-radius: 8px;
+  color: var(--sidebar-text);
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+}
+
+.chat-history-item:hover,
+.chat-history-item.active {
+  background: rgba(255, 255, 255, .075);
+}
+
+.chat-history-item strong {
+  overflow: hidden;
+  font-size: 11px;
+  font-weight: 520;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-history-item time {
+  color: var(--sidebar-muted);
+  font-size: 9px;
+}
+
+.chat-history-empty {
+  margin: 8px 10px;
+  color: var(--sidebar-muted);
+  font-size: 10px;
+  line-height: 1.45;
+}
+
 .sidebar-note {
   display: flex;
   gap: 11px;
-  margin-top: auto;
+  margin-top: 18px;
   padding: 14px 12px;
   border: 1px solid rgba(255, 255, 255, .09);
   border-radius: 10px;
@@ -997,6 +1092,72 @@ kbd {
 
 .upload-status.busy svg {
   animation: spin 1s linear infinite;
+}
+
+.upload-progress {
+  display: grid;
+  gap: 10px;
+}
+
+.upload-progress[hidden] {
+  display: none;
+}
+
+.upload-progress-row {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr) 34px;
+  align-items: center;
+  gap: 8px;
+}
+
+.upload-progress-row[hidden] {
+  display: none;
+}
+
+.upload-progress-row > span {
+  color: var(--text-tertiary);
+  font-size: 10px;
+}
+
+.upload-progress-track {
+  height: 7px;
+  flex: 1;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #e5e9f0;
+}
+
+.upload-progress-fill {
+  display: block;
+  width: 0;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--primary);
+  transition: width .16s ease;
+}
+
+.upload-progress-row > strong {
+  min-width: 34px;
+  color: var(--text-secondary);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.upload-progress.success .upload-progress-fill {
+  background: var(--success);
+}
+
+.indexing-progress-fill {
+  background: #7c5ce5;
+}
+
+.upload-progress.error .upload-progress-fill {
+  background: var(--danger);
+}
+
+.upload-progress-row.error .upload-progress-fill {
+  background: var(--danger);
 }
 
 .trust-note {

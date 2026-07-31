@@ -13,6 +13,11 @@ class ModelClient:
 
     async def embed(self, texts: list[str]) -> list[list[float]]:
         embeddings: list[list[float]] = []
+        async for _, _, batch_embeddings in self.embed_batches(texts):
+            embeddings.extend(batch_embeddings)
+        return embeddings
+
+    async def embed_batches(self, texts: list[str]) -> AsyncIterator[tuple[int, int, list[list[float]]]]:
         try:
             async with httpx.AsyncClient(base_url=self.settings.model_server_url, timeout=120) as client:
                 for offset in range(0, len(texts), 64):
@@ -40,13 +45,12 @@ class ModelClient:
                             status_code=status.HTTP_502_BAD_GATEWAY,
                             detail="Embedding service returned an invalid response",
                         )
-                    embeddings.extend(batch_embeddings)
+                    yield min(offset + len(batch), len(texts)), len(texts), batch_embeddings
         except httpx.HTTPError as error:
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail="Embedding service unavailable",
             ) from error
-        return embeddings
 
     async def answer(self, question: str, context: str) -> str:
         prompt = self._prompt(question, context)

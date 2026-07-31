@@ -18,7 +18,19 @@ const allowedRoles = document.querySelector("#allowed-roles");
 const allowedUsers = document.querySelector("#allowed-users");
 const uploadButton = document.querySelector("#upload-button");
 const uploadStatus = document.querySelector("#upload-status");
-const promptSuggestions = document.querySelectorAll("[data-prompt]");
+const uploadProgress = document.querySelector("#upload-progress");
+const uploadProgressTrack = document.querySelector("#upload-progress-track");
+const uploadProgressFill = document.querySelector("#upload-progress-fill");
+const uploadProgressValue = document.querySelector("#upload-progress-value");
+const indexingProgressRow = document.querySelector("#indexing-progress-row");
+const indexingProgressTrack = document.querySelector("#indexing-progress-track");
+const indexingProgressFill = document.querySelector("#indexing-progress-fill");
+const indexingProgressValue = document.querySelector("#indexing-progress-value");
+const chatHistoryList = document.querySelector("#chat-history-list");
+const chatHistoryEmpty = document.querySelector("#chat-history-empty");
+const newChatButton = document.querySelector("#new-chat-button");
+const emptyChatMarkup = chatLog.innerHTML;
+let activeChatId = null;
 
 tenantId.value = sessionStorage.getItem("secure-rag.tenant-id") || "";
 apiKey.value = sessionStorage.getItem("secure-rag.api-key") || "";
@@ -48,6 +60,9 @@ settingsClose.addEventListener("click", () => setSettingsOpen(false));
 settingsDone.addEventListener("click", () => {
   saveConnectionSettings();
   setSettingsOpen(false);
+  activeChatId = null;
+  resetConversation();
+  loadChatHistory();
   settingsToggle.focus();
 });
 tenantId.addEventListener("input", saveConnectionSettings);
@@ -107,9 +122,93 @@ function addMessage(text, type) {
   return paragraph;
 }
 
+function resetConversation() {
+  chatLog.innerHTML = emptyChatMarkup;
+  activeChatId = null;
+  renderActiveChat();
+  question.focus();
+}
+
+function renderActiveChat() {
+  chatHistoryList.querySelectorAll(".chat-history-item").forEach((button) => {
+    button.classList.toggle("active", button.dataset.chatId === activeChatId);
+  });
+}
+
+function formatChatDate(value) {
+  const date = new Date(value);
+  const today = new Date();
+  if (date.toDateString() === today.toDateString()) {
+    return new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" }).format(date);
+  }
+  return new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" }).format(date);
+}
+
+function renderChatHistory(chats) {
+  chatHistoryList.replaceChildren();
+  chatHistoryEmpty.hidden = chats.length > 0;
+  chatHistoryEmpty.textContent = chats.length ? "" : "No saved chats yet.";
+  chats.forEach((chat) => {
+    const button = document.createElement("button");
+    button.className = "chat-history-item";
+    button.type = "button";
+    button.dataset.chatId = chat.chat_id;
+    const title = document.createElement("strong");
+    title.textContent = chat.title;
+    const time = document.createElement("time");
+    time.dateTime = chat.updated_at;
+    time.textContent = formatChatDate(chat.updated_at);
+    button.append(title, time);
+    button.addEventListener("click", () => loadChat(chat.chat_id));
+    chatHistoryList.append(button);
+  });
+  renderActiveChat();
+}
+
+async function loadChatHistory() {
+  const { tenant: selectedTenant, apiKey: selectedApiKey } = connectionSettings();
+  if (!selectedTenant || !selectedApiKey) {
+    chatHistoryList.replaceChildren();
+    chatHistoryEmpty.hidden = false;
+    chatHistoryEmpty.textContent = "Connect to load your chat history.";
+    return;
+  }
+  chatHistoryEmpty.hidden = false;
+  chatHistoryEmpty.textContent = "Loading chats…";
+  try {
+    const response = await fetch("/v1/chats", { headers: requestHeaders(selectedTenant, selectedApiKey) });
+    const payload = await response.json();
+    if (!response.ok) throw new Error(responseError(payload, "Unable to load chat history."));
+    renderChatHistory(payload);
+  } catch (error) {
+    chatHistoryList.replaceChildren();
+    chatHistoryEmpty.hidden = false;
+    chatHistoryEmpty.textContent = error.message || "Unable to load chat history.";
+  }
+}
+
+async function loadChat(chatId) {
+  if (sendButton.disabled) return;
+  const { tenant: selectedTenant, apiKey: selectedApiKey } = connectionSettings();
+  try {
+    const response = await fetch(`/v1/chats/${encodeURIComponent(chatId)}`, { headers: requestHeaders(selectedTenant, selectedApiKey) });
+    const payload = await response.json();
+    if (!response.ok) throw new Error(responseError(payload, "Unable to load this chat."));
+    chatLog.replaceChildren();
+    payload.messages.forEach((message) => addMessage(message.content, message.role));
+    activeChatId = payload.chat_id;
+    renderActiveChat();
+    chatLog.scrollTop = chatLog.scrollHeight;
+  } catch (error) {
+    addMessage(error.message || "Unable to load this chat.", "error");
+  }
+}
+
 function setBusy(isBusy) {
   sendButton.disabled = isBusy;
   question.disabled = isBusy;
+  newChatButton.disabled = isBusy;
+  chatHistoryList.querySelectorAll("button").forEach((button) => { button.disabled = isBusy; });
   status.classList.toggle("busy", isBusy);
   status.lastChild.textContent = isBusy ? " Searching authorized documents…" : " Ready to search";
 }
@@ -164,7 +263,7 @@ async function submitQuestion() {
         "Content-Type": "application/json",
         ...requestHeaders(selectedTenant, selectedApiKey),
       },
-      body: JSON.stringify({ question: userQuestion }),
+      body: JSON.stringify({ question: userQuestion, ...(activeChatId ? { chat_id: activeChatId } : {}) }),
     });
     if (!response.ok) {
       const payload = await response.json();
@@ -188,6 +287,10 @@ async function submitQuestion() {
         if (!line.trim()) continue;
         const event = JSON.parse(line);
         if (event.type === "error") throw new Error(event.detail || "Unable to generate an answer.");
+        if (event.type === "chat") {
+          activeChatId = event.chat_id;
+          continue;
+        }
         if (event.type !== "delta" || typeof event.text !== "string") continue;
         if (!answerElement) {
           answerElement = addMessage("", "assistant");
@@ -202,6 +305,7 @@ async function submitQuestion() {
     }
 
     if (!answerElement) throw new Error("The model returned an empty answer.");
+    await loadChatHistory();
   } catch (error) {
     addMessage(error.message || "Unable to connect to the RAG service.", "error");
   } finally {
@@ -222,22 +326,124 @@ question.addEventListener("keydown", (event) => {
   }
 });
 
-promptSuggestions.forEach((button) => {
-  button.addEventListener("click", () => {
+chatLog.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-prompt]");
+  if (button) {
     question.value = button.dataset.prompt;
     question.focus();
-  });
+  }
 });
+
+newChatButton.addEventListener("click", resetConversation);
 
 function setUploadStatus(message, state = "") {
   uploadStatus.className = `upload-status ${state}`.trim();
   uploadStatus.lastChild.textContent = ` ${message}`;
 }
 
+function setUploadProgress(value, state = "") {
+  const percentage = Math.max(0, Math.min(100, Math.round(value)));
+  uploadProgress.hidden = false;
+  uploadProgress.className = `upload-progress ${state}`.trim();
+  uploadProgressTrack.setAttribute("aria-valuenow", String(percentage));
+  uploadProgressFill.style.width = `${percentage}%`;
+  uploadProgressValue.textContent = `${percentage}%`;
+}
+
+function setIndexingProgress(value) {
+  const percentage = Math.max(0, Math.min(100, Math.round(value)));
+  uploadProgress.hidden = false;
+  indexingProgressRow.hidden = false;
+  indexingProgressTrack.setAttribute("aria-valuenow", String(percentage));
+  indexingProgressFill.style.width = `${percentage}%`;
+  indexingProgressValue.textContent = `${percentage}%`;
+}
+
+function resetUploadProgress() {
+  uploadProgress.hidden = true;
+  uploadProgress.className = "upload-progress";
+  uploadProgressTrack.setAttribute("aria-valuenow", "0");
+  uploadProgressFill.style.width = "0%";
+  uploadProgressValue.textContent = "0%";
+  indexingProgressRow.hidden = true;
+  indexingProgressRow.classList.remove("error");
+  indexingProgressTrack.setAttribute("aria-valuenow", "0");
+  indexingProgressFill.style.width = "0%";
+  indexingProgressValue.textContent = "0%";
+}
+
+function uploadDocument(file, headers) {
+  return new Promise((resolve, reject) => {
+    const request = new XMLHttpRequest();
+    let responseOffset = 0;
+    let responseBuffer = "";
+    let completedPayload;
+    let streamError;
+
+    function processResponse(isComplete = false) {
+      responseBuffer += request.responseText.slice(responseOffset);
+      responseOffset = request.responseText.length;
+      const lines = responseBuffer.split("\n");
+      responseBuffer = isComplete ? "" : lines.pop();
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        const payload = JSON.parse(line);
+        if (payload.type === "error") streamError = new Error(payload.detail || "Unable to index the document.");
+        if (payload.type === "complete") completedPayload = payload;
+        if (payload.type === "progress") {
+          setIndexingProgress(payload.percentage);
+          setUploadStatus(payload.message || `Indexing ${file.name}…`, "busy");
+        }
+      }
+    }
+
+    request.open("POST", "/v1/documents/stream");
+    Object.entries(headers).forEach(([name, value]) => request.setRequestHeader(name, value));
+
+    request.upload.addEventListener("progress", (event) => {
+      if (!event.lengthComputable) return;
+      setUploadProgress((event.loaded / event.total) * 100);
+      setUploadStatus(`Uploading ${file.name}…`, "busy");
+    });
+    request.upload.addEventListener("load", () => {
+      setUploadProgress(100, "success");
+      setIndexingProgress(0);
+      setUploadStatus(`Upload complete. Starting indexing for ${file.name}…`, "busy");
+    });
+    request.addEventListener("progress", () => processResponse());
+    request.addEventListener("load", () => {
+      if (request.status < 200 || request.status >= 300) {
+        let payload = {};
+        try {
+          payload = JSON.parse(request.responseText);
+        } catch {
+          payload = {};
+        }
+        resolve({ ok: false, payload });
+        return;
+      }
+      processResponse(true);
+      if (streamError) {
+        reject(streamError);
+        return;
+      }
+      if (!completedPayload) {
+        reject(new Error("The indexing service returned an incomplete response."));
+        return;
+      }
+      resolve({ ok: true, payload: completedPayload });
+    });
+    request.addEventListener("error", () => reject(new Error("Unable to connect to the RAG service.")));
+    request.addEventListener("abort", () => reject(new Error("Document upload was cancelled.")));
+    request.send(file);
+  });
+}
+
 function updateSelectedFile() {
   const file = documentFile.files[0];
   fileLabel.textContent = file ? file.name : "Choose a document";
   setUploadStatus(file ? `${file.name} is ready to upload.` : "Select a file to begin.");
+  resetUploadProgress();
 }
 
 documentFile.addEventListener("change", updateSelectedFile);
@@ -278,7 +484,8 @@ uploadForm.addEventListener("submit", async (event) => {
 
   saveConnectionSettings();
   uploadButton.disabled = true;
-  setUploadStatus(`Indexing ${file.name}…`, "busy");
+  setUploadProgress(0);
+  setUploadStatus(`Preparing ${file.name}…`, "busy");
 
   try {
     const headers = {
@@ -289,13 +496,17 @@ uploadForm.addEventListener("submit", async (event) => {
     if (allowedRoles.value.trim()) headers["X-Allowed-Roles"] = allowedRoles.value.trim();
     if (allowedUsers.value.trim()) headers["X-Allowed-Users"] = allowedUsers.value.trim();
 
-    const response = await fetch("/v1/documents", { method: "POST", headers, body: file });
-    const payload = await response.json();
-    if (!response.ok) throw new Error(responseError(payload, "Unable to index the document."));
+    const { ok, payload } = await uploadDocument(file, headers);
+    if (!ok) throw new Error(responseError(payload, "Unable to index the document."));
+    setUploadProgress(100, "success");
+    setIndexingProgress(100);
+    uploadProgress.classList.add("success");
     setUploadStatus(`${file.name} is searchable (${payload.chunks_indexed} chunks).`, "success");
     documentFile.value = "";
     fileLabel.textContent = "Choose another document";
   } catch (error) {
+    if (uploadProgressTrack.getAttribute("aria-valuenow") === "100") indexingProgressRow.classList.add("error");
+    else uploadProgress.classList.add("error");
     setUploadStatus(error.message || "Unable to index the document.", "error");
   } finally {
     uploadButton.disabled = false;
@@ -303,3 +514,4 @@ uploadForm.addEventListener("submit", async (event) => {
 });
 
 updateTenantChip();
+loadChatHistory();

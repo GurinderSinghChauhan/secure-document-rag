@@ -35,6 +35,17 @@
           </a>
         </nav>
 
+        <section class="chat-history" aria-labelledby="chat-history-title">
+          <div class="chat-history-header">
+            <span id="chat-history-title">Recent chats</span>
+            <button id="new-chat-button" type="button" aria-label="Start a new chat" title="New chat">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
+            </button>
+          </div>
+          <div id="chat-history-list" class="chat-history-list" aria-live="polite"></div>
+          <p id="chat-history-empty" class="chat-history-empty">Connect to load your chat history.</p>
+        </section>
+
         <div class="sidebar-note">
           <span class="privacy-icon" aria-hidden="true">
             <svg viewBox="0 0 24 24"><rect x="4" y="10" width="16" height="11" rx="2"></rect><path d="M8 10V7a4 4 0 0 1 8 0v3"></path></svg>
@@ -198,6 +209,38 @@
               <div id="upload-status" class="upload-status" role="status">
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20Z"></path><path d="M12 16v-4M12 8h.01"></path></svg>
                 Select a file to begin.
+              </div>
+              <div id="upload-progress" class="upload-progress" hidden>
+                <div class="upload-progress-row">
+                  <span>Upload</span>
+                  <div
+                    id="upload-progress-track"
+                    class="upload-progress-track"
+                    role="progressbar"
+                    aria-label="Document upload progress"
+                    aria-valuemin="0"
+                    aria-valuemax="100"
+                    aria-valuenow="0"
+                  >
+                    <span id="upload-progress-fill" class="upload-progress-fill"></span>
+                  </div>
+                  <strong id="upload-progress-value">0%</strong>
+                </div>
+                <div id="indexing-progress-row" class="upload-progress-row" hidden>
+                  <span>Indexing</span>
+                  <div
+                    id="indexing-progress-track"
+                    class="upload-progress-track"
+                    role="progressbar"
+                    aria-label="Document indexing progress"
+                    aria-valuemin="0"
+                    aria-valuemax="100"
+                    aria-valuenow="0"
+                  >
+                    <span id="indexing-progress-fill" class="upload-progress-fill indexing-progress-fill"></span>
+                  </div>
+                  <strong id="indexing-progress-value">0%</strong>
+                </div>
               </div>
               <button id="upload-button" class="primary-button" type="submit">
                 <span>Upload and index</span>

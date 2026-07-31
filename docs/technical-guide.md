@@ -58,6 +58,9 @@ X-Tenant-ID: <tenant-id>
 | `POST` | `/v1/documents` | Admin | Ingest a document body |
 | `POST` | `/v1/query` | Authorized user | Retrieve and generate a cited answer |
 | `POST` | `/v1/query/stream` | Authorized user | Retrieve and stream an NDJSON answer |
+| `POST` | `/v1/documents/stream` | Tenant admin | Upload a document and stream indexing progress |
+| `GET` | `/v1/chats` | Authorized user | List the user's recent tenant-scoped chats |
+| `GET` | `/v1/chats/{chat_id}` | Authorized user | Restore one owned conversation and its messages |
 | `DELETE` | `/v1/documents/{document_id}` | Admin | Remove vectors and soft-delete metadata |
 
 ## Configuration

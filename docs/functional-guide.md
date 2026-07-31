@@ -45,6 +45,12 @@ An authorized user sends `POST /v1/query` with a question and optional `top_k` v
 
 The chat interface uses `POST /v1/query/stream`, so the answer appears incrementally as soon as the model emits text instead of waiting for the full response. Retrieval and authorization still complete before generation begins.
 
+During document ingestion, the interface displays separate upload and indexing percentages. Upload progress measures bytes transferred from the browser. Indexing progress is reported by the API across text extraction, chunking, embedding batches, vector storage, and metadata persistence.
+
+### Chat history
+
+Each user's questions and completed assistant answers are saved as a conversation in PostgreSQL. The left sidebar lists recent conversations for the authenticated tenant and user, and selecting one restores its messages. A new-chat control starts a separate conversation. Chat records never cross tenant or user boundaries; production deployments should define retention and deletion schedules that match organizational and regulatory policy.
+
 The response includes only `answer`, a grounded response from the self-hosted model. If there are no permitted results above the configured similarity threshold, the response says it does not have enough information.
 
 ## Deleting a document
