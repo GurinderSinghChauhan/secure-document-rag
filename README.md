@@ -4,11 +4,12 @@ Self-hosted, multi-tenant retrieval-augmented generation (RAG) for sensitive hea
 
 ## What this starter provides
 
-- A self-hosted OpenAI-compatible model server for embeddings and answer generation.
+- A self-hosted OpenAI-compatible model server for embeddings, visual understanding, and answer generation.
+- A self-hosted **MinerU** service for layout-aware OCR, reading order, tables, formulas, and figure extraction.
 - Self-hosted **Qdrant** for vector storage, with one collection per tenant.
 - **PostgreSQL** system of record for document lifecycle and metadata-only audit events.
 - FastAPI service with API-key authentication, tenant enforcement, document-level ACLs, bounded retrieval context, and readiness probes.
-- Docker deployment that exposes the application only on `127.0.0.1` by default; Qdrant and Ollama are private to the Docker network.
+- Docker deployment that exposes the application only on `127.0.0.1` by default; PostgreSQL and Qdrant remain private to the Docker network, and LM Studio remains bound to the host.
 
 This is an application foundation, not a compliance certification. HIPAA, GLBA, PCI DSS, SEC, GDPR, and legal-hold obligations require organization-specific controls, policies, reviews, and evidence.
 
@@ -27,6 +28,10 @@ docker compose up --build -d
 ```
 
 Before starting, replace the example `TENANT_API_KEYS_JSON` and `POSTGRES_PASSWORD` values in `.env`. The service refuses to start with an example API key. Use secrets supplied by your secret manager in real deployments; do not commit `.env`.
+
+Build the official MinerU image as `mineru:3.2.1` using its pinned release Dockerfile, then start the stack with `docker compose --profile mineru up --build -d`. The API reaches MinerU at `http://mineru:8000` on the private Compose network. MinerU must use locally downloaded model weights (`MINERU_MODEL_SOURCE=local`); do not configure its hosted API for regulated documents. See the [official Docker deployment guide](https://opendatalab.github.io/MinerU/quick_start/docker_deployment/).
+
+Multimodal ingestion requires an image-capable model exposed by LM Studio. Set `VISION_MODEL` to its loaded identifier. The included MinerU profile gives its `pipeline` backend access to the NVIDIA GPU. On an 8 GB RTX 4060, unload Qwen from LM Studio during large indexing jobs, then reload it for visual enrichment and chat; MinerU's VLM backend alone lists 8 GB as its minimum and should use a separate production GPU.
 
 ```bash
 curl -X POST http://127.0.0.1:8080/v1/documents \
@@ -59,13 +64,13 @@ curl -X POST http://127.0.0.1:8080/v1/query \
 - Put volumes on encrypted storage; use KMS-managed keys and rotate API keys.
 - Replace the environment key map with OIDC/JWT verification or your identity provider, retaining the tenant and role claims.
 - Send audit events to immutable, access-controlled storage; set retention policies per regulation and legal hold.
-- Add antivirus/DLP scanning and malware sandboxing before parsing uploads. The current parser rejects encrypted PDFs but does not replace a malware-scanning pipeline.
+- Add antivirus/DLP scanning and malware sandboxing before parsing uploads. Parser rejection is not a substitute for a malware-scanning pipeline.
 - Use separate runtime identities, a secrets manager, network policies, backups, restore tests, vulnerability scanning, and model/image pinning.
 - Validate retrieval isolation and prompt-injection resistance with adversarial tests before handling production records.
 
 ## API
 
-`POST /v1/documents` ingests `text/plain`, PDF, or DOCX request bodies. Optional headers:
+`POST /v1/documents` ingests `text/plain`, PDF, DOCX, PPTX, XLSX, PNG, JPEG, or WebP request bodies. MinerU converts structured documents into Markdown and content-list JSON while extracting tables, formulas, images, charts, and layout metadata. Detailed MinerU visual content is indexed directly; only missing or short descriptions are concurrently enriched by the configured self-hosted vision model. Text embeddings use configurable large batches to reduce model-server round trips.
 
 - `X-Document-Name` (required)
 - `X-Allowed-Roles`: comma-separated role list
@@ -77,11 +82,11 @@ Chat conversations are stored in PostgreSQL and scoped to the authenticated tena
 
 `DELETE /v1/documents/{document_id}` removes a document's chunks from Qdrant and soft-deletes its PostgreSQL record. It requires the `admin` role. Implement a legal-hold workflow before enabling deletion for regulated records.
 
-`GET /healthz` reports process liveness. `GET /readyz` checks PostgreSQL, Qdrant, and the model server readiness; it must be used by the deployment platform before routing traffic.
+`GET /healthz` reports process liveness. `GET /readyz` checks PostgreSQL, Qdrant, the model server, and MinerU when enabled; it must be used by the deployment platform before routing traffic.
 
 ## Chat UI
 
-The API serves a basic same-origin chat UI at `http://127.0.0.1:8080/`. An administrator can upload and index PDF, DOCX, and TXT documents from the UI, while users can ask questions and see only the final answer. The browser calls only the secured RAG API; it never connects to the model server or Qdrant directly.
+The API serves a basic same-origin chat UI at `http://127.0.0.1:8080/`. An administrator can upload and index PDF, DOCX, PPTX, XLSX, TXT, PNG, JPEG, and WebP content from the UI, while users can ask questions and see only the final answer. The browser calls only the secured RAG API; it never connects to MinerU, the model server, or Qdrant directly.
 
 The basic UI retains the API key in browser session storage for development convenience. Put the API behind an SSO-enabled gateway and replace this development credential flow with short-lived, HTTP-only session credentials before providing it to end users.
 
@@ -100,6 +105,6 @@ uv sync
 uv run uvicorn app.main:app --reload
 ```
 
-Run `uv run pytest` for the local unit tests. The app requires Qdrant and Ollama for ingestion/query operations.
+Run `uv run pytest` for the local unit tests. The app requires Qdrant, PostgreSQL, MinerU, and an OpenAI-compatible self-hosted model server such as LM Studio for structured ingestion/query operations.
 
 Create the default 500-PDF evaluation corpus with `uv run python -m tools.rag_dataset download`. See the [PDF test dataset guide](docs/test-dataset.md) before downloading or indexing the corpus.

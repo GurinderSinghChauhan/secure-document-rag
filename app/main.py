@@ -1,3 +1,4 @@
+import asyncio
 from contextlib import asynccontextmanager
 from hashlib import sha256
 import json
@@ -16,13 +17,15 @@ from .auth import require_admin, require_principal
 from .chunking import chunk_text
 from .config import get_settings
 from .database import DocumentRecord, dispose_database, get_session, initialize_database
-from .document_parser import extract_text
+from .document_parser import VisualAsset, extract_document
+from .mineru import MinerUClient, supports_mineru
 from .models import ChatDetail, ChatMessage, ChatSummary, DeleteResponse, IngestResponse, Principal, QueryRequest, QueryResponse, ReadinessResponse
 from .providers import ModelClient
 from .repository import add_chat_message, create_chat, database_is_ready, document_exists, get_chat, get_document, list_chat_messages, list_chats, mark_document_deleted
 from .vector_store import VectorStore
 
 model_server = ModelClient()
+mineru = MinerUClient()
 vectors = VectorStore()
 
 
@@ -105,19 +108,60 @@ async def index_document_events(
     principal: Principal,
     session: AsyncSession,
 ):
-    yield {"type": "progress", "percentage": 5, "stage": "extracting", "message": "Extracting document text"}
-    text = extract_text(content, content_type)
-    chunks = chunk_text(text)
+    settings = get_settings()
+    yield {"type": "progress", "percentage": 5, "stage": "extracting", "message": "Extracting text, tables, and visual content"}
+    if settings.mineru_enabled and supports_mineru(content_type):
+        parsed = await mineru.parse(content, content_type, document_name, settings.max_visuals_per_document)
+    else:
+        parsed = extract_document(content, content_type, settings.max_visuals_per_document)
+    text_sections = [parsed.text] if parsed.text.strip() else []
+    visuals_indexed = parsed.described_visual_count
+    if parsed.visuals:
+        semaphore = asyncio.Semaphore(settings.visual_analysis_concurrency)
+
+        async def describe_visual(visual_index: int):
+            visual = parsed.visuals[visual_index]
+            async with semaphore:
+                description = await model_server.describe_visual(visual)
+            return visual_index, visual, description
+
+        tasks = [asyncio.create_task(describe_visual(index)) for index in range(len(parsed.visuals))]
+        descriptions: dict[int, tuple[VisualAsset, str]] = {}
+        try:
+            for completed_count, completed_task in enumerate(asyncio.as_completed(tasks), start=1):
+                visual_index, visual, description = await completed_task
+                descriptions[visual_index] = (visual, description)
+                percentage = 5 + round((completed_count / len(tasks)) * 20)
+                yield {
+                    "type": "progress",
+                    "percentage": percentage,
+                    "stage": "visual_analysis",
+                    "message": f"Analyzed {completed_count} of {len(tasks)} visuals",
+                }
+        finally:
+            for task in tasks:
+                if not task.done():
+                    task.cancel()
+            await asyncio.gather(*tasks, return_exceptions=True)
+
+        for visual_index in sorted(descriptions):
+            visual, description = descriptions[visual_index]
+            if description != "NO_MEANINGFUL_VISUAL":
+                text_sections.append(f"[Visual content: {visual.location}]\n{description}")
+                if not visual.description_indexed:
+                    visuals_indexed += 1
+
+    chunks = chunk_text("\n\n".join(text_sections))
     if not chunks:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Document has no extractable text")
-    if len(chunks) > get_settings().max_document_chunks:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Document has no indexable text, tables, or visuals")
+    if len(chunks) > settings.max_document_chunks:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Document exceeds configured chunk limit")
 
-    yield {"type": "progress", "percentage": 15, "stage": "chunking", "message": f"Prepared {len(chunks)} searchable chunks"}
+    yield {"type": "progress", "percentage": 28, "stage": "chunking", "message": f"Prepared {len(chunks)} searchable chunks"}
     embeddings: list[list[float]] = []
     async for completed, total, batch_embeddings in model_server.embed_batches(chunks):
         embeddings.extend(batch_embeddings)
-        percentage = 15 + round((completed / total) * 70)
+        percentage = 28 + round((completed / total) * 57)
         yield {
             "type": "progress",
             "percentage": percentage,
@@ -136,12 +180,23 @@ async def index_document_events(
         await session.rollback()
         await vectors.delete_document(principal.tenant_id, document_id)
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="This document version is already indexed") from error
-    await record(session, "document_ingested", principal.tenant_id, principal.user_id, document_id=document_id, chunks=len(chunks))
+    await record(
+        session,
+        "document_ingested",
+        principal.tenant_id,
+        principal.user_id,
+        document_id=document_id,
+        chunks=len(chunks),
+        tables=parsed.table_count,
+        visuals=visuals_indexed,
+    )
     yield {
         "type": "complete",
         "percentage": 100,
         "document_id": document_id,
         "chunks_indexed": len(chunks),
+        "tables_indexed": parsed.table_count,
+        "visuals_indexed": visuals_indexed,
         "message": "Document is searchable",
     }
 
@@ -163,6 +218,8 @@ async def readyz(session: AsyncSession = Depends(get_session)) -> ReadinessRespo
         "qdrant": "ready" if await vectors.is_ready() else "unavailable",
         "model_server": "ready" if await model_server.is_ready() else "unavailable",
     }
+    if get_settings().mineru_enabled:
+        components["mineru"] = "ready" if await mineru.is_ready() else "unavailable"
     if any(component != "ready" for component in components.values()):
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail={"status": "unavailable", "components": components})
     return ReadinessResponse(status="ready", components=components)
@@ -194,7 +251,12 @@ async def ingest_document(
             completed = event
     if completed is None:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Document indexing did not complete")
-    return IngestResponse(document_id=str(completed["document_id"]), chunks_indexed=int(completed["chunks_indexed"]))
+    return IngestResponse(
+        document_id=str(completed["document_id"]),
+        chunks_indexed=int(completed["chunks_indexed"]),
+        tables_indexed=int(completed["tables_indexed"]),
+        visuals_indexed=int(completed["visuals_indexed"]),
+    )
 
 
 @app.post("/v1/documents/stream")

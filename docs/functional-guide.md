@@ -19,14 +19,18 @@ The tenant in `X-Tenant-ID` must match the tenant bound to the API key. A mismat
 
 ## Document ingestion
 
-An administrator uploads a PDF, DOCX, or UTF-8 text file through `POST /v1/documents`. The service:
+An administrator uploads a PDF, DOCX, PPTX, XLSX, UTF-8 text file, or supported image through `POST /v1/documents`. The service:
 
 1. Enforces the configured upload size limit.
-2. Rejects invalid document names, unsupported formats, encrypted PDFs, empty documents, and documents that create too many chunks.
-3. Extracts text, breaks it into overlapping chunks, and creates embeddings through the self-hosted Ollama service.
-4. Stores chunks with the document name, tenant collection, and access-control metadata in Qdrant.
-5. Registers document metadata and a SHA-256 content fingerprint in PostgreSQL.
-6. Records a metadata-only audit event. Document content and user questions are not written to the audit table.
+2. Rejects invalid document names, unsupported formats, empty documents, unsafe parser archives, and documents that create too many chunks.
+3. Uses self-hosted MinerU to recover reading order, headings, paragraph text, OCR, formulas, tables, captions, and embedded figures from structured documents.
+4. Indexes detailed visual descriptions produced by MinerU directly. Images, charts, diagrams, and forms with missing or weak descriptions are concurrently enriched by a self-hosted vision-language model.
+5. Combines text, table content, and visual descriptions, breaks them into overlapping chunks, and creates embeddings through the self-hosted model service.
+6. Stores chunks with the document name, tenant collection, and access-control metadata in Qdrant.
+7. Registers document metadata and a SHA-256 content fingerprint in PostgreSQL.
+8. Records a metadata-only audit event, including extracted table and visual counts. Document content and user questions are not written to the audit table.
+
+Visual search is caption-based: raw image pixels are analyzed transiently by the private vision model, but Qdrant stores only the resulting text description and embedding. This allows normal text questions to retrieve information represented in charts and diagrams without introducing a second incompatible image-vector space.
 
 By default, a document inherits the uploader's roles. An administrator can narrow access using:
 
@@ -38,6 +42,8 @@ At least one permitted role or permitted user must match at query time.
 ### Important current limitation
 
 The service retains extracted chunks in Qdrant and metadata in PostgreSQL, but does **not** retain the original uploaded file. The upstream system must remain the system of record for originals. Before production use, add encrypted private object storage and a re-index workflow if the service must retain original files.
+
+Documents indexed before multimodal support was enabled must be deleted and re-indexed to add their table and visual descriptions. Vision descriptions are model-generated and can omit or misread details; consequential values must be verified against the original document.
 
 ## Asking a question
 

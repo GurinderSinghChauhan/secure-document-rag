@@ -40,6 +40,8 @@ class ChatDetail(ChatSummary):
 class IngestResponse(BaseModel):
     document_id: str
     chunks_indexed: int
+    tables_indexed: int = 0
+    visuals_indexed: int = 0
 
 
 class DeleteResponse(BaseModel):

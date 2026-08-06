@@ -501,7 +501,10 @@ uploadForm.addEventListener("submit", async (event) => {
     setUploadProgress(100, "success");
     setIndexingProgress(100);
     uploadProgress.classList.add("success");
-    setUploadStatus(`${file.name} is searchable (${payload.chunks_indexed} chunks).`, "success");
+    const indexedParts = [`${payload.chunks_indexed} chunks`];
+    if (payload.tables_indexed) indexedParts.push(`${payload.tables_indexed} tables`);
+    if (payload.visuals_indexed) indexedParts.push(`${payload.visuals_indexed} visuals`);
+    setUploadStatus(`${file.name} is searchable (${indexedParts.join(", ")}).`, "success");
     documentFile.value = "";
     fileLabel.textContent = "Choose another document";
   } catch (error) {

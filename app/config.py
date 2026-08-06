@@ -14,8 +14,19 @@ class Settings(BaseSettings):
     model_server_url: str = "http://localhost:1234/v1"
     embedding_model: str = "text-embedding-nomic-embed-text-v1.5"
     chat_model: str = "qwen/qwen3-4b-2507"
+    vision_model: str = "qwen/qwen3-vl-4b"
+    mineru_enabled: bool = True
+    mineru_url: str = "http://localhost:8000"
+    mineru_backend: str = "pipeline"
+    mineru_timeout_seconds: float = Field(default=600, ge=30, le=3_600)
+    mineru_max_output_bytes: int = Field(default=104_857_600, ge=1_048_576, le=1_073_741_824)
+    mineru_visual_enrichment_min_characters: int = Field(default=80, ge=0, le=2_000)
     max_upload_bytes: int = 26_214_400
     max_document_chunks: int = 2_000
+    max_visuals_per_document: int = Field(default=40, ge=0, le=200)
+    visual_analysis_concurrency: int = Field(default=2, ge=1, le=8)
+    vision_max_tokens: int = Field(default=512, ge=128, le=2_048)
+    embedding_batch_size: int = Field(default=128, ge=1, le=256)
     max_context_characters: int = 24_000
     min_retrieval_score: float = Field(default=0.25, ge=-1, le=1)
     allowed_hosts: str = "localhost,127.0.0.1"

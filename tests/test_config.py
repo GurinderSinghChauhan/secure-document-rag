@@ -17,3 +17,9 @@ def test_settings_reject_short_api_key() -> None:
 def test_settings_accepts_valid_api_key_claims() -> None:
     settings = Settings(tenant_api_keys_json='{"valid-api-key-with-more-than-thirty-two-chars":{"tenant_id":"tenant-a","user_id":"user-a","roles":["admin"]}}')
     assert settings.api_keys["valid-api-key-with-more-than-thirty-two-chars"]["tenant_id"] == "tenant-a"
+    assert settings.vision_model == "qwen/qwen3-vl-4b"
+    assert settings.mineru_enabled is True
+    assert settings.mineru_backend == "pipeline"
+    assert settings.visual_analysis_concurrency == 2
+    assert settings.embedding_batch_size == 128
+    assert settings.max_visuals_per_document == 40

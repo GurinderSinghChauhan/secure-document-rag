@@ -2,6 +2,8 @@ services:
   api:
     build: .
     env_file: .env
+    environment:
+      MINERU_URL: ${MINERU_URL:-http://mineru:8000}
     ports:
       - "127.0.0.1:8080:8080"
     depends_on:
@@ -58,6 +60,34 @@ services:
       interval: 10s
       timeout: 5s
       retries: 10
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+
+  mineru:
+    image: ${MINERU_IMAGE:-mineru:3.2.1}
+    profiles: ["mineru"]
+    entrypoint: mineru-api
+    command: ["--host", "0.0.0.0", "--port", "8000"]
+    environment:
+      MINERU_MODEL_SOURCE: local
+    ports:
+      - "127.0.0.1:8000:8000"
+    networks:
+      - private
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:8000/health"]
+      interval: 20s
+      timeout: 5s
+      retries: 12
+      start_period: 120s
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ["0"]
+              capabilities: [gpu]
     security_opt:
       - no-new-privileges:true
     restart: unless-stopped

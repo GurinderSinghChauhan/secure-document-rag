@@ -184,13 +184,13 @@
 
             <form id="upload-form" class="upload-form">
               <label id="file-dropzone" class="file-dropzone" for="document-file">
-                <input id="document-file" type="file" accept="text/plain,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" required>
+                <input id="document-file" type="file" accept="text/plain,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.presentationml.presentation,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,image/png,image/jpeg,image/webp" required>
                 <span class="upload-icon" aria-hidden="true">
                   <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><path d="m17 8-5-5-5 5M12 3v12"></path></svg>
                 </span>
                 <strong id="file-label">Choose a document</strong>
                 <span>or drag and drop it here</span>
-                <small>PDF, DOCX, or TXT · up to 25 MB</small>
+                <small>PDF, DOCX, PPTX, XLSX, TXT, PNG, JPEG, or WebP · up to 25 MB</small>
               </label>
 
               <fieldset class="access-fieldset">
@@ -250,7 +250,7 @@
 
             <div class="trust-note">
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20Z"></path><path d="m9 12 2 2 4-4"></path></svg>
-              <p><strong>Processed privately.</strong> The browser sends this file only to your self-hosted API.</p>
+              <p><strong>Processed privately.</strong> The browser sends this file only to your self-hosted API. Structured parsing uses self-hosted <a href="https://github.com/opendatalab/MinerU" target="_blank" rel="noreferrer">MinerU</a>.</p>
             </div>
           </aside>
         </main>
