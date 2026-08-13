@@ -88,3 +88,62 @@ async def test_embedding_requests_use_configured_batch_size(monkeypatch):
 
     assert batch_sizes == [128, 1]
     assert len(embeddings) == 129
+
+
+@pytest.mark.asyncio
+async def test_readiness_requires_all_configured_models_and_accepts_provider_prefix(monkeypatch):
+    class FakeResponse:
+        is_success = True
+
+        @staticmethod
+        def json():
+            return {
+                "data": [
+                    {"id": "smarttasks/text-embedding-nomic-embed-text-v1.5"},
+                    {"id": "qwen/qwen3-4b-2507"},
+                    {"id": "qwen/qwen3-vl-4b"},
+                ]
+            }
+
+    class FakeClient:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_):
+            return None
+
+        async def get(self, _path):
+            return FakeResponse()
+
+    monkeypatch.setattr("app.providers.httpx.AsyncClient", lambda **_: FakeClient())
+
+    assert await ModelClient().is_ready() is True
+
+
+@pytest.mark.asyncio
+async def test_readiness_rejects_missing_vision_model(monkeypatch):
+    class FakeResponse:
+        is_success = True
+
+        @staticmethod
+        def json():
+            return {
+                "data": [
+                    {"id": "smarttasks/text-embedding-nomic-embed-text-v1.5"},
+                    {"id": "qwen/qwen3-4b-2507"},
+                ]
+            }
+
+    class FakeClient:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_):
+            return None
+
+        async def get(self, _path):
+            return FakeResponse()
+
+    monkeypatch.setattr("app.providers.httpx.AsyncClient", lambda **_: FakeClient())
+
+    assert await ModelClient().is_ready() is False

@@ -29,9 +29,9 @@ docker compose up --build -d
 
 Before starting, replace the example `TENANT_API_KEYS_JSON` and `POSTGRES_PASSWORD` values in `.env`. The service refuses to start with an example API key. Use secrets supplied by your secret manager in real deployments; do not commit `.env`.
 
-Build the official MinerU image as `mineru:3.2.1` using its pinned release Dockerfile, then start the stack with `docker compose --profile mineru up --build -d`. The API reaches MinerU at `http://mineru:8000` on the private Compose network. MinerU must use locally downloaded model weights (`MINERU_MODEL_SOURCE=local`); do not configure its hosted API for regulated documents. See the [official Docker deployment guide](https://opendatalab.github.io/MinerU/quick_start/docker_deployment/).
+The first build creates the pinned, pipeline-only `mineru:3.2.1` CUDA image. A one-shot `mineru-models` service downloads only the pipeline weights into the persistent `mineru-models` volume before the private MinerU API starts. Image rebuilds therefore do not duplicate or re-download model weights. MinerU must remain configured with `MINERU_MODEL_SOURCE=local`; do not configure its hosted API for regulated documents. The model initialization follows MinerU's [local-model guidance](https://opendatalab.github.io/MinerU/usage/model_source/).
 
-Multimodal ingestion requires an image-capable model exposed by LM Studio. Set `VISION_MODEL` to its loaded identifier. The included MinerU profile gives its `pipeline` backend access to the NVIDIA GPU. On an 8 GB RTX 4060, unload Qwen from LM Studio during large indexing jobs, then reload it for visual enrichment and chat; MinerU's VLM backend alone lists 8 GB as its minimum and should use a separate production GPU.
+Multimodal ingestion requires an image-capable model exposed by LM Studio. Set `VISION_MODEL` to an identifier returned by `/v1/models`; readiness verifies the configured embedding, chat, and vision model IDs. The included MinerU service gives its `pipeline` backend access to NVIDIA GPU 0 by default and can be changed with `MINERU_GPU_DEVICE`. On an 8 GB RTX 4060, serialize heavy MinerU work and LM Studio model loading to avoid VRAM exhaustion; use a separate production GPU before switching MinerU to its VLM backend.
 
 ```bash
 curl -X POST http://127.0.0.1:8080/v1/documents \
@@ -82,7 +82,7 @@ Chat conversations are stored in PostgreSQL and scoped to the authenticated tena
 
 `DELETE /v1/documents/{document_id}` removes a document's chunks from Qdrant and soft-deletes its PostgreSQL record. It requires the `admin` role. Implement a legal-hold workflow before enabling deletion for regulated records.
 
-`GET /healthz` reports process liveness. `GET /readyz` checks PostgreSQL, Qdrant, the model server, and MinerU when enabled; it must be used by the deployment platform before routing traffic.
+`GET /healthz` reports process liveness. `GET /readyz` checks PostgreSQL, Qdrant, MinerU when enabled, and the availability of every configured model ID; it must be used by the deployment platform before routing traffic.
 
 ## Chat UI
 

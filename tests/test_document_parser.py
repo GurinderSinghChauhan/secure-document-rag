@@ -3,6 +3,7 @@ from io import BytesIO
 
 from docx import Document
 from docx.shared import Inches
+from pypdf import PdfWriter
 
 from app.document_parser import extract_document, table_to_markdown
 
@@ -49,3 +50,15 @@ def test_extract_standalone_image_as_visual():
     assert parsed.text == ""
     assert len(parsed.visuals) == 1
     assert parsed.visuals[0].location == "Uploaded image"
+
+
+def test_extract_pdf_fallback_when_mineru_is_disabled():
+    output = BytesIO()
+    writer = PdfWriter()
+    writer.add_blank_page(width=72, height=72)
+    writer.write(output)
+
+    parsed = extract_document(output.getvalue(), "application/pdf")
+
+    assert parsed.text == ""
+    assert parsed.visuals == []

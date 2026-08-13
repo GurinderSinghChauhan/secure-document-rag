@@ -1,0 +1,28 @@
+# Pipeline-only MinerU runtime. The official all-backend image uses vLLM, but
+# this service runs the pipeline backend and only needs PyTorch with CUDA.
+FROM pytorch/pytorch:2.7.1-cuda12.8-cudnn9-runtime
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        curl \
+        fonts-noto-core \
+        fonts-noto-cjk \
+        fontconfig \
+        libgl1 \
+        libglib2.0-0 \
+        libsm6 \
+        libxext6 && \
+    fc-cache -fv && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+# MinerU 3.2.1 expects the iterable page-character API removed in pdftext 0.7.
+RUN python3 -m pip install --no-cache-dir \
+        'mineru[core]==3.2.1' \
+        'pdftext==0.6.3' && \
+    python3 -m pip check
+
+ENV MINERU_MODEL_SOURCE=local
+ENTRYPOINT ["/bin/bash", "-c", "exec \"$@\"", "--"]

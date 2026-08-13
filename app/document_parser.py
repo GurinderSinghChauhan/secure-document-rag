@@ -5,6 +5,7 @@ import warnings
 from docx import Document as DocxDocument
 from fastapi import HTTPException, status
 from PIL import Image
+from pypdf import PdfReader
 
 
 @dataclass(frozen=True)
@@ -92,6 +93,13 @@ def extract_document(content: bytes, content_type: str, max_visuals: int = 40) -
     try:
         if content_type.startswith("text/plain"):
             return ParsedDocument(text=content.decode("utf-8"))
+        if content_type.startswith("application/pdf"):
+            reader = PdfReader(BytesIO(content))
+            if reader.is_encrypted:
+                raise ValueError("Encrypted PDF files are not supported")
+            return ParsedDocument(
+                text="\n".join(page.extract_text() or "" for page in reader.pages)
+            )
         if content_type.startswith("application/vnd.openxmlformats-officedocument.wordprocessingml.document"):
             return _extract_docx(content, max_visuals)
         if content_type.startswith("image/"):

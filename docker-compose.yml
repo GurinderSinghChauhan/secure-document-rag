@@ -11,6 +11,8 @@ services:
         condition: service_healthy
       qdrant:
         condition: service_healthy
+      mineru:
+        condition: service_healthy
     networks:
       - private
     extra_hosts:
@@ -68,15 +70,47 @@ services:
       - no-new-privileges:true
     restart: unless-stopped
 
+  mineru-models:
+    image: ${MINERU_IMAGE:-mineru:3.2.1}
+    build:
+      context: .
+      dockerfile: Dockerfile.mineru
+    entrypoint: ["/bin/bash", "-c"]
+    command:
+      - |
+        if [ ! -s "$${MINERU_TOOLS_CONFIG_JSON}" ]; then
+          mineru-models-download -s huggingface -m pipeline
+        fi
+    environment:
+      HF_HOME: /opt/mineru/huggingface
+      HF_HUB_DISABLE_XET: "1"
+      HF_HUB_DOWNLOAD_TIMEOUT: "600"
+      MINERU_TOOLS_CONFIG_JSON: /opt/mineru/mineru.json
+    volumes:
+      - mineru-models:/opt/mineru
+    networks:
+      - private
+    security_opt:
+      - no-new-privileges:true
+    restart: "no"
+
   mineru:
     image: ${MINERU_IMAGE:-mineru:3.2.1}
-    profiles: ["mineru"]
+    build:
+      context: .
+      dockerfile: Dockerfile.mineru
     entrypoint: mineru-api
     command: ["--host", "0.0.0.0", "--port", "8000"]
     environment:
       MINERU_MODEL_SOURCE: local
-    ports:
-      - "127.0.0.1:8000:8000"
+      MINERU_TOOLS_CONFIG_JSON: /opt/mineru/mineru.json
+      HF_HOME: /opt/mineru/huggingface
+      CUDA_VISIBLE_DEVICES: ${MINERU_GPU_DEVICE:-0}
+    volumes:
+      - mineru-models:/opt/mineru:ro
+    depends_on:
+      mineru-models:
+        condition: service_completed_successfully
     networks:
       - private
     healthcheck:
@@ -85,12 +119,16 @@ services:
       timeout: 5s
       retries: 12
       start_period: 120s
+    ipc: host
+    ulimits:
+      memlock: -1
+      stack: 67108864
     deploy:
       resources:
         reservations:
           devices:
             - driver: nvidia
-              device_ids: ["0"]
+              device_ids: ["${MINERU_GPU_DEVICE:-0}"]
               capabilities: [gpu]
     security_opt:
       - no-new-privileges:true
@@ -102,3 +140,4 @@ networks:
 volumes:
   postgres-data:
   qdrant-data:
+  mineru-models:

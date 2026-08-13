@@ -164,10 +164,32 @@ class ModelClient:
             ) from error
         return content if isinstance(content, str) else None
 
+    @staticmethod
+    def _model_is_available(configured_id: str, available_ids: set[str]) -> bool:
+        return configured_id in available_ids or any(
+            available_id.endswith(f"/{configured_id}") for available_id in available_ids
+        )
+
     async def is_ready(self) -> bool:
         try:
             async with httpx.AsyncClient(base_url=self.settings.model_server_url, timeout=5) as client:
                 response = await client.get("/models")
-            return response.is_success
-        except httpx.HTTPError:
+            if not response.is_success:
+                return False
+            values = response.json().get("data", [])
+            available_ids = {
+                value["id"] for value in values
+                if isinstance(value, dict) and isinstance(value.get("id"), str)
+            }
+            required_ids = {
+                self.settings.embedding_model,
+                self.settings.chat_model,
+            }
+            if self.settings.max_visuals_per_document > 0:
+                required_ids.add(self.settings.vision_model)
+            return all(
+                self._model_is_available(model_id, available_ids)
+                for model_id in required_ids
+            )
+        except (httpx.HTTPError, AttributeError, TypeError, ValueError):
             return False

@@ -58,7 +58,7 @@ X-Tenant-ID: <tenant-id>
 | Method | Path | Access | Purpose |
 | --- | --- | --- | --- |
 | `GET` | `/healthz` | None | Process liveness only |
-| `GET` | `/readyz` | None | Dependency readiness for PostgreSQL, Qdrant, MinerU, and the model server |
+| `GET` | `/readyz` | None | Dependency readiness for PostgreSQL, Qdrant, MinerU, and every configured model ID |
 | `POST` | `/v1/documents` | Admin | Ingest a document body |
 | `POST` | `/v1/query` | Authorized user | Retrieve and generate a cited answer |
 | `POST` | `/v1/query/stream` | Authorized user | Retrieve and stream an NDJSON answer |
@@ -80,6 +80,7 @@ X-Tenant-ID: <tenant-id>
 | `MINERU_ENABLED` | Require MinerU for supported structured document formats and readiness checks |
 | `MINERU_URL` | Private base URL for the self-hosted MinerU API |
 | `MINERU_BACKEND` | MinerU parser backend; `pipeline` supports GPU acceleration with lower VRAM pressure than the VLM backend |
+| `MINERU_IMAGE` / `MINERU_GPU_DEVICE` | Pinned local image tag and NVIDIA GPU device assigned to MinerU |
 | `MINERU_TIMEOUT_SECONDS` | End-to-end parsing timeout for one MinerU request |
 | `MINERU_MAX_OUTPUT_BYTES` | Maximum compressed response and declared uncompressed archive size accepted from MinerU |
 | `MINERU_VISUAL_ENRICHMENT_MIN_CHARACTERS` | Minimum MinerU visual-description length that bypasses secondary Qwen enrichment |
@@ -96,7 +97,7 @@ X-Tenant-ID: <tenant-id>
 ## Operations
 
 - Use `GET /healthz` for liveness and `GET /readyz` for traffic readiness.
-- The included Compose profile exposes NVIDIA GPU 0 to MinerU's `pipeline` backend. On an 8 GB card, serialize heavy indexing and LM Studio model loading to avoid out-of-memory failures. Use a separate GPU worker before switching MinerU to its VLM backend.
+- The default Compose stack builds a pipeline-only PyTorch/CUDA MinerU image, keeps its API private, and assigns NVIDIA GPU 0 with host IPC and the official memory/stack ulimits. A one-shot initializer stores only pipeline model weights in the persistent `mineru-models` volume, separate from the image. On an 8 GB card, serialize heavy MinerU work and LM Studio model loading to avoid out-of-memory failures. Use a separate GPU worker before switching MinerU to its VLM backend.
 - Keep MinerU, Qdrant, and PostgreSQL off public networks. Keep the model server bound to `127.0.0.1` and do not expose its port externally. Remote MinerU or model URLs would transmit document content and must not be used without an approved data-flow review.
 - Use encrypted storage and tested restore procedures for Qdrant and PostgreSQL volumes.
 - Inject configuration via a secrets manager; never retain production API keys in `.env` or source control.
