@@ -526,7 +526,9 @@ uploadForm.addEventListener("submit", async (event) => {
       setUploadStatus(`${indexed.length} of ${files.length} indexed. Failed: ${failedNames}.`, "error");
     } else {
       const chunks = indexed.reduce((total, item) => total + item.payload.chunks_indexed, 0);
-      setUploadStatus(`${indexed.length} ${indexed.length === 1 ? "document is" : "documents are"} searchable (${chunks} chunks total).`, "success");
+      const reindexed = indexed.filter((item) => item.payload.reindexed).length;
+      const reindexedLabel = reindexed ? ` ${reindexed} re-indexed.` : "";
+      setUploadStatus(`${indexed.length} ${indexed.length === 1 ? "document is" : "documents are"} searchable (${chunks} chunks total).${reindexedLabel}`, "success");
       documentFile.value = "";
       fileLabel.textContent = "Choose more documents";
       uploadButton.querySelector("span").textContent = "Upload and index";

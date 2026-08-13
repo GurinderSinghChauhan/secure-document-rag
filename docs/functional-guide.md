@@ -51,7 +51,7 @@ An authorized user sends `POST /v1/query` with a question and optional `top_k` v
 
 The chat interface uses `POST /v1/query/stream`, so the answer appears incrementally as soon as the model emits text instead of waiting for the full response. Retrieval and authorization still complete before generation begins.
 
-During document ingestion, the interface displays separate upload and indexing percentages. Upload progress measures bytes transferred from the browser. Indexing progress is reported by the API across text extraction, chunking, embedding batches, vector storage, and metadata persistence.
+During document ingestion, the interface displays separate upload and indexing percentages. Upload progress measures bytes transferred from the browser. While MinerU parses a document, the API emits periodic extraction progress capped below the next completed stage. Indexing then reports measured progress across chunking, embedding batches, vector storage, and metadata persistence.
 
 ### Chat history
 

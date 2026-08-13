@@ -6,7 +6,7 @@ from zipfile import ZipFile
 import httpx
 import pytest
 
-from app.mineru import MinerUClient, _parse_archive, supports_mineru
+from app.mineru import MinerUClient, _parse_archive, normalize_html_tables, supports_mineru
 
 
 PNG_BYTES = base64.b64decode(
@@ -14,7 +14,7 @@ PNG_BYTES = base64.b64decode(
 )
 
 
-def mineru_archive(chart_content: str = "") -> bytes:
+def mineru_archive(chart_content: str = "", include_table_image: bool = False) -> bytes:
     output = BytesIO()
     with ZipFile(output, "w") as archive:
         archive.writestr("report/report.md", "# Risk report\n\n<table><tr><td>High</td></tr></table>")
@@ -23,7 +23,11 @@ def mineru_archive(chart_content: str = "") -> bytes:
             json.dumps(
                 [
                     {"type": "text", "text": "Risk report", "page_idx": 0},
-                    {"type": "table", "page_idx": 0},
+                    {
+                        "type": "table",
+                        "page_idx": 0,
+                        **({"img_path": "images/table.png"} if include_table_image else {}),
+                    },
                     {
                         "type": "chart",
                         "img_path": "images/chart.png",
@@ -34,6 +38,8 @@ def mineru_archive(chart_content: str = "") -> bytes:
             ),
         )
         archive.writestr("report/images/chart.png", PNG_BYTES)
+        if include_table_image:
+            archive.writestr("report/images/table.png", PNG_BYTES)
     return output.getvalue()
 
 
@@ -45,6 +51,36 @@ def test_parse_archive_extracts_markdown_tables_and_visuals():
     assert len(parsed.visuals) == 1
     assert parsed.visuals[0].location == "MinerU chart, page 2"
     assert parsed.described_visual_count == 0
+    assert "<td>" not in parsed.text
+    assert "| High |" in parsed.text
+
+
+def test_normalize_html_tables_expands_rowspan_and_colspan() -> None:
+    markdown = """Before
+<table><tr><th rowspan="2">Tax</th><th colspan="2">Year</th></tr>
+<tr><td>2025</td><td>2026</td></tr><tr><td>Total</td><td>10</td><td>12</td></tr></table>
+After"""
+
+    normalized = normalize_html_tables(markdown)
+
+    assert "<table>" not in normalized
+    assert "<td>" not in normalized
+    assert "[MinerU table 1]" in normalized
+    assert "| Tax | Year | Year |" in normalized
+    assert "| Tax | 2025 | 2026 |" in normalized
+    assert "| Total | 10 | 12 |" in normalized
+
+
+def test_parse_archive_prefers_table_image_over_mineru_html() -> None:
+    parsed = _parse_archive(
+        mineru_archive(include_table_image=True),
+        max_visuals=10,
+        max_output_bytes=1_000_000,
+    )
+
+    assert "| High |" not in parsed.text
+    assert "transcribed from its extracted image" in parsed.text
+    assert any(visual.location == "MinerU table, page 1" for visual in parsed.visuals)
 
 
 def test_parse_archive_skips_redundant_enrichment_for_detailed_visual_content():

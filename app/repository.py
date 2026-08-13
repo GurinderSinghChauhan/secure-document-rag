@@ -12,15 +12,14 @@ async def create_document(session: AsyncSession, record: DocumentRecord) -> None
     await session.commit()
 
 
-async def document_exists(session: AsyncSession, tenant_id: str, content_sha256: str) -> bool:
-    result = await session.scalar(
-        select(DocumentRecord.document_id).where(
+async def get_document_by_content_hash(session: AsyncSession, tenant_id: str, content_sha256: str) -> DocumentRecord | None:
+    return await session.scalar(
+        select(DocumentRecord).where(
             DocumentRecord.tenant_id == tenant_id,
             DocumentRecord.content_sha256 == content_sha256,
             DocumentRecord.deleted_at.is_(None),
         )
     )
-    return result is not None
 
 
 async def get_document(session: AsyncSession, tenant_id: str, document_id: str) -> DocumentRecord | None:

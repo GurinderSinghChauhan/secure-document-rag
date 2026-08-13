@@ -21,7 +21,7 @@ from .document_parser import VisualAsset, extract_document
 from .mineru import MinerUClient, supports_mineru
 from .models import ChatDetail, ChatMessage, ChatSummary, DeleteResponse, IngestResponse, Principal, QueryRequest, QueryResponse, ReadinessResponse
 from .providers import ModelClient
-from .repository import add_chat_message, create_chat, database_is_ready, document_exists, get_chat, get_document, list_chat_messages, list_chats, mark_document_deleted
+from .repository import add_chat_message, create_chat, database_is_ready, get_chat, get_document, get_document_by_content_hash, list_chat_messages, list_chats, mark_document_deleted
 from .vector_store import VectorStore
 
 model_server = ModelClient()
@@ -69,6 +69,19 @@ def encode_event(event: dict[str, object]) -> str:
     return json.dumps(event) + "\n"
 
 
+def existing_document_event(document: DocumentRecord) -> dict[str, object]:
+    return {
+        "type": "complete",
+        "percentage": 100,
+        "document_id": document.document_id,
+        "chunks_indexed": document.chunk_count,
+        "tables_indexed": 0,
+        "visuals_indexed": 0,
+        "reindexed": False,
+        "message": "Document is searchable",
+    }
+
+
 def chat_title(question: str) -> str:
     normalized = " ".join(question.split())
     return normalized[:77] + "..." if len(normalized) > 80 else normalized
@@ -107,11 +120,30 @@ async def index_document_events(
     allowed_users: list[str],
     principal: Principal,
     session: AsyncSession,
+    existing_document: DocumentRecord | None = None,
 ):
     settings = get_settings()
     yield {"type": "progress", "percentage": 5, "stage": "extracting", "message": "Extracting text, tables, and visual content"}
     if settings.mineru_enabled and supports_mineru(content_type):
-        parsed = await mineru.parse(content, content_type, document_name, settings.max_visuals_per_document)
+        parse_task = asyncio.create_task(mineru.parse(content, content_type, document_name, settings.max_visuals_per_document))
+        parsing_percentage = 5
+        try:
+            while not parse_task.done():
+                try:
+                    await asyncio.wait_for(asyncio.shield(parse_task), timeout=2)
+                except TimeoutError:
+                    parsing_percentage = min(24, parsing_percentage + 1)
+                    yield {
+                        "type": "progress",
+                        "percentage": parsing_percentage,
+                        "stage": "extracting",
+                        "message": "MinerU is extracting document content",
+                    }
+            parsed = await parse_task
+        finally:
+            if not parse_task.done():
+                parse_task.cancel()
+                await asyncio.gather(parse_task, return_exceptions=True)
     else:
         parsed = extract_document(content, content_type, settings.max_visuals_per_document)
     text_sections = [parsed.text] if parsed.text.strip() else []
@@ -169,20 +201,34 @@ async def index_document_events(
             "message": f"Embedded {completed} of {total} chunks",
         }
 
-    document_id = str(uuid4())
+    document_id = existing_document.document_id if existing_document is not None else str(uuid4())
     yield {"type": "progress", "percentage": 90, "stage": "vector_storage", "message": "Saving searchable vectors"}
+    if existing_document is not None:
+        await vectors.delete_document(principal.tenant_id, document_id)
     await vectors.upsert_document(principal.tenant_id, document_id, document_name, chunks, embeddings, allowed_roles, allowed_users)
     yield {"type": "progress", "percentage": 96, "stage": "metadata", "message": "Saving document metadata"}
     try:
-        session.add(DocumentRecord(document_id=document_id, tenant_id=principal.tenant_id, document_name=document_name, content_type=content_type, content_sha256=content_sha256, size_bytes=len(content), chunk_count=len(chunks), allowed_roles=allowed_roles, allowed_users=allowed_users, created_by=principal.user_id))
+        if existing_document is None:
+            session.add(DocumentRecord(document_id=document_id, tenant_id=principal.tenant_id, document_name=document_name, content_type=content_type, content_sha256=content_sha256, size_bytes=len(content), chunk_count=len(chunks), allowed_roles=allowed_roles, allowed_users=allowed_users, created_by=principal.user_id))
+        else:
+            existing_document.document_name = document_name
+            existing_document.content_type = content_type
+            existing_document.size_bytes = len(content)
+            existing_document.chunk_count = len(chunks)
+            existing_document.allowed_roles = allowed_roles
+            existing_document.allowed_users = allowed_users
         await session.commit()
     except IntegrityError as error:
         await session.rollback()
         await vectors.delete_document(principal.tenant_id, document_id)
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="This document version is already indexed") from error
+        existing_document = await get_document_by_content_hash(session, principal.tenant_id, content_sha256)
+        if existing_document is None:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Document indexing conflicted with another request") from error
+        yield existing_document_event(existing_document)
+        return
     await record(
         session,
-        "document_ingested",
+        "document_reindexed" if existing_document is not None else "document_ingested",
         principal.tenant_id,
         principal.user_id,
         document_id=document_id,
@@ -197,7 +243,8 @@ async def index_document_events(
         "chunks_indexed": len(chunks),
         "tables_indexed": parsed.table_count,
         "visuals_indexed": visuals_indexed,
-        "message": "Document is searchable",
+        "reindexed": existing_document is not None,
+        "message": "Document was re-indexed" if existing_document is not None else "Document is searchable",
     }
 
 
@@ -240,13 +287,12 @@ async def ingest_document(
     if not content:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Document cannot be empty")
     content_sha256 = sha256(content).hexdigest()
-    if await document_exists(session, principal.tenant_id, content_sha256):
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="This document version is already indexed")
+    existing_document = await get_document_by_content_hash(session, principal.tenant_id, content_sha256)
     content_type = request.headers.get("content-type", "")
     allowed_roles = parse_acl(x_allowed_roles) or principal.roles
     allowed_users = parse_acl(x_allowed_users)
     completed: dict[str, object] | None = None
-    async for event in index_document_events(content, content_type, content_sha256, document_name, allowed_roles, allowed_users, principal, session):
+    async for event in index_document_events(content, content_type, content_sha256, document_name, allowed_roles, allowed_users, principal, session, existing_document):
         if event["type"] == "complete":
             completed = event
     if completed is None:
@@ -274,15 +320,14 @@ async def stream_ingest_document(
     if not content:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Document cannot be empty")
     content_sha256 = sha256(content).hexdigest()
-    if await document_exists(session, principal.tenant_id, content_sha256):
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="This document version is already indexed")
+    existing_document = await get_document_by_content_hash(session, principal.tenant_id, content_sha256)
     content_type = request.headers.get("content-type", "")
     allowed_roles = parse_acl(x_allowed_roles) or principal.roles
     allowed_users = parse_acl(x_allowed_users)
 
     async def events():
         try:
-            async for event in index_document_events(content, content_type, content_sha256, document_name, allowed_roles, allowed_users, principal, session):
+            async for event in index_document_events(content, content_type, content_sha256, document_name, allowed_roles, allowed_users, principal, session, existing_document):
                 yield encode_event(event)
         except HTTPException as error:
             yield encode_event({"type": "error", "detail": error.detail})

@@ -1,13 +1,15 @@
 from io import BytesIO
 import json
 from pathlib import PurePosixPath
+import re
 from zipfile import BadZipFile, ZipFile
 
 import httpx
 from fastapi import HTTPException, status
+from lxml import html
 
 from .config import get_settings
-from .document_parser import ParsedDocument, VisualAsset, normalize_visual
+from .document_parser import ParsedDocument, VisualAsset, normalize_visual, table_to_markdown
 
 
 MINERU_CONTENT_TYPES = {
@@ -16,6 +18,7 @@ MINERU_CONTENT_TYPES = {
     "application/vnd.openxmlformats-officedocument.presentationml.presentation",
     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
 }
+HTML_TABLE_PATTERN = re.compile(r"<table\b[^>]*>.*?</table>", re.IGNORECASE | re.DOTALL)
 
 
 def supports_mineru(content_type: str) -> bool:
@@ -61,6 +64,61 @@ def _visual_description(item: dict[str, object]) -> str:
     return "\n".join(text for key in keys for text in _flatten_text(item.get(key)))
 
 
+def _html_table_rows(markup: str) -> list[list[str]]:
+    table = html.fragment_fromstring(markup)
+    rows: list[list[str]] = []
+    spans: dict[int, tuple[int, str]] = {}
+    for row_element in table.xpath(".//tr"):
+        row: list[str] = []
+        column = 0
+
+        def fill_spans() -> None:
+            nonlocal column
+            while column in spans:
+                remaining, value = spans[column]
+                row.append(value)
+                if remaining <= 1:
+                    del spans[column]
+                else:
+                    spans[column] = (remaining - 1, value)
+                column += 1
+
+        for cell in row_element.xpath("./th|./td"):
+            fill_spans()
+            value = " ".join(cell.text_content().split())
+            try:
+                colspan = max(1, int(cell.get("colspan", "1")))
+                rowspan = max(1, int(cell.get("rowspan", "1")))
+            except ValueError:
+                colspan = rowspan = 1
+            for _ in range(colspan):
+                row.append(value)
+                if rowspan > 1:
+                    spans[column] = (rowspan - 1, value)
+                column += 1
+        fill_spans()
+        if any(row):
+            rows.append(row)
+    return rows
+
+
+def normalize_html_tables(markdown: str, omit_tables: bool = False) -> str:
+    table_number = 0
+
+    def replace_table(match: re.Match[str]) -> str:
+        nonlocal table_number
+        table_number += 1
+        if omit_tables:
+            return f"[MinerU table {table_number} is transcribed from its extracted image below]"
+        try:
+            rows = _html_table_rows(match.group(0))
+            return table_to_markdown(rows, f"MinerU table {table_number}")
+        except (ValueError, TypeError):
+            return " ".join(html.fromstring(match.group(0)).text_content().split())
+
+    return HTML_TABLE_PATTERN.sub(replace_table, markdown)
+
+
 def _parse_archive(
     content: bytes,
     max_visuals: int,
@@ -83,7 +141,7 @@ def _parse_archive(
 
             names = {member.filename for member in members}
             markdown_names = sorted(name for name in names if name.lower().endswith(".md"))
-            markdown = archive.read(markdown_names[0]).decode("utf-8") if markdown_names else ""
+            raw_markdown = archive.read(markdown_names[0]).decode("utf-8") if markdown_names else ""
 
             content_list_names = sorted(
                 name for name in names if name.lower().endswith("_content_list.json")
@@ -93,16 +151,25 @@ def _parse_archive(
                 items = _content_items(json.loads(archive.read(content_list_names[0])))
 
             table_count = sum(item.get("type") == "table" for item in items)
+            has_table_images = any(
+                item.get("type") == "table" and isinstance(item.get("img_path"), str)
+                for item in items
+            )
+            markdown = normalize_html_tables(raw_markdown, omit_tables=has_table_images)
             image_references: list[tuple[str, str, str]] = []
             for item in items:
                 item_type = str(item.get("type", ""))
                 image_path = item.get("img_path")
-                if item_type not in {"image", "chart"} or not isinstance(image_path, str):
+                if item_type not in {"image", "chart", "table"} or not isinstance(image_path, str):
                     continue
                 page = item.get("page_idx")
                 page_label = int(page) + 1 if isinstance(page, int) else "unknown"
                 image_references.append(
-                    (image_path, f"MinerU {item_type}, page {page_label}", _visual_description(item))
+                    (
+                        image_path,
+                        f"MinerU {item_type}, page {page_label}",
+                        "" if item_type == "table" else _visual_description(item),
+                    )
                 )
 
             if not image_references:

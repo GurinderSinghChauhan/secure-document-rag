@@ -42,6 +42,7 @@ class IngestResponse(BaseModel):
     chunks_indexed: int
     tables_indexed: int = 0
     visuals_indexed: int = 0
+    reindexed: bool = False
 
 
 class DeleteResponse(BaseModel):

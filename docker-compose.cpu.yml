@@ -1,0 +1,18 @@
+services:
+  mineru-models:
+    image: mineru:3.2.1-cpu
+    build:
+      context: .
+      dockerfile: Dockerfile.mineru.cpu
+
+  mineru:
+    image: mineru:3.2.1-cpu
+    build:
+      context: .
+      dockerfile: Dockerfile.mineru.cpu
+    environment:
+      CUDA_VISIBLE_DEVICES: ""
+    deploy:
+      resources:
+        reservations:
+          devices: !reset []

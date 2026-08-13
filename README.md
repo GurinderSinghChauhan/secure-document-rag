@@ -33,6 +33,14 @@ The first build creates the pinned, pipeline-only `mineru:3.2.1` CUDA image. A o
 
 Multimodal ingestion requires an image-capable model exposed by LM Studio. Set `VISION_MODEL` to an identifier returned by `/v1/models`; readiness verifies the configured embedding, chat, and vision model IDs. The included MinerU service gives its `pipeline` backend access to NVIDIA GPU 0 by default and can be changed with `MINERU_GPU_DEVICE`. On an 8 GB RTX 4060, serialize heavy MinerU work and LM Studio model loading to avoid VRAM exhaustion; use a separate production GPU before switching MinerU to its VLM backend.
 
+For a host without CUDA, layer the CPU override onto the default Compose file:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.cpu.yml up --build -d
+```
+
+This builds MinerU with CPU-only PyTorch and removes the NVIDIA device reservation. Parsing structured documents will be slower than with a supported GPU.
+
 ```bash
 curl -X POST http://127.0.0.1:8080/v1/documents \
   -H 'X-API-Key: replace-with-a-real-secret' \
@@ -71,6 +79,8 @@ curl -X POST http://127.0.0.1:8080/v1/query \
 ## API
 
 `POST /v1/documents` ingests `text/plain`, PDF, DOCX, PPTX, XLSX, PNG, JPEG, or WebP request bodies. MinerU converts structured documents into Markdown and content-list JSON while extracting tables, formulas, images, charts, and layout metadata. Detailed MinerU visual content is indexed directly; only missing or short descriptions are concurrently enriched by the configured self-hosted vision model. Text embeddings use configurable large batches to reduce model-server round trips.
+
+Document ingestion is idempotent per tenant and file content. Repeating an upload rebuilds the vectors under the existing document ID, updates its metadata and ACLs, and returns `reindexed: true` instead of creating a duplicate document.
 
 - `X-Document-Name` (required)
 - `X-Allowed-Roles`: comma-separated role list
