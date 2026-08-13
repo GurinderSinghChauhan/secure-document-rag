@@ -32,6 +32,8 @@ services:
 
   postgres:
     image: postgres:17.2-alpine
+    ports:
+      - "127.0.0.1:5432:5432"
     environment:
       POSTGRES_DB: secure_rag
       POSTGRES_USER: secure_rag
@@ -51,6 +53,8 @@ services:
 
   qdrant:
     image: qdrant/qdrant:v1.12.5
+    ports:
+      - "127.0.0.1:6333:6333"
     volumes:
       - qdrant-data:/qdrant/storage
     networks:
