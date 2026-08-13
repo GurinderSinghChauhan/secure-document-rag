@@ -372,7 +372,7 @@ function resetUploadProgress() {
   indexingProgressValue.textContent = "0%";
 }
 
-function uploadDocument(file, headers) {
+function uploadDocument(file, headers, batchLabel = "") {
   return new Promise((resolve, reject) => {
     const request = new XMLHttpRequest();
     let responseOffset = 0;
@@ -392,7 +392,7 @@ function uploadDocument(file, headers) {
         if (payload.type === "complete") completedPayload = payload;
         if (payload.type === "progress") {
           setIndexingProgress(payload.percentage);
-          setUploadStatus(payload.message || `Indexing ${file.name}…`, "busy");
+          setUploadStatus(payload.message ? `${batchLabel}${payload.message}` : `${batchLabel}Indexing ${file.name}…`, "busy");
         }
       }
     }
@@ -403,12 +403,12 @@ function uploadDocument(file, headers) {
     request.upload.addEventListener("progress", (event) => {
       if (!event.lengthComputable) return;
       setUploadProgress((event.loaded / event.total) * 100);
-      setUploadStatus(`Uploading ${file.name}…`, "busy");
+      setUploadStatus(`${batchLabel}Uploading ${file.name}…`, "busy");
     });
     request.upload.addEventListener("load", () => {
       setUploadProgress(100, "success");
       setIndexingProgress(0);
-      setUploadStatus(`Upload complete. Starting indexing for ${file.name}…`, "busy");
+      setUploadStatus(`${batchLabel}Upload complete. Starting indexing for ${file.name}…`, "busy");
     });
     request.addEventListener("progress", () => processResponse());
     request.addEventListener("load", () => {
@@ -440,9 +440,14 @@ function uploadDocument(file, headers) {
 }
 
 function updateSelectedFile() {
-  const file = documentFile.files[0];
-  fileLabel.textContent = file ? file.name : "Choose a document";
-  setUploadStatus(file ? `${file.name} is ready to upload.` : "Select a file to begin.");
+  const files = Array.from(documentFile.files);
+  if (files.length === 0) fileLabel.textContent = "Choose documents";
+  else if (files.length === 1) fileLabel.textContent = files[0].name;
+  else fileLabel.textContent = `${files.length} documents selected`;
+  setUploadStatus(
+    files.length ? `${files.length} ${files.length === 1 ? "document is" : "documents are"} ready to upload.` : "Select one or more files to begin.",
+  );
+  uploadButton.querySelector("span").textContent = files.length > 1 ? `Upload and index ${files.length}` : "Upload and index";
   resetUploadProgress();
 }
 
@@ -471,46 +476,61 @@ fileDropzone.addEventListener("drop", (event) => {
 uploadForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   const { tenant: selectedTenant, apiKey: selectedApiKey } = connectionSettings();
-  const file = documentFile.files[0];
+  const files = Array.from(documentFile.files);
 
   if (!selectedTenant || !selectedApiKey) {
     showConnectionError();
     return;
   }
-  if (!file) {
-    setUploadStatus("Select a document first.", "error");
+  if (!files.length) {
+    setUploadStatus("Select one or more documents first.", "error");
     return;
   }
 
   saveConnectionSettings();
   uploadButton.disabled = true;
   setUploadProgress(0);
-  setUploadStatus(`Preparing ${file.name}…`, "busy");
+  setUploadStatus(`Preparing ${files.length} ${files.length === 1 ? "document" : "documents"}…`, "busy");
 
+  const indexed = [];
+  const failed = [];
   try {
-    const headers = {
-      ...requestHeaders(selectedTenant, selectedApiKey),
-      "X-Document-Name": file.name,
-      "Content-Type": file.type || "text/plain",
-    };
-    if (allowedRoles.value.trim()) headers["X-Allowed-Roles"] = allowedRoles.value.trim();
-    if (allowedUsers.value.trim()) headers["X-Allowed-Users"] = allowedUsers.value.trim();
+    for (const [index, file] of files.entries()) {
+      resetUploadProgress();
+      setUploadProgress(0);
+      const batchLabel = files.length > 1 ? `Document ${index + 1} of ${files.length}: ` : "";
+      const headers = {
+        ...requestHeaders(selectedTenant, selectedApiKey),
+        "X-Document-Name": file.name,
+        "Content-Type": file.type || "text/plain",
+      };
+      if (allowedRoles.value.trim()) headers["X-Allowed-Roles"] = allowedRoles.value.trim();
+      if (allowedUsers.value.trim()) headers["X-Allowed-Users"] = allowedUsers.value.trim();
 
-    const { ok, payload } = await uploadDocument(file, headers);
-    if (!ok) throw new Error(responseError(payload, "Unable to index the document."));
-    setUploadProgress(100, "success");
-    setIndexingProgress(100);
-    uploadProgress.classList.add("success");
-    const indexedParts = [`${payload.chunks_indexed} chunks`];
-    if (payload.tables_indexed) indexedParts.push(`${payload.tables_indexed} tables`);
-    if (payload.visuals_indexed) indexedParts.push(`${payload.visuals_indexed} visuals`);
-    setUploadStatus(`${file.name} is searchable (${indexedParts.join(", ")}).`, "success");
-    documentFile.value = "";
-    fileLabel.textContent = "Choose another document";
-  } catch (error) {
-    if (uploadProgressTrack.getAttribute("aria-valuenow") === "100") indexingProgressRow.classList.add("error");
-    else uploadProgress.classList.add("error");
-    setUploadStatus(error.message || "Unable to index the document.", "error");
+      try {
+        const { ok, payload } = await uploadDocument(file, headers, batchLabel);
+        if (!ok) throw new Error(responseError(payload, "Unable to index the document."));
+        indexed.push({ file, payload });
+        setUploadProgress(100, "success");
+        setIndexingProgress(100);
+        uploadProgress.classList.add("success");
+      } catch (error) {
+        failed.push({ file, message: error.message || "Unable to index the document." });
+        if (uploadProgressTrack.getAttribute("aria-valuenow") === "100") indexingProgressRow.classList.add("error");
+        else uploadProgress.classList.add("error");
+      }
+    }
+
+    if (failed.length) {
+      const failedNames = failed.map(({ file }) => file.name).join(", ");
+      setUploadStatus(`${indexed.length} of ${files.length} indexed. Failed: ${failedNames}.`, "error");
+    } else {
+      const chunks = indexed.reduce((total, item) => total + item.payload.chunks_indexed, 0);
+      setUploadStatus(`${indexed.length} ${indexed.length === 1 ? "document is" : "documents are"} searchable (${chunks} chunks total).`, "success");
+      documentFile.value = "";
+      fileLabel.textContent = "Choose more documents";
+      uploadButton.querySelector("span").textContent = "Upload and index";
+    }
   } finally {
     uploadButton.disabled = false;
   }
