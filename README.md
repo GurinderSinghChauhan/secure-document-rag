@@ -17,6 +17,7 @@ This is an application foundation, not a compliance certification. HIPAA, GLBA, 
 
 - [Functional guide](docs/functional-guide.md): user roles, document lifecycle, expected behavior, and operational limitations.
 - [Technical guide](docs/technical-guide.md): architecture, data flow, API contract, configuration, operations, and production gaps.
+- [Cloudflare tunnel laptop migration](docs/cloudflare-tunnel-runbook.md): securely move the stable demo connector to another laptop, verify cutover, and roll back.
 - [Design system](docs/design-system.md): visual tokens, accessible components, regulated workflows, privacy rules, and UI review criteria.
 - [PDF test dataset](docs/test-dataset.md): download and batch-index a licensed 500-document healthcare and legal corpus.
 
