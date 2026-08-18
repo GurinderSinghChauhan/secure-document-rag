@@ -9,6 +9,32 @@
     <link rel="stylesheet" href="/assets/app.css">
   </head>
   <body>
+    <section id="auth-gate" class="auth-gate" aria-labelledby="auth-title">
+      <div class="auth-card">
+        <span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 2.5 20 6v5.4c0 5-3.3 8.6-8 10.1-4.7-1.5-8-5.1-8-10.1V6l8-3.5Z"></path><path d="m8.7 12 2.1 2.1 4.6-4.7"></path></svg></span>
+        <h1 id="auth-title">Sign in to Arcline</h1>
+        <p id="auth-message">Use your organization account.</p>
+        <form id="login-form" class="auth-form">
+          <label><span>Email</span><input id="login-email" type="email" autocomplete="email" required></label>
+          <label><span>Password</span><span class="password-input"><input id="login-password" type="password" autocomplete="current-password" required><button type="button" data-password-toggle aria-controls="login-password" aria-label="Show password" title="Show password"><svg class="eye-open" viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z"></path><circle cx="12" cy="12" r="2.5"></circle></svg><svg class="eye-closed" viewBox="0 0 24 24" aria-hidden="true"><path d="m3 3 18 18"></path><path d="M10.6 6.2A10.7 10.7 0 0 1 12 6c6 0 9.5 6 9.5 6a15 15 0 0 1-2.1 2.7M6.2 6.2C3.8 8 2.5 12 2.5 12s3.5 6 9.5 6a9.8 9.8 0 0 0 4-.8M9.9 9.9a3 3 0 0 0 4.2 4.2"></path></svg></button></span></label>
+          <button class="primary-button" type="submit">Sign in</button>
+          <button id="forgot-password-button" class="text-button" type="button">Forgot password?</button>
+        </form>
+        <form id="register-form" class="auth-form" hidden>
+          <label><span>Your name</span><input id="register-name" autocomplete="name" minlength="2" required></label>
+          <label><span>Email</span><input id="register-email" type="email" autocomplete="email" required></label>
+          <label><span>Password</span><span class="password-input"><input id="register-password" type="password" autocomplete="new-password" minlength="12" required><button type="button" data-password-toggle aria-controls="register-password" aria-label="Show password" title="Show password"><svg class="eye-open" viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z"></path><circle cx="12" cy="12" r="2.5"></circle></svg><svg class="eye-closed" viewBox="0 0 24 24" aria-hidden="true"><path d="m3 3 18 18"></path><path d="M10.6 6.2A10.7 10.7 0 0 1 12 6c6 0 9.5 6 9.5 6a15 15 0 0 1-2.1 2.7M6.2 6.2C3.8 8 2.5 12 2.5 12s3.5 6 9.5 6a9.8 9.8 0 0 0 4-.8M9.9 9.9a3 3 0 0 0 4.2 4.2"></path></svg></button></span></label>
+          <label><span>Organization name</span><input id="organization-name" minlength="2" required></label>
+          <button class="primary-button" type="submit">Create organization</button>
+        </form>
+        <form id="account-action-form" class="auth-form" hidden>
+          <label id="action-name-field" hidden><span>Your name</span><input id="action-name" autocomplete="name" minlength="2"></label>
+          <label><span>New password</span><span class="password-input"><input id="action-password" type="password" autocomplete="new-password" minlength="12" required><button type="button" data-password-toggle aria-controls="action-password" aria-label="Show password" title="Show password"><svg class="eye-open" viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z"></path><circle cx="12" cy="12" r="2.5"></circle></svg><svg class="eye-closed" viewBox="0 0 24 24" aria-hidden="true"><path d="m3 3 18 18"></path><path d="M10.6 6.2A10.7 10.7 0 0 1 12 6c6 0 9.5 6 9.5 6a15 15 0 0 1-2.1 2.7M6.2 6.2C3.8 8 2.5 12 2.5 12s3.5 6 9.5 6a9.8 9.8 0 0 0 4-.8M9.9 9.9a3 3 0 0 0 4.2 4.2"></path></svg></button></span></label>
+          <button id="account-action-submit" class="primary-button" type="submit">Continue</button>
+        </form>
+        <button id="auth-mode-toggle" class="text-button" type="button">Create an organization account</button>
+      </div>
+    </section>
     <div class="app-shell">
       <aside class="sidebar" aria-label="Primary navigation">
         <div class="brand">
@@ -51,8 +77,8 @@
             <svg viewBox="0 0 24 24"><rect x="4" y="10" width="16" height="11" rx="2"></rect><path d="M8 10V7a4 4 0 0 1 8 0v3"></path></svg>
           </span>
           <div>
-            <strong>Private deployment</strong>
-            <p>Documents and responses stay within your controlled environment.</p>
+            <strong>Security by design</strong>
+            <p>Access is isolated by organization and enforced by the API.</p>
           </div>
         </div>
       </aside>
@@ -73,12 +99,12 @@
           <div class="topbar-actions">
             <div class="environment-badge">
               <span class="status-dot" aria-hidden="true"></span>
-              Self-hosted
+              Protected workspace
             </div>
             <button id="settings-toggle" class="settings-button" type="button" aria-expanded="false" aria-controls="settings-panel">
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z"></path><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2h-4V21a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H2.8v-4H3a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-1.6v-.2h4V3a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.2v4H21a1.7 1.7 0 0 0-1.6 1Z"></path></svg>
-              <span>Connection</span>
-              <span id="tenant-chip" class="tenant-chip">Not configured</span>
+              <span>Account</span>
+              <span id="tenant-chip" class="tenant-chip">Signed out</span>
             </button>
           </div>
         </header>
@@ -86,29 +112,17 @@
         <section id="settings-panel" class="settings-panel" aria-labelledby="settings-title" hidden>
           <div class="settings-heading">
             <div>
-              <span class="section-kicker">Development connection</span>
-              <h2 id="settings-title">Connect this workspace</h2>
-              <p>Credentials remain in this browser session and are sent only to the same-origin RAG API.</p>
+              <span class="section-kicker">Organization account</span>
+              <h2 id="settings-title">Your account</h2>
+              <p id="account-summary">Sign in to view your organization and role.</p>
             </div>
             <button id="settings-close" class="icon-button" type="button" aria-label="Close connection settings">
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"></path></svg>
             </button>
           </div>
-          <div class="settings-fields">
-            <label>
-              <span>Tenant ID</span>
-              <input id="tenant-id" autocomplete="organization" placeholder="acme-health" required>
-              <small>Your organization’s isolated data boundary.</small>
-            </label>
-            <label>
-              <span>API key</span>
-              <input id="api-key" type="password" autocomplete="off" placeholder="Enter your development API key" required>
-              <small>Use short-lived SSO sessions in production.</small>
-            </label>
-          </div>
           <div class="settings-footer">
-            <span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20Z"></path><path d="M12 16v-4M12 8h.01"></path></svg>Changes save automatically for this session.</span>
-            <button id="settings-done" class="primary-button compact" type="button">Done</button>
+            <span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20Z"></path><path d="M12 16v-4M12 8h.01"></path></svg>Access is scoped to your organization.</span>
+            <div><button id="logout-button" class="secondary-button" type="button">Sign out</button><button id="settings-done" class="primary-button compact" type="button">Done</button></div>
           </div>
         </section>
 
@@ -170,17 +184,17 @@
             <p class="assistant-disclaimer">AI responses can be incomplete. Verify consequential decisions against the original document.</p>
           </section>
 
-          <aside id="document-library" class="document-panel" aria-labelledby="upload-title">
+          <aside id="document-library" class="document-panel" data-admin-only aria-labelledby="upload-title">
             <header class="panel-header">
               <span class="panel-icon" aria-hidden="true">
                 <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"></path><path d="M14 2v6h6M12 18v-6M9 15h6"></path></svg>
               </span>
               <div>
                 <span class="section-kicker">Admin workflow</span>
-                <h2 id="upload-title">Index documents</h2>
+                <h2 id="upload-title">Upload documents</h2>
               </div>
             </header>
-            <p class="panel-description">Add one or more documents to this tenant’s searchable knowledge base.</p>
+            <p class="panel-description">Files are saved first. GPU processing stays off until an administrator releases a bounded batch.</p>
 
             <form id="upload-form" class="upload-form">
               <label id="file-dropzone" class="file-dropzone" for="document-file">
@@ -227,7 +241,7 @@
                   <strong id="upload-progress-value">0%</strong>
                 </div>
                 <div id="indexing-progress-row" class="upload-progress-row" hidden>
-                  <span>Indexing</span>
+                  <span>Processing</span>
                   <div
                     id="indexing-progress-track"
                     class="upload-progress-track"
@@ -243,15 +257,53 @@
                 </div>
               </div>
               <button id="upload-button" class="primary-button" type="submit">
-                <span>Upload and index</span>
+                <span>Upload and hold</span>
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 8l5-5 5 5M5 21h14"></path></svg>
               </button>
             </form>
 
-            <div class="trust-note">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20Z"></path><path d="m9 12 2 2 4-4"></path></svg>
-              <p><strong>Processed privately.</strong> The browser sends these files only to your self-hosted API. Structured parsing uses self-hosted <a href="https://github.com/opendatalab/MinerU" target="_blank" rel="noreferrer">MinerU</a>.</p>
-            </div>
+            <section class="compute-panel" aria-labelledby="compute-title">
+              <div class="compute-heading">
+                <div><span class="section-kicker">Cost control</span><h3 id="compute-title">Held for compute</h3></div>
+                <button id="refresh-jobs" class="secondary-button" type="button">Refresh</button>
+              </div>
+              <p id="compute-message">GPU processing is off; uploaded documents are saved and waiting.</p>
+              <div id="held-jobs" class="held-jobs"><small>Connect to view held documents.</small></div>
+              <div class="compute-limits">
+                <label><span>Max jobs</span><input id="max-jobs" type="number" min="1" value="10"></label>
+                <label><span>GPU minutes</span><input id="max-gpu-minutes" type="number" min="1" value="30"></label>
+                <label><span>Max cost USD <em>Optional</em></span><input id="max-cost" type="number" min="0.01" step="0.01"></label>
+              </div>
+              <button id="release-jobs" class="primary-button" type="button">Start bounded batch</button>
+            </section>
+
+            <section class="compute-panel" aria-labelledby="members-title">
+              <div class="compute-heading"><div><span class="section-kicker">Access</span><h3 id="members-title">Organization members</h3></div><button id="refresh-members" class="secondary-button" type="button">Refresh</button></div>
+              <form id="invite-form" class="invite-form">
+                <input id="invite-email" type="email" placeholder="person@example.com" required>
+                <select id="invite-role"><option value="member">Member</option><option value="admin">Admin</option></select>
+                <button class="primary-button" type="submit">Invite</button>
+              </form>
+              <p id="member-message"></p>
+              <div id="invite-link-panel" class="invite-link-panel" hidden>
+                <input id="invite-link" type="text" readonly aria-label="Invitation link">
+                <button id="copy-invite-link" class="secondary-button" type="button">Copy link</button>
+              </div>
+              <div id="member-list" class="held-jobs"></div>
+            </section>
+
+            <section class="trust-note" aria-labelledby="security-summary-title">
+              <div class="trust-note-heading">
+                <span class="security-shield" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 2.5 20 6v5.4c0 5-3.3 8.6-8 10.1-4.7-1.5-8-5.1-8-10.1V6l8-3.5Z"></path><path d="m8.7 12 2.1 2.1 4.6-4.7"></path></svg></span>
+                <div><strong id="security-summary-title">Security controls active</strong><small>Protection is enforced by the API, not only the interface.</small></div>
+              </div>
+              <ul>
+                <li><span aria-hidden="true"></span>Organization-isolated data</li>
+                <li><span aria-hidden="true"></span>Admin and member permissions</li>
+                <li><span aria-hidden="true"></span>Secure, rotating sessions</li>
+                <li><span aria-hidden="true"></span>Controlled document processing</li>
+              </ul>
+            </section>
           </aside>
         </main>
       </div>

@@ -45,6 +45,53 @@ class IngestResponse(BaseModel):
     reindexed: bool = False
 
 
+class HeldIngestResponse(BaseModel):
+    job_id: str
+    state: str = "held_for_compute"
+    message: str
+
+
+class IngestionJobResponse(BaseModel):
+    job_id: str
+    document_name: str
+    state: str
+    stage: str
+    progress: int
+    message: str
+    compute_session_id: str | None
+    result_document_id: str | None
+    chunks_indexed: int
+    tables_indexed: int
+    visuals_indexed: int
+    error_code: str | None
+    error_message: str | None
+    created_at: datetime
+    updated_at: datetime
+
+
+class ComputeSessionCreate(BaseModel):
+    max_jobs: int = Field(ge=1, le=10_000)
+    max_gpu_minutes: float = Field(gt=0, le=100_000)
+    max_estimated_cost_usd: float | None = Field(default=None, gt=0)
+
+
+class ComputeSessionRelease(BaseModel):
+    job_ids: list[str] = Field(min_length=1, max_length=10_000)
+
+
+class ComputeSessionResponse(BaseModel):
+    session_id: str
+    status: str
+    provider: str
+    max_jobs: int
+    max_gpu_minutes: float
+    max_estimated_cost_usd: float | None
+    released_job_count: int
+    gpu_seconds: float
+    estimated_cost_usd: float
+    jobs: list[IngestionJobResponse] = Field(default_factory=list)
+
+
 class DeleteResponse(BaseModel):
     document_id: str
     status: str

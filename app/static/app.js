@@ -1,7 +1,7 @@
 const form = document.querySelector("#chat-form");
 const question = document.querySelector("#question");
-const tenantId = document.querySelector("#tenant-id");
-const apiKey = document.querySelector("#api-key");
+let accessToken = null;
+let currentUser = null;
 const chatLog = document.querySelector("#chat-log");
 const sendButton = document.querySelector("#send-button");
 const status = document.querySelector("#status");
@@ -29,44 +29,53 @@ const indexingProgressValue = document.querySelector("#indexing-progress-value")
 const chatHistoryList = document.querySelector("#chat-history-list");
 const chatHistoryEmpty = document.querySelector("#chat-history-empty");
 const newChatButton = document.querySelector("#new-chat-button");
+const heldJobs = document.querySelector("#held-jobs");
+const refreshJobsButton = document.querySelector("#refresh-jobs");
+const releaseJobsButton = document.querySelector("#release-jobs");
+const computeMessage = document.querySelector("#compute-message");
+const maxJobs = document.querySelector("#max-jobs");
+const maxGpuMinutes = document.querySelector("#max-gpu-minutes");
+const maxCost = document.querySelector("#max-cost");
+const authGate = document.querySelector("#auth-gate");
+const authMessage = document.querySelector("#auth-message");
+const loginForm = document.querySelector("#login-form");
+const registerForm = document.querySelector("#register-form");
+const authModeToggle = document.querySelector("#auth-mode-toggle");
+const accountActionForm = document.querySelector("#account-action-form");
+const actionNameField = document.querySelector("#action-name-field");
+let pendingAccountAction = null;
+const logoutButton = document.querySelector("#logout-button");
+const accountSummary = document.querySelector("#account-summary");
+const inviteForm = document.querySelector("#invite-form");
+const memberList = document.querySelector("#member-list");
+const memberMessage = document.querySelector("#member-message");
+const inviteLinkPanel = document.querySelector("#invite-link-panel");
+const inviteLink = document.querySelector("#invite-link");
+const copyInviteLink = document.querySelector("#copy-invite-link");
+const refreshMembers = document.querySelector("#refresh-members");
 const emptyChatMarkup = chatLog.innerHTML;
 let activeChatId = null;
 
-tenantId.value = sessionStorage.getItem("secure-rag.tenant-id") || "";
-apiKey.value = sessionStorage.getItem("secure-rag.api-key") || "";
-
 function updateTenantChip() {
-  tenantChip.textContent = tenantId.value.trim() || "Not configured";
+  tenantChip.textContent = currentUser?.organization?.name || "Signed out";
 }
 
 function setSettingsOpen(isOpen) {
   settingsPanel.hidden = !isOpen;
   settingsToggle.setAttribute("aria-expanded", String(isOpen));
-  if (isOpen) tenantId.focus();
 }
 
-function saveConnectionSettings() {
-  const selectedTenant = tenantId.value.trim();
-  const selectedApiKey = apiKey.value.trim();
-  if (selectedTenant) sessionStorage.setItem("secure-rag.tenant-id", selectedTenant);
-  else sessionStorage.removeItem("secure-rag.tenant-id");
-  if (selectedApiKey) sessionStorage.setItem("secure-rag.api-key", selectedApiKey);
-  else sessionStorage.removeItem("secure-rag.api-key");
-  updateTenantChip();
-}
+function saveConnectionSettings() {}
 
 settingsToggle.addEventListener("click", () => setSettingsOpen(settingsPanel.hidden));
 settingsClose.addEventListener("click", () => setSettingsOpen(false));
 settingsDone.addEventListener("click", () => {
-  saveConnectionSettings();
   setSettingsOpen(false);
   activeChatId = null;
   resetConversation();
   loadChatHistory();
   settingsToggle.focus();
 });
-tenantId.addEventListener("input", saveConnectionSettings);
-apiKey.addEventListener("input", saveConnectionSettings);
 
 document.addEventListener("keydown", (event) => {
   if (event.key === "Escape" && !settingsPanel.hidden) {
@@ -214,22 +223,19 @@ function setBusy(isBusy) {
 }
 
 function requestHeaders(selectedTenant, selectedApiKey) {
-  return {
-    "X-API-Key": selectedApiKey,
-    "X-Tenant-ID": selectedTenant,
-  };
+  return accessToken ? { Authorization: `Bearer ${accessToken}` } : {};
 }
 
 function connectionSettings() {
   return {
-    tenant: tenantId.value.trim(),
-    apiKey: apiKey.value.trim(),
+    tenant: currentUser?.organization?.organization_id || "",
+    apiKey: accessToken || "",
   };
 }
 
 function showConnectionError() {
-  setSettingsOpen(true);
-  addMessage("Enter a tenant ID and API key in Connection before continuing.", "error");
+  authGate.hidden = false;
+  addMessage("Sign in to your organization before continuing.", "error");
 }
 
 function responseError(payload, fallback) {
@@ -408,7 +414,7 @@ function uploadDocument(file, headers, batchLabel = "") {
     request.upload.addEventListener("load", () => {
       setUploadProgress(100, "success");
       setIndexingProgress(0);
-      setUploadStatus(`${batchLabel}Upload complete. Starting indexing for ${file.name}…`, "busy");
+      setUploadStatus(`${batchLabel}Upload complete. Saving ${file.name} for compute…`, "busy");
     });
     request.addEventListener("progress", () => processResponse());
     request.addEventListener("load", () => {
@@ -447,7 +453,7 @@ function updateSelectedFile() {
   setUploadStatus(
     files.length ? `${files.length} ${files.length === 1 ? "document is" : "documents are"} ready to upload.` : "Select one or more files to begin.",
   );
-  uploadButton.querySelector("span").textContent = files.length > 1 ? `Upload and index ${files.length}` : "Upload and index";
+  uploadButton.querySelector("span").textContent = files.length > 1 ? `Upload and hold ${files.length}` : "Upload and hold";
   resetUploadProgress();
 }
 
@@ -492,7 +498,7 @@ uploadForm.addEventListener("submit", async (event) => {
   setUploadProgress(0);
   setUploadStatus(`Preparing ${files.length} ${files.length === 1 ? "document" : "documents"}…`, "busy");
 
-  const indexed = [];
+  const queued = [];
   const failed = [];
   try {
     for (const [index, file] of files.entries()) {
@@ -509,10 +515,9 @@ uploadForm.addEventListener("submit", async (event) => {
 
       try {
         const { ok, payload } = await uploadDocument(file, headers, batchLabel);
-        if (!ok) throw new Error(responseError(payload, "Unable to index the document."));
-        indexed.push({ file, payload });
+        if (!ok) throw new Error(responseError(payload, "Unable to save the document."));
+        queued.push({ file, payload });
         setUploadProgress(100, "success");
-        setIndexingProgress(100);
         uploadProgress.classList.add("success");
       } catch (error) {
         failed.push({ file, message: error.message || "Unable to index the document." });
@@ -523,20 +528,256 @@ uploadForm.addEventListener("submit", async (event) => {
 
     if (failed.length) {
       const failedNames = failed.map(({ file }) => file.name).join(", ");
-      setUploadStatus(`${indexed.length} of ${files.length} indexed. Failed: ${failedNames}.`, "error");
+      setUploadStatus(`${queued.length} of ${files.length} saved. Failed: ${failedNames}.`, "error");
     } else {
-      const chunks = indexed.reduce((total, item) => total + item.payload.chunks_indexed, 0);
-      const reindexed = indexed.filter((item) => item.payload.reindexed).length;
-      const reindexedLabel = reindexed ? ` ${reindexed} re-indexed.` : "";
-      setUploadStatus(`${indexed.length} ${indexed.length === 1 ? "document is" : "documents are"} searchable (${chunks} chunks total).${reindexedLabel}`, "success");
+      setUploadStatus(`${queued.length} ${queued.length === 1 ? "document is" : "documents are"} saved and waiting. GPU processing is off.`, "success");
       documentFile.value = "";
       fileLabel.textContent = "Choose more documents";
-      uploadButton.querySelector("span").textContent = "Upload and index";
+      uploadButton.querySelector("span").textContent = "Upload and hold";
+      await loadHeldJobs();
     }
   } finally {
     uploadButton.disabled = false;
   }
 });
 
-updateTenantChip();
-loadChatHistory();
+async function loadHeldJobs() {
+  const { tenant, apiKey: key } = connectionSettings();
+  if (!tenant || !key) return;
+  const response = await fetch("/v1/admin/ingestion-jobs?state=held_for_compute", { headers: requestHeaders(tenant, key) });
+  if (!response.ok) {
+    computeMessage.textContent = responseError(await response.json(), "Unable to load held documents.");
+    return;
+  }
+  const jobs = await response.json();
+  heldJobs.innerHTML = jobs.length
+    ? jobs.map((job) => `<label class="held-job"><input type="checkbox" value="${job.job_id}"><span><strong>${escapeHtml(job.document_name)}</strong><small>${escapeHtml(job.message)}</small></span></label>`).join("")
+    : "<small>No documents are waiting for compute.</small>";
+  computeMessage.textContent = jobs.length ? `${jobs.length} document${jobs.length === 1 ? "" : "s"} safely held. Select a bounded batch to process.` : "GPU capacity is zero; nothing is waiting.";
+}
+
+function renderSessionJobs(sessionPayload) {
+  heldJobs.innerHTML = sessionPayload.jobs.map((job) => `<div class="held-job"><span><strong>${escapeHtml(job.document_name)}</strong><small>${escapeHtml(job.stage.replaceAll("_", " "))} · ${job.progress}% — ${escapeHtml(job.message)}</small><span class="job-progress"><i style="width:${job.progress}%"></i></span></span></div>`).join("");
+  const minutes = (sessionPayload.gpu_seconds / 60).toFixed(1);
+  computeMessage.textContent = sessionPayload.status === "closed"
+    ? `Session closed. GPU capacity released after ${minutes} recorded GPU minutes. Estimated cost: $${sessionPayload.estimated_cost_usd.toFixed(4)}.`
+    : `Session ${sessionPayload.status}: ${minutes} of ${sessionPayload.max_gpu_minutes} GPU minutes used.`;
+}
+
+async function pollComputeSession(sessionId, tenant, key) {
+  for (;;) {
+    const response = await fetch(`/v1/admin/compute-sessions/${sessionId}`, { headers: requestHeaders(tenant, key) });
+    if (!response.ok) return;
+    const payload = await response.json();
+    renderSessionJobs(payload);
+    if (payload.status === "closed") {
+      window.setTimeout(loadHeldJobs, 1500);
+      return;
+    }
+    await new Promise((resolve) => window.setTimeout(resolve, 2000));
+  }
+}
+
+refreshJobsButton.addEventListener("click", loadHeldJobs);
+releaseJobsButton.addEventListener("click", async () => {
+  const selected = Array.from(heldJobs.querySelectorAll("input:checked"), (input) => input.value);
+  const { tenant, apiKey: key } = connectionSettings();
+  if (!tenant || !key) return showConnectionError();
+  if (!selected.length) {
+    computeMessage.textContent = "Select at least one held document.";
+    return;
+  }
+  releaseJobsButton.disabled = true;
+  try {
+    const limits = { max_jobs: Number(maxJobs.value), max_gpu_minutes: Number(maxGpuMinutes.value) };
+    if (maxCost.value) limits.max_estimated_cost_usd = Number(maxCost.value);
+    const opened = await fetch("/v1/admin/compute-sessions", { method: "POST", headers: { ...requestHeaders(tenant, key), "Content-Type": "application/json" }, body: JSON.stringify(limits) });
+    const sessionPayload = await opened.json();
+    if (!opened.ok) throw new Error(responseError(sessionPayload, "Unable to open compute session."));
+    const released = await fetch(`/v1/admin/compute-sessions/${sessionPayload.session_id}/release`, { method: "POST", headers: { ...requestHeaders(tenant, key), "Content-Type": "application/json" }, body: JSON.stringify({ job_ids: selected }) });
+    const releasePayload = await released.json();
+    if (!released.ok) throw new Error(responseError(releasePayload, "Unable to release jobs."));
+    computeMessage.textContent = `Batch released with a ${limits.max_gpu_minutes}-minute GPU limit. Capacity will return to zero when it drains.`;
+    renderSessionJobs(releasePayload);
+    pollComputeSession(sessionPayload.session_id, tenant, key);
+  } catch (error) {
+    computeMessage.textContent = error.message;
+  } finally {
+    releaseJobsButton.disabled = false;
+  }
+});
+
+function escapeHtml(value) {
+  const element = document.createElement("div");
+  element.textContent = String(value ?? "");
+  return element.innerHTML;
+}
+
+function applyAuthenticatedUser(payload) {
+  accessToken = payload.access_token;
+  currentUser = payload.user;
+  authGate.hidden = true;
+  updateTenantChip();
+  accountSummary.textContent = `${currentUser.display_name} · ${currentUser.role} at ${currentUser.organization.name}`;
+  document.querySelectorAll("[data-admin-only]").forEach((element) => { element.hidden = currentUser.role !== "admin"; });
+  loadChatHistory();
+  if (currentUser.role === "admin") {
+    loadHeldJobs();
+    loadMembers();
+  }
+}
+
+async function authJson(path, options = {}) {
+  const response = await fetch(path, { credentials: "same-origin", ...options, headers: { "Content-Type": "application/json", ...(options.headers || {}) } });
+  const payload = response.status === 204 ? {} : await response.json();
+  if (!response.ok) throw new Error(responseError(payload, "Authentication request failed."));
+  return payload;
+}
+
+document.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-password-toggle]");
+  if (!button) return;
+  const input = document.getElementById(button.getAttribute("aria-controls"));
+  const showing = input.type === "text";
+  input.type = showing ? "password" : "text";
+  button.dataset.visible = showing ? "false" : "true";
+  button.setAttribute("aria-label", showing ? "Show password" : "Hide password");
+  button.title = showing ? "Show password" : "Hide password";
+});
+
+loginForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  try {
+    const payload = await authJson("/v1/auth/login", { method: "POST", body: JSON.stringify({ email: document.querySelector("#login-email").value, password: document.querySelector("#login-password").value }) });
+    applyAuthenticatedUser(payload);
+    loginForm.reset();
+  } catch (error) { authMessage.textContent = error.message; }
+});
+
+registerForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  try {
+    const payload = await authJson("/v1/auth/register", { method: "POST", body: JSON.stringify({
+      display_name: document.querySelector("#register-name").value,
+      email: document.querySelector("#register-email").value,
+      password: document.querySelector("#register-password").value,
+      organization_name: document.querySelector("#organization-name").value,
+    }) });
+    authMessage.textContent = payload.message;
+    registerForm.hidden = true;
+    loginForm.hidden = false;
+  } catch (error) { authMessage.textContent = error.message; }
+});
+
+authModeToggle.addEventListener("click", () => {
+  const showRegister = registerForm.hidden;
+  registerForm.hidden = !showRegister;
+  loginForm.hidden = showRegister;
+  authModeToggle.textContent = showRegister ? "Already have an account? Sign in" : "Create an organization account";
+});
+
+document.querySelector("#forgot-password-button").addEventListener("click", async () => {
+  const email = document.querySelector("#login-email").value;
+  if (!email) return (authMessage.textContent = "Enter your email first.");
+  try { authMessage.textContent = (await authJson("/v1/auth/forgot-password", { method: "POST", body: JSON.stringify({ email }) })).message; }
+  catch (error) { authMessage.textContent = error.message; }
+});
+
+logoutButton.addEventListener("click", async () => {
+  try { await authJson("/v1/auth/logout", { method: "POST" }); } catch {}
+  accessToken = null;
+  currentUser = null;
+  setSettingsOpen(false);
+  authGate.hidden = false;
+  updateTenantChip();
+});
+
+async function loadMembers() {
+  if (currentUser?.role !== "admin") return;
+  const response = await fetch("/v1/admin/organization/members", { headers: requestHeaders() });
+  if (!response.ok) return;
+  const members = await response.json();
+  memberList.innerHTML = members.map((member) => `<div class="held-job"><span><strong>${escapeHtml(member.display_name)}</strong><small>${escapeHtml(member.email)} · ${member.role}${member.active ? "" : " · inactive"}</small>${member.active ? `<span><button class="text-button" data-member-action="role" data-user-id="${member.user_id}" data-role="${member.role}">Make ${member.role === "admin" ? "member" : "admin"}</button><button class="text-button" data-member-action="revoke" data-user-id="${member.user_id}">Revoke sessions</button><button class="text-button" data-member-action="deactivate" data-user-id="${member.user_id}">Deactivate</button></span>` : ""}</span></div>`).join("");
+}
+
+refreshMembers.addEventListener("click", loadMembers);
+inviteForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  try {
+    const response = await fetch("/v1/admin/organization/invitations", { method: "POST", headers: { ...requestHeaders(), "Content-Type": "application/json" }, body: JSON.stringify({ email: document.querySelector("#invite-email").value, role: document.querySelector("#invite-role").value }) });
+    const payload = await response.json();
+    if (!response.ok) throw new Error(responseError(payload, "Unable to send invitation."));
+    memberMessage.textContent = payload.message;
+    inviteLinkPanel.hidden = !payload.invitation_url;
+    inviteLink.value = payload.invitation_url || "";
+    inviteForm.reset();
+  } catch (error) { memberMessage.textContent = error.message; }
+});
+
+copyInviteLink.addEventListener("click", async () => {
+  try {
+    await navigator.clipboard.writeText(inviteLink.value);
+    memberMessage.textContent = "Invitation link copied. It expires in 72 hours.";
+  } catch {
+    inviteLink.select();
+    memberMessage.textContent = "Copy the selected invitation link.";
+  }
+});
+
+memberList.addEventListener("click", async (event) => {
+  const button = event.target.closest("[data-member-action]");
+  if (!button) return;
+  const action = button.dataset.memberAction;
+  const userId = button.dataset.userId;
+  let path = `/v1/admin/organization/members/${userId}/${action === "role" ? "role" : action === "revoke" ? "revoke-sessions" : "deactivate"}`;
+  const options = { method: action === "role" ? "PATCH" : "POST", headers: { ...requestHeaders(), "Content-Type": "application/json" } };
+  if (action === "role") options.body = JSON.stringify({ role: button.dataset.role === "admin" ? "member" : "admin" });
+  const response = await fetch(path, options);
+  const payload = await response.json();
+  memberMessage.textContent = response.ok ? "Member updated." : responseError(payload, "Unable to update member.");
+  await loadMembers();
+});
+
+async function handleActionLink() {
+  const params = new URLSearchParams(location.search);
+  try {
+    if (params.get("verify")) authMessage.textContent = (await authJson("/v1/auth/verify-email", { method: "POST", body: JSON.stringify({ token: params.get("verify") }) })).message;
+    if (params.get("reset")) {
+      pendingAccountAction = { type: "reset", token: params.get("reset") };
+      loginForm.hidden = true; registerForm.hidden = true; accountActionForm.hidden = false; authModeToggle.hidden = true;
+      authMessage.textContent = "Choose a new password for your account.";
+    }
+    if (params.get("invite")) {
+      pendingAccountAction = { type: "invite", token: params.get("invite") };
+      loginForm.hidden = true; registerForm.hidden = true; accountActionForm.hidden = false; actionNameField.hidden = false; authModeToggle.hidden = true;
+      document.querySelector("#action-name").required = true;
+      authMessage.textContent = "Create your invited organization account.";
+    }
+    if (params.get("verify")) history.replaceState({}, "", location.pathname);
+  } catch (error) { authMessage.textContent = error.message; }
+}
+
+accountActionForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  if (!pendingAccountAction) return;
+  const password = document.querySelector("#action-password").value;
+  const path = pendingAccountAction.type === "invite" ? "/v1/auth/accept-invitation" : "/v1/auth/reset-password";
+  const body = { token: pendingAccountAction.token, password };
+  if (pendingAccountAction.type === "invite") body.display_name = document.querySelector("#action-name").value;
+  try {
+    authMessage.textContent = (await authJson(path, { method: "POST", body: JSON.stringify(body) })).message;
+    pendingAccountAction = null;
+    accountActionForm.reset(); accountActionForm.hidden = true; actionNameField.hidden = true;
+    loginForm.hidden = false; authModeToggle.hidden = false;
+    history.replaceState({}, "", location.pathname);
+  } catch (error) { authMessage.textContent = error.message; }
+});
+
+async function bootstrapAuthentication() {
+  updateTenantChip();
+  await handleActionLink();
+  try { applyAuthenticatedUser(await authJson("/v1/auth/refresh", { method: "POST", body: "{}" })); }
+  catch { authGate.hidden = false; }
+}
+
+bootstrapAuthentication();

@@ -135,7 +135,7 @@ Reflow content rather than shrink it. Tables must become horizontally scrollable
 - Required fields must be identified in text.
 - Validation occurs after interaction and again on submission.
 - Error text must describe the problem and how to fix it.
-- Sensitive values such as API keys must be masked, must not be copied into logs, and should support deliberate reveal and copy actions.
+- Sensitive values such as passwords, recovery links, and tokens must never be copied into logs or persistent browser storage.
 
 ### Cards and panels
 

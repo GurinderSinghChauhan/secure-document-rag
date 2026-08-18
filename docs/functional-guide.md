@@ -8,14 +8,14 @@ The service is evidence-first internally: it generates answers only from retriev
 
 ## Roles and access
 
-Every request carries an API key and tenant ID. The configured key maps to one tenant, user, and role set.
+Every protected request carries a short-lived JWT access token. The token maps one registered person to one organization and an `admin` or `member` role.
 
 | Role | Can ingest | Can query authorized documents | Can delete |
 | --- | --- | --- | --- |
 | `admin` | Yes | Yes | Yes |
 | Other configured role | No | Yes, when document ACL permits | No |
 
-The tenant in `X-Tenant-ID` must match the tenant bound to the API key. A mismatch is rejected before document retrieval.
+Organization scope comes from the verified JWT and cannot be selected through a request header. A mismatch is rejected before document retrieval.
 
 ## Document ingestion
 

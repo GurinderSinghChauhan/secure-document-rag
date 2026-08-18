@@ -7,7 +7,10 @@ COPY --from=uv /uv /uvx /bin/
 COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev --no-install-project
 COPY app ./app
+COPY alembic.ini ./
+COPY migrations ./migrations
+COPY tools ./tools
 RUN useradd --create-home --uid 10001 appuser && chown -R appuser:appuser /service
 USER appuser
 EXPOSE 8080
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080", "--workers", "2", "--proxy-headers", "--forwarded-allow-ips", "*"]
+CMD ["sh", "-c", "alembic upgrade head && exec uvicorn app.main:app --host 0.0.0.0 --port 8080 --workers 2 --proxy-headers --forwarded-allow-ips '*' "]

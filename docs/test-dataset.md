@@ -55,16 +55,17 @@ PMC license terms can contain article-specific conditions. The downloader restri
 
 ## Batch ingestion
 
-Start the RAG stack and model server, then export the development credentials for an administrator in the target tenant:
+Start the RAG stack and model server, then export the credentials for a verified organization administrator:
 
 ```bash
 export RAG_API_URL="http://127.0.0.1:8080"
 export RAG_TENANT_ID="acme-health"
-export RAG_API_KEY="your-admin-api-key"
+export RAG_EMAIL="admin@example.com"
+export RAG_PASSWORD="your-long-password"
 uv run python -m tools.rag_dataset ingest
 ```
 
-API keys are accepted only through `RAG_API_KEY`; they are intentionally hidden from command-line arguments to reduce shell-history exposure.
+Passwords are accepted through `RAG_PASSWORD` or an equivalent secret-injection mechanism and are hidden from command help to reduce accidental exposure.
 
 The ingestion command:
 

@@ -429,23 +429,21 @@ def completed_ingestions(state_path: Path) -> set[str]:
     return {
         str(record["file"])
         for record in load_jsonl(state_path)
-        if record.get("status") in {"indexed", "duplicate"} and isinstance(record.get("file"), str)
+        if record.get("status") in {"held", "indexed", "duplicate"} and isinstance(record.get("file"), str)
     }
 
 
 async def ingest_file(
     client: httpx.AsyncClient,
     api_url: str,
-    tenant_id: str,
-    api_key: str,
+    access_token: str,
     path: Path,
     relative_path: str,
     roles: str | None,
     users: str | None,
 ) -> IngestionRecord:
     headers = {
-        "X-API-Key": api_key,
-        "X-Tenant-ID": tenant_id,
+        "Authorization": f"Bearer {access_token}",
         "X-Document-Name": path.name,
         "Content-Type": PDF_CONTENT_TYPE,
     }
@@ -478,9 +476,9 @@ async def ingest_file(
             )
         return IngestionRecord(
             relative_path,
-            "indexed",
-            payload.get("document_id"),
-            payload.get("chunks_indexed"),
+            "held",
+            payload.get("job_id"),
+            0,
             None,
             utc_now(),
         )
@@ -489,10 +487,8 @@ async def ingest_file(
 
 
 async def ingest_dataset(args: argparse.Namespace) -> None:
-    if not args.tenant_id:
-        raise DatasetError("Set RAG_TENANT_ID or pass --tenant-id")
-    if not args.api_key:
-        raise DatasetError("Set RAG_API_KEY; API keys are intentionally not accepted as command-line arguments")
+    if not args.email or not args.password:
+        raise DatasetError("Set RAG_EMAIL and RAG_PASSWORD for an organization administrator")
     if args.concurrency < 1:
         raise DatasetError("Concurrency must be at least one")
     if args.limit is not None and args.limit < 1:
@@ -517,12 +513,16 @@ async def ingest_dataset(args: argparse.Namespace) -> None:
     timeout = httpx.Timeout(connect=20, read=args.timeout, write=args.timeout, pool=30)
     semaphore = asyncio.Semaphore(args.concurrency)
     state_lock = asyncio.Lock()
-    counters = {"indexed": 0, "duplicate": 0, "failed": 0}
+    counters = {"held": 0, "indexed": 0, "duplicate": 0, "failed": 0}
 
     async with httpx.AsyncClient(timeout=timeout) as client:
         readiness = await client.get(f"{args.api_url.rstrip('/')}/readyz")
         if readiness.is_error:
             raise DatasetError(f"RAG API is not ready: HTTP {readiness.status_code}")
+        login = await client.post(f"{args.api_url.rstrip('/')}/v1/auth/login", json={"email": args.email, "password": args.password})
+        if login.is_error:
+            raise DatasetError(f"RAG login failed: HTTP {login.status_code}")
+        access_token = login.json()["access_token"]
 
         async def process(record: DatasetRecord) -> None:
             path = input_path / record.file
@@ -533,8 +533,7 @@ async def ingest_dataset(args: argparse.Namespace) -> None:
                     result = await ingest_file(
                         client,
                         args.api_url,
-                        args.tenant_id,
-                        args.api_key,
+                        access_token,
                         path,
                         record.file,
                         args.roles,
@@ -552,7 +551,7 @@ async def ingest_dataset(args: argparse.Namespace) -> None:
 
     print(
         "Ingestion complete: "
-        f"{counters['indexed']} indexed, {counters['duplicate']} duplicates, {counters['failed']} failed"
+        f"{counters['held']} held, {counters['indexed']} indexed, {counters['duplicate']} duplicates, {counters['failed']} failed"
     )
     print(f"State: {state_path}")
     if counters["failed"]:
@@ -582,8 +581,8 @@ def build_parser() -> argparse.ArgumentParser:
     ingest = subparsers.add_parser("ingest", help="Batch-index a downloaded corpus")
     ingest.add_argument("--input", type=Path, default=Path("datasets/rag-500"))
     ingest.add_argument("--api-url", default=os.getenv("RAG_API_URL", "http://127.0.0.1:8080"))
-    ingest.add_argument("--tenant-id", default=os.getenv("RAG_TENANT_ID"))
-    ingest.add_argument("--api-key", dest="api_key", default=os.getenv("RAG_API_KEY"), help=argparse.SUPPRESS)
+    ingest.add_argument("--email", default=os.getenv("RAG_EMAIL"))
+    ingest.add_argument("--password", default=os.getenv("RAG_PASSWORD"), help=argparse.SUPPRESS)
     ingest.add_argument("--roles")
     ingest.add_argument("--users")
     ingest.add_argument("--concurrency", type=int, default=1)

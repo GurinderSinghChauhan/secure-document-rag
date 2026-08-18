@@ -3,23 +3,27 @@ from contextlib import asynccontextmanager
 from hashlib import sha256
 import json
 from pathlib import PurePath
+from time import monotonic
 from uuid import uuid4
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request, status
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
+from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .audit import record
+from .accounts import router as accounts_router
 from .auth import require_admin, require_principal
 from .chunking import chunk_text
 from .config import get_settings
-from .database import DocumentRecord, dispose_database, get_session, initialize_database
+from .compute import assert_release_within_limits, estimated_cost
+from .database import ComputeSessionRecord, DocumentRecord, IngestionJobRecord, SessionFactory, dispose_database, get_session, initialize_database
 from .document_parser import VisualAsset, extract_document
 from .mineru import MinerUClient, supports_mineru
-from .models import ChatDetail, ChatMessage, ChatSummary, DeleteResponse, IngestResponse, Principal, QueryRequest, QueryResponse, ReadinessResponse
+from .models import ChatDetail, ChatMessage, ChatSummary, ComputeSessionCreate, ComputeSessionRelease, ComputeSessionResponse, DeleteResponse, HeldIngestResponse, IngestionJobResponse, Principal, QueryRequest, QueryResponse, ReadinessResponse
 from .providers import ModelClient
 from .repository import add_chat_message, create_chat, database_is_ready, get_chat, get_document, get_document_by_content_hash, list_chat_messages, list_chats, mark_document_deleted
 from .vector_store import VectorStore
@@ -27,17 +31,33 @@ from .vector_store import VectorStore
 model_server = ModelClient()
 mineru = MinerUClient()
 vectors = VectorStore()
+compute_tasks: dict[str, asyncio.Task[None]] = {}
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     await initialize_database()
+    # A control-plane restart never wakes compute. Interrupted local work becomes
+    # safely retryable and must be released by an administrator again.
+    async with SessionFactory() as session:
+        await session.execute(
+            update(IngestionJobRecord)
+            .where(IngestionJobRecord.state.in_(["provider_queued", "cold_start", "processing", "retrying"]))
+            .values(state="held_for_compute", stage="held", progress=0, message="Processing was interrupted; document is safely held for retry.")
+        )
+        await session.execute(
+            update(ComputeSessionRecord)
+            .where(ComputeSessionRecord.status.in_(["open", "draining"]))
+            .values(status="closed", closed_at=func.now())
+        )
+        await session.commit()
     yield
     await vectors.close()
     await dispose_database()
 
 
 app = FastAPI(title="Secure Document RAG", version="0.2.0", docs_url=None, redoc_url=None, lifespan=lifespan)
+app.include_router(accounts_router)
 app.add_middleware(TrustedHostMiddleware, allowed_hosts=get_settings().allowed_host_list)
 app.mount("/assets", StaticFiles(directory="app/static"), name="assets")
 
@@ -80,6 +100,45 @@ def existing_document_event(document: DocumentRecord) -> dict[str, object]:
         "reindexed": False,
         "message": "Document is searchable",
     }
+
+
+def job_response(job: IngestionJobRecord) -> IngestionJobResponse:
+    return IngestionJobResponse.model_validate(job, from_attributes=True)
+
+
+async def create_held_job(
+    *, session: AsyncSession, principal: Principal, document_name: str, content: bytes,
+    content_type: str, allowed_roles: list[str], allowed_users: list[str],
+) -> IngestionJobRecord:
+    job = IngestionJobRecord(
+        job_id=str(uuid4()), tenant_id=principal.tenant_id, state="held_for_compute", stage="held", progress=0,
+        message="GPU processing is off; document saved and waiting.", document_name=document_name,
+        content_type=content_type, content_sha256=sha256(content).hexdigest(), content=content, size_bytes=len(content),
+        allowed_roles=allowed_roles, allowed_users=allowed_users, created_by=principal.user_id,
+        retry_limit=get_settings().compute_retry_limit,
+    )
+    session.add(job)
+    await session.commit()
+    await session.refresh(job)
+    await record(session, "document_held_for_compute", principal.tenant_id, principal.user_id, job_id=job.job_id, document_name=document_name)
+    return job
+
+
+async def get_open_compute_session(session: AsyncSession, tenant_id: str) -> ComputeSessionRecord | None:
+    return await session.scalar(
+        select(ComputeSessionRecord).where(ComputeSessionRecord.tenant_id == tenant_id, ComputeSessionRecord.status == "open")
+    )
+
+
+async def require_compute_for_query(session: AsyncSession, principal: Principal) -> ComputeSessionRecord:
+    if not get_settings().gpu_dispatch_enabled:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="GPU processing is off; an administrator must explicitly enable dispatch and open a bounded compute session.")
+    compute_session = await get_open_compute_session(session, principal.tenant_id)
+    if compute_session is None:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="No compute session is open; queries will not wake a GPU automatically.")
+    if compute_session.provider != "local_docker":
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Interactive queries are not enabled for this asynchronous compute provider.")
+    return compute_session
 
 
 def chat_title(question: str) -> str:
@@ -248,6 +307,103 @@ async def index_document_events(
     }
 
 
+async def run_local_compute_session(compute_session_id: str, job_ids: list[str]) -> None:
+    """Runs one heavy operation at a time after an explicit admin release."""
+    settings = get_settings()
+    for job_id in job_ids:
+        started = monotonic()
+        async with SessionFactory() as session:
+            compute_session = await session.get(ComputeSessionRecord, compute_session_id)
+            job = await session.get(IngestionJobRecord, job_id)
+            if compute_session is None or job is None or compute_session.status not in {"open", "draining"}:
+                continue
+            if compute_session.gpu_seconds >= compute_session.max_gpu_minutes * 60:
+                job.state, job.stage, job.progress = "held_for_compute", "held", 0
+                job.message = "Session GPU time limit reached; document returned to held state."
+                await session.commit()
+                break
+            if compute_session.max_estimated_cost_usd is not None and compute_session.estimated_cost_usd >= compute_session.max_estimated_cost_usd:
+                job.state, job.stage, job.progress = "held_for_compute", "held", 0
+                job.message = "Session cost limit reached; document returned to held state."
+                await session.commit()
+                break
+            job.state, job.stage, job.progress = "processing", "cold_start", 1
+            job.message = "Compute available; starting document worker."
+            job.attempt_count += 1
+            await session.commit()
+            principal = Principal(tenant_id=job.tenant_id, user_id=job.created_by, roles=job.allowed_roles)
+            existing = await get_document_by_content_hash(session, job.tenant_id, job.content_sha256)
+            try:
+                async for event in index_document_events(job.content, job.content_type, job.content_sha256, job.document_name, job.allowed_roles, job.allowed_users, principal, session, existing):
+                    elapsed = monotonic() - started
+                    if compute_session.gpu_seconds + elapsed >= compute_session.max_gpu_minutes * 60:
+                        raise TimeoutError("Compute session GPU time limit reached")
+                    job.stage = str(event.get("stage", "completion"))
+                    job.progress = int(event.get("percentage", job.progress))
+                    job.message = str(event.get("message", job.message))[:500]
+                    if event.get("type") == "complete":
+                        job.state = "completed"
+                        job.result_document_id = str(event["document_id"])
+                        job.chunks_indexed = int(event["chunks_indexed"])
+                        job.tables_indexed = int(event["tables_indexed"])
+                        job.visuals_indexed = int(event["visuals_indexed"])
+                    await session.commit()
+            except asyncio.CancelledError:
+                job.state, job.stage, job.progress = "held_for_compute", "held", 0
+                job.message = "Session cancelled; document returned to held state."
+                await session.commit()
+                raise
+            except Exception as error:
+                exhausted = job.attempt_count >= job.retry_limit
+                is_oom = "out of memory" in str(error).lower() or "oom" in str(error).lower()
+                job.state = "failed" if exhausted else "held_for_compute"
+                job.stage = "failed" if exhausted else "held"
+                job.progress = 0
+                job.error_code = "gpu_out_of_memory" if is_oom else "processing_failed"
+                job.error_message = str(error)[:500]
+                job.message = ("Retry limit exhausted." if exhausted else "Processing failed; document returned to held state for retry.")
+                await session.commit()
+            finally:
+                elapsed = monotonic() - started
+                job.gpu_seconds += elapsed
+                job.estimated_cost_usd = estimated_cost(job.gpu_seconds, settings.compute_gpu_hourly_cost_usd)
+                compute_session.gpu_seconds += elapsed
+                compute_session.estimated_cost_usd = estimated_cost(compute_session.gpu_seconds, settings.compute_gpu_hourly_cost_usd)
+                await session.commit()
+
+    async with SessionFactory() as session:
+        compute_session = await session.get(ComputeSessionRecord, compute_session_id)
+        if compute_session is not None:
+            await session.execute(
+                update(IngestionJobRecord).where(
+                    IngestionJobRecord.compute_session_id == compute_session_id,
+                    IngestionJobRecord.state == "provider_queued",
+                ).values(state="held_for_compute", stage="held", progress=0, message="Session stopped before dispatch; document remains held.")
+            )
+            remaining = await session.scalar(
+                select(func.count()).select_from(IngestionJobRecord).where(
+                    IngestionJobRecord.compute_session_id == compute_session_id,
+                    IngestionJobRecord.state.in_(["provider_queued", "cold_start", "processing", "retrying"]),
+                )
+            )
+            if not remaining:
+                compute_session.status = "closed"
+                compute_session.closed_at = func.now()
+                await session.commit()
+    compute_tasks.pop(compute_session_id, None)
+
+
+async def compute_session_payload(session: AsyncSession, record_: ComputeSessionRecord) -> ComputeSessionResponse:
+    jobs = list(await session.scalars(select(IngestionJobRecord).where(IngestionJobRecord.compute_session_id == record_.session_id).order_by(IngestionJobRecord.created_at)))
+    return ComputeSessionResponse(
+        session_id=record_.session_id, status=record_.status, provider=record_.provider,
+        max_jobs=record_.max_jobs, max_gpu_minutes=record_.max_gpu_minutes,
+        max_estimated_cost_usd=record_.max_estimated_cost_usd, released_job_count=record_.released_job_count,
+        gpu_seconds=record_.gpu_seconds, estimated_cost_usd=record_.estimated_cost_usd,
+        jobs=[job_response(job) for job in jobs],
+    )
+
+
 @app.get("/healthz")
 async def healthz() -> dict[str, str]:
     return {"status": "ok"}
@@ -260,19 +416,19 @@ async def chat_ui() -> FileResponse:
 
 @app.get("/readyz", response_model=ReadinessResponse)
 async def readyz(session: AsyncSession = Depends(get_session)) -> ReadinessResponse:
+    # Readiness is intentionally control-plane only. It must never wake or poll
+    # GPU compute, model servers, MinerU, or a hosted provider.
     components = {
         "database": "ready" if await database_is_ready(session) else "unavailable",
         "qdrant": "ready" if await vectors.is_ready() else "unavailable",
-        "model_server": "ready" if await model_server.is_ready() else "unavailable",
     }
-    if get_settings().mineru_enabled:
-        components["mineru"] = "ready" if await mineru.is_ready() else "unavailable"
-    if any(component != "ready" for component in components.values()):
+    components["compute"] = "enabled_idle" if get_settings().gpu_dispatch_enabled else "disabled"
+    if components["database"] != "ready" or components["qdrant"] != "ready":
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail={"status": "unavailable", "components": components})
     return ReadinessResponse(status="ready", components=components)
 
 
-@app.post("/v1/documents", response_model=IngestResponse, status_code=status.HTTP_201_CREATED)
+@app.post("/v1/documents", response_model=HeldIngestResponse, status_code=status.HTTP_202_ACCEPTED)
 async def ingest_document(
     request: Request,
     principal: Principal = Depends(require_principal),
@@ -280,29 +436,17 @@ async def ingest_document(
     x_document_name: str = Header(min_length=1, max_length=255),
     x_allowed_roles: str | None = Header(default=None),
     x_allowed_users: str | None = Header(default=None),
-) -> IngestResponse:
+) -> HeldIngestResponse:
     require_admin(principal)
     document_name = validate_document_name(x_document_name)
     content = await read_limited_body(request)
     if not content:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Document cannot be empty")
-    content_sha256 = sha256(content).hexdigest()
-    existing_document = await get_document_by_content_hash(session, principal.tenant_id, content_sha256)
     content_type = request.headers.get("content-type", "")
     allowed_roles = parse_acl(x_allowed_roles) or principal.roles
     allowed_users = parse_acl(x_allowed_users)
-    completed: dict[str, object] | None = None
-    async for event in index_document_events(content, content_type, content_sha256, document_name, allowed_roles, allowed_users, principal, session, existing_document):
-        if event["type"] == "complete":
-            completed = event
-    if completed is None:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Document indexing did not complete")
-    return IngestResponse(
-        document_id=str(completed["document_id"]),
-        chunks_indexed=int(completed["chunks_indexed"]),
-        tables_indexed=int(completed["tables_indexed"]),
-        visuals_indexed=int(completed["visuals_indexed"]),
-    )
+    job = await create_held_job(session=session, principal=principal, document_name=document_name, content=content, content_type=content_type, allowed_roles=allowed_roles, allowed_users=allowed_users)
+    return HeldIngestResponse(job_id=job.job_id, message=job.message)
 
 
 @app.post("/v1/documents/stream")
@@ -319,20 +463,144 @@ async def stream_ingest_document(
     content = await read_limited_body(request)
     if not content:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Document cannot be empty")
-    content_sha256 = sha256(content).hexdigest()
-    existing_document = await get_document_by_content_hash(session, principal.tenant_id, content_sha256)
     content_type = request.headers.get("content-type", "")
     allowed_roles = parse_acl(x_allowed_roles) or principal.roles
     allowed_users = parse_acl(x_allowed_users)
+    job = await create_held_job(session=session, principal=principal, document_name=document_name, content=content, content_type=content_type, allowed_roles=allowed_roles, allowed_users=allowed_users)
 
     async def events():
-        try:
-            async for event in index_document_events(content, content_type, content_sha256, document_name, allowed_roles, allowed_users, principal, session, existing_document):
-                yield encode_event(event)
-        except HTTPException as error:
-            yield encode_event({"type": "error", "detail": error.detail})
+        yield encode_event({
+            "type": "complete", "percentage": 100, "job_id": job.job_id, "state": job.state,
+            "chunks_indexed": 0, "tables_indexed": 0, "visuals_indexed": 0, "reindexed": False,
+            "message": job.message,
+        })
 
     return StreamingResponse(events(), media_type="application/x-ndjson", headers={"X-Accel-Buffering": "no"})
+
+
+@app.get("/v1/admin/ingestion-jobs", response_model=list[IngestionJobResponse])
+async def list_ingestion_jobs(
+    state: str | None = None,
+    principal: Principal = Depends(require_principal),
+    session: AsyncSession = Depends(get_session),
+) -> list[IngestionJobResponse]:
+    require_admin(principal)
+    statement = select(IngestionJobRecord).where(IngestionJobRecord.tenant_id == principal.tenant_id)
+    if state:
+        statement = statement.where(IngestionJobRecord.state == state)
+    jobs = list(await session.scalars(statement.order_by(IngestionJobRecord.created_at.desc()).limit(500)))
+    return [job_response(job) for job in jobs]
+
+
+@app.post("/v1/admin/compute-sessions", response_model=ComputeSessionResponse, status_code=status.HTTP_201_CREATED)
+async def open_compute_session(
+    payload: ComputeSessionCreate,
+    principal: Principal = Depends(require_principal),
+    session: AsyncSession = Depends(get_session),
+) -> ComputeSessionResponse:
+    require_admin(principal)
+    settings = get_settings()
+    if not settings.gpu_dispatch_enabled:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="GPU dispatch is disabled by configuration; no provider was contacted.")
+    existing = await get_open_compute_session(session, principal.tenant_id)
+    if existing is not None:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="A compute session is already open")
+    record_ = ComputeSessionRecord(
+        session_id=str(uuid4()), tenant_id=principal.tenant_id, provider=settings.compute_provider, status="open",
+        max_jobs=payload.max_jobs, max_gpu_minutes=payload.max_gpu_minutes,
+        max_estimated_cost_usd=payload.max_estimated_cost_usd, released_job_count=0,
+        gpu_seconds=0, estimated_cost_usd=0, created_by=principal.user_id,
+    )
+    session.add(record_)
+    await session.commit()
+    await session.refresh(record_)
+    await record(session, "compute_session_opened", principal.tenant_id, principal.user_id, compute_session_id=record_.session_id, provider=record_.provider)
+    return await compute_session_payload(session, record_)
+
+
+async def owned_compute_session(session: AsyncSession, principal: Principal, session_id: str) -> ComputeSessionRecord:
+    record_ = await session.scalar(select(ComputeSessionRecord).where(ComputeSessionRecord.session_id == session_id, ComputeSessionRecord.tenant_id == principal.tenant_id))
+    if record_ is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Compute session not found")
+    return record_
+
+
+@app.post("/v1/admin/compute-sessions/{session_id}/release", response_model=ComputeSessionResponse)
+async def release_compute_jobs(
+    session_id: str,
+    payload: ComputeSessionRelease,
+    principal: Principal = Depends(require_principal),
+    session: AsyncSession = Depends(get_session),
+) -> ComputeSessionResponse:
+    require_admin(principal)
+    settings = get_settings()
+    if not settings.gpu_dispatch_enabled:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="GPU dispatch is disabled; no provider was contacted.")
+    record_ = await owned_compute_session(session, principal, session_id)
+    if record_.status != "open":
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Compute session is not open")
+    if len(payload.job_ids) != len(set(payload.job_ids)):
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Job IDs must be unique")
+    jobs = list(await session.scalars(select(IngestionJobRecord).where(IngestionJobRecord.job_id.in_(payload.job_ids), IngestionJobRecord.tenant_id == principal.tenant_id)))
+    if len(jobs) != len(payload.job_ids):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="One or more jobs were not found")
+    if any(job.state != "held_for_compute" for job in jobs):
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Only held jobs can be released")
+    try:
+        assert_release_within_limits(
+            released_job_count=record_.released_job_count, requested_jobs=len(jobs), max_jobs=record_.max_jobs,
+            gpu_seconds=record_.gpu_seconds, max_gpu_minutes=record_.max_gpu_minutes,
+            estimated_cost_usd=record_.estimated_cost_usd, max_estimated_cost_usd=record_.max_estimated_cost_usd,
+        )
+    except ValueError as error:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(error)) from error
+    if record_.provider != "local_docker":
+        raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="Hosted worker artifact exchange is not configured; no provider was contacted.")
+    for job in jobs:
+        job.state, job.stage, job.progress = "provider_queued", "provider_queue", 0
+        job.message = "Released into the bounded compute session."
+        job.compute_session_id = record_.session_id
+    record_.released_job_count += len(jobs)
+    await session.commit()
+    await record(session, "compute_jobs_released", principal.tenant_id, principal.user_id, compute_session_id=record_.session_id, job_ids=payload.job_ids)
+    task = asyncio.create_task(run_local_compute_session(record_.session_id, payload.job_ids))
+    compute_tasks[record_.session_id] = task
+    return await compute_session_payload(session, record_)
+
+
+@app.post("/v1/admin/compute-sessions/{session_id}/drain", response_model=ComputeSessionResponse)
+async def drain_compute_session(session_id: str, principal: Principal = Depends(require_principal), session: AsyncSession = Depends(get_session)) -> ComputeSessionResponse:
+    require_admin(principal)
+    record_ = await owned_compute_session(session, principal, session_id)
+    if record_.status == "open":
+        record_.status = "draining"
+        await session.commit()
+    return await compute_session_payload(session, record_)
+
+
+@app.post("/v1/admin/compute-sessions/{session_id}/cancel", response_model=ComputeSessionResponse)
+async def cancel_compute_session(session_id: str, principal: Principal = Depends(require_principal), session: AsyncSession = Depends(get_session)) -> ComputeSessionResponse:
+    require_admin(principal)
+    record_ = await owned_compute_session(session, principal, session_id)
+    task = compute_tasks.get(session_id)
+    if task is not None:
+        task.cancel()
+    await session.execute(
+        update(IngestionJobRecord).where(
+            IngestionJobRecord.compute_session_id == session_id,
+            IngestionJobRecord.state.in_(["provider_queued", "cold_start", "processing", "retrying"]),
+        ).values(state="held_for_compute", stage="held", progress=0, message="Session cancelled; document returned to held state.")
+    )
+    record_.status = "closed"
+    record_.closed_at = func.now()
+    await session.commit()
+    return await compute_session_payload(session, record_)
+
+
+@app.get("/v1/admin/compute-sessions/{session_id}", response_model=ComputeSessionResponse)
+async def get_compute_session(session_id: str, principal: Principal = Depends(require_principal), session: AsyncSession = Depends(get_session)) -> ComputeSessionResponse:
+    require_admin(principal)
+    return await compute_session_payload(session, await owned_compute_session(session, principal, session_id))
 
 
 @app.delete("/v1/documents/{document_id}", response_model=DeleteResponse)
@@ -382,6 +650,7 @@ async def query_documents(
     principal: Principal = Depends(require_principal),
     session: AsyncSession = Depends(get_session),
 ) -> QueryResponse:
+    await require_compute_for_query(session, principal)
     chat = await resolve_chat(payload, principal, session)
     embedding = (await model_server.embed([payload.question]))[0]
     matches = await vectors.search(principal, embedding, payload.top_k)
@@ -410,6 +679,7 @@ async def stream_query_documents(
     principal: Principal = Depends(require_principal),
     session: AsyncSession = Depends(get_session),
 ) -> StreamingResponse:
+    await require_compute_for_query(session, principal)
     chat = await resolve_chat(payload, principal, session)
     embedding = (await model_server.embed([payload.question]))[0]
     matches = await vectors.search(principal, embedding, payload.top_k)
