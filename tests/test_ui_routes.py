@@ -18,6 +18,7 @@ def test_chat_page_links_to_admin_without_embedding_admin_controls():
     html = Path("app/static/index.html").read_text()
 
     assert 'href="/admin" data-admin-only' in html
+    assert 'id="auth-gate" class="auth-gate" aria-labelledby="auth-title" hidden' in html
     assert 'id="upload-form"' not in html
     assert 'id="held-jobs"' not in html
     assert 'id="invite-form"' not in html
