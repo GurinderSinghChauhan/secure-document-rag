@@ -595,6 +595,10 @@ textarea:focus {
   padding: 34px 32px 28px;
 }
 
+.content.member-layout {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .assistant-workspace {
   position: sticky;
   top: 102px;

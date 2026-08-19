@@ -619,9 +619,11 @@ function applyAuthenticatedUser(payload) {
   authGate.hidden = true;
   updateTenantChip();
   accountSummary.textContent = `${currentUser.display_name} · ${currentUser.role} at ${currentUser.organization.name}`;
-  document.querySelectorAll("[data-admin-only]").forEach((element) => { element.hidden = currentUser.role !== "admin"; });
+  const isAdmin = currentUser.role === "admin";
+  document.querySelectorAll("[data-admin-only]").forEach((element) => { element.hidden = !isAdmin; });
+  document.querySelector(".content").classList.toggle("member-layout", !isAdmin);
   loadChatHistory();
-  if (currentUser.role === "admin") {
+  if (isAdmin) {
     loadHeldJobs();
     loadMembers();
   }
