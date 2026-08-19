@@ -123,6 +123,14 @@ The API serves a same-origin chat UI at `http://127.0.0.1:8080/` and a separate 
 
 The UI keeps the short-lived access JWT only in memory and restores sessions through a rotating, HTTP-only refresh cookie. Registration creates an organization and its first administrator; additional accounts join by invitation.
 
+Platform super administrators use the separate `/super-admin` console to review all organizations and their users, suspend or reactivate organizations, activate or deactivate accounts, change organization roles, and revoke sessions. Platform authority is independent of the `admin` and `member` organization roles. Create the first super administrator by promoting an existing active, verified account through the interactive command below; the command verifies the account password and accepts no credentials through arguments or environment variables:
+
+```bash
+docker compose exec api python -m tools.bootstrap_super_admin
+```
+
+Every platform mutation is audited. The console prevents self-deactivation, deactivation of the final active super administrator, and removal of an organization's final active administrator. Suspending an organization revokes its non-super-admin sessions without deleting its data.
+
 ## Production deployment
 
 - The Compose file is intended for a single-node private deployment. It binds only the API to loopback; PostgreSQL and Qdrant have no host-port mappings. Place an authenticated TLS/mTLS gateway in front of the API.

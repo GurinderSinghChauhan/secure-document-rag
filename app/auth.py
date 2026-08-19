@@ -12,7 +12,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .config import get_settings
-from .database import MembershipRecord, UserRecord, get_session
+from .database import MembershipRecord, OrganizationRecord, UserRecord, get_session
 from .models import Principal
 
 password_hasher = PasswordHasher(time_cost=3, memory_cost=65536, parallelism=4)
@@ -50,6 +50,7 @@ def create_access_token(user: UserRecord, membership: MembershipRecord) -> str:
             "sub": user.user_id,
             "org_id": membership.organization_id,
             "role": membership.role,
+            "super_admin": bool(user.is_super_admin),
             "ver": user.token_version,
             "iat": now,
             "exp": now + timedelta(minutes=settings.access_token_minutes),
@@ -88,10 +89,21 @@ async def require_principal(
     membership = await session.scalar(select(MembershipRecord).where(MembershipRecord.user_id == user.user_id))
     if membership is None or membership.organization_id != claims.get("org_id") or membership.role != claims.get("role"):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authorization has changed; sign in again")
-    return Principal(tenant_id=membership.organization_id, user_id=user.user_id, roles=[membership.role])
+    if bool(claims.get("super_admin")) != bool(user.is_super_admin):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authorization has changed; sign in again")
+    organization = await session.get(OrganizationRecord, membership.organization_id)
+    if organization is None or (not organization.active and not user.is_super_admin):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Organization is suspended")
+    return Principal(tenant_id=membership.organization_id, user_id=user.user_id, roles=[membership.role], is_super_admin=bool(user.is_super_admin))
 
 
 def require_admin(principal: Principal) -> Principal:
     if "admin" not in principal.roles:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Administrator role required")
+    return principal
+
+
+def require_super_admin(principal: Principal) -> Principal:
+    if not principal.is_super_admin:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Super administrator role required")
     return principal

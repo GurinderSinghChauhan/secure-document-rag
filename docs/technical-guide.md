@@ -63,6 +63,7 @@ Authorization: Bearer <short-lived-access-jwt>
 | `POST` | `/v1/auth/refresh` | Refresh cookie | Rotate the refresh session and issue a new access JWT |
 | `POST` | `/v1/auth/logout` | Refresh cookie | Revoke the current refresh session |
 | `GET` | `/v1/auth/me` | Authorized user | Return the current account, role, and organization |
+| `GET/PATCH/POST` | `/v1/super-admin/*` | Platform super admin | Inspect organizations/users, suspend access, change roles, and revoke sessions |
 | `GET/POST/PATCH` | `/v1/admin/organization/*` | Organization admin | Manage invitations, members, roles, and sessions |
 | `POST` | `/v1/documents` | Admin | Ingest a document body |
 | `POST` | `/v1/query` | Authorized user | Retrieve and generate a cited answer |
@@ -122,6 +123,7 @@ Authorization: Bearer <short-lived-access-jwt>
 - Use migrations for all future schema changes. The current `create_all` startup initialization is an initial-schema convenience, not a production migration strategy.
 - Pin and scan container image digests after model and integration testing.
 - Review third-party licenses as part of release governance. MinerU uses an Apache-2.0-based custom license with online-service attribution and commercial thresholds; retain the required notice and obtain legal approval before release.
+- Platform super-admin authority is stored separately from organization membership and included in signed access-token claims. Use `python -m tools.bootstrap_super_admin` interactively inside the API container to promote an existing verified account. Never expose platform promotion through public registration or environment configuration.
 
 ## Production gaps to close
 

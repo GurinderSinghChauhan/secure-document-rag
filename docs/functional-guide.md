@@ -21,6 +21,8 @@ Organization scope comes from the verified JWT and cannot be selected through a 
 
 Administrators open `/admin` to upload documents, release bounded compute batches, and manage organization members. The main `/` workspace remains focused on chat and does not embed administrative controls. Members are redirected away from the admin console, and the API independently rejects every unauthorized administrative request.
 
+Platform super administrators have a separate `/super-admin` console. They can see organizations and users across the deployment, suspend access without deleting data, reactivate users or organizations, change organization roles, and revoke user sessions. These actions are audited and protected by final-administrator and self-lockout safeguards.
+
 An administrator uploads a PDF, DOCX, PPTX, XLSX, UTF-8 text file, or supported image through `POST /v1/documents`. The service:
 
 1. Enforces the configured upload size limit.

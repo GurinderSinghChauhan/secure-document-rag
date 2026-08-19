@@ -320,6 +320,7 @@ function applyAuthenticatedUser(payload) {
   accountSummary.textContent = `${currentUser.display_name} · ${currentUser.role} at ${currentUser.organization.name}`;
   const isAdmin = currentUser.role === "admin";
   document.querySelectorAll("[data-admin-only]").forEach((element) => { element.hidden = !isAdmin; });
+  document.querySelectorAll("[data-super-admin-only]").forEach((element) => { element.hidden = !currentUser.is_super_admin; });
   loadChatHistory();
 }
 

@@ -2,16 +2,18 @@ from pathlib import Path
 
 import pytest
 
-from app.main import admin_ui, chat_ui
+from app.main import admin_ui, chat_ui, super_admin_ui
 
 
 @pytest.mark.asyncio
 async def test_chat_and_admin_pages_are_served_separately():
     chat_response = await chat_ui()
     admin_response = await admin_ui()
+    super_admin_response = await super_admin_ui()
 
     assert Path(chat_response.path).name == "index.html"
     assert Path(admin_response.path).name == "admin.html"
+    assert Path(super_admin_response.path).name == "super_admin.html"
 
 
 def test_chat_page_links_to_admin_without_embedding_admin_controls():
@@ -33,3 +35,22 @@ def test_admin_page_is_role_gated_and_contains_management_workflows():
     assert 'id="invite-form"' in html
     assert 'payload.user?.role !== "admin"' in script
     assert 'location.replace("/")' in script
+
+
+def test_super_admin_page_is_platform_gated_and_contains_safe_controls():
+    html = Path("app/static/super_admin.html").read_text()
+    script = Path("app/static/super_admin.js").read_text()
+
+    assert "Organizations and access" in html
+    assert "/v1/super-admin/organizations" in script
+    assert "payload.user?.is_super_admin" in script
+    assert "Revoke every active session" in script
+    assert 'location.replace("/")' in script
+
+
+def test_platform_migration_adds_only_explicit_authority_fields():
+    migration = Path("migrations/versions/20260819_02_platform_admin.py").read_text()
+
+    assert 'op.add_column("organizations"' in migration
+    assert 'op.add_column("users"' in migration
+    assert '"is_super_admin"' in migration

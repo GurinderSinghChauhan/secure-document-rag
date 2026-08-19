@@ -7,6 +7,7 @@ class Principal(BaseModel):
     tenant_id: str
     user_id: str
     roles: list[str]
+    is_super_admin: bool = False
 
 
 class QueryRequest(BaseModel):

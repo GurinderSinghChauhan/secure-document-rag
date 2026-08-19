@@ -25,6 +25,7 @@ from .document_parser import VisualAsset, extract_document
 from .mineru import MinerUClient, supports_mineru
 from .models import ChatDetail, ChatMessage, ChatSummary, ComputeSessionCreate, ComputeSessionRelease, ComputeSessionResponse, DeleteResponse, HeldIngestResponse, IngestionJobResponse, Principal, QueryRequest, QueryResponse, ReadinessResponse
 from .providers import ModelClient
+from .super_admin import router as super_admin_router
 from .repository import add_chat_message, create_chat, database_is_ready, get_chat, get_document, get_document_by_content_hash, list_chat_messages, list_chats, mark_document_deleted
 from .vector_store import VectorStore
 
@@ -58,6 +59,7 @@ async def lifespan(_: FastAPI):
 
 app = FastAPI(title="Secure Document RAG", version="0.2.0", docs_url=None, redoc_url=None, lifespan=lifespan)
 app.include_router(accounts_router)
+app.include_router(super_admin_router)
 app.add_middleware(TrustedHostMiddleware, allowed_hosts=get_settings().allowed_host_list)
 app.mount("/assets", StaticFiles(directory="app/static"), name="assets")
 
@@ -417,6 +419,11 @@ async def chat_ui() -> FileResponse:
 @app.get("/admin", include_in_schema=False)
 async def admin_ui() -> FileResponse:
     return FileResponse("app/static/admin.html")
+
+
+@app.get("/super-admin", include_in_schema=False)
+async def super_admin_ui() -> FileResponse:
+    return FileResponse("app/static/super_admin.html")
 
 
 @app.get("/readyz", response_model=ReadinessResponse)

@@ -128,6 +128,8 @@ async def auth_response(session: AsyncSession, response: Response, user: UserRec
     settings = get_settings()
     membership = await membership_for(session, user.user_id)
     organization = await session.get(OrganizationRecord, membership.organization_id)
+    if not organization.active and not user.is_super_admin:
+        raise HTTPException(status_code=403, detail="Organization is suspended")
     refresh = random_token()
     session.add(RefreshSessionRecord(
         session_id=str(uuid4()), family_id=family_id or str(uuid4()), user_id=user.user_id,
@@ -137,7 +139,7 @@ async def auth_response(session: AsyncSession, response: Response, user: UserRec
     set_refresh_cookie(response, refresh)
     return AuthResponse(
         access_token=create_access_token(user, membership), expires_in=settings.access_token_minutes * 60,
-        user={"user_id": user.user_id, "email": user.email, "display_name": user.display_name, "role": membership.role,
+        user={"user_id": user.user_id, "email": user.email, "display_name": user.display_name, "role": membership.role, "is_super_admin": bool(user.is_super_admin),
               "organization": {"organization_id": organization.organization_id, "name": organization.name, "slug": organization.slug}},
     )
 
@@ -241,6 +243,10 @@ async def refresh(request: Request, response: Response, session: AsyncSession = 
     user = await session.get(UserRecord, stored.user_id)
     if user is None or not user.active or not user.email_verified:
         raise HTTPException(status_code=401, detail="Refresh session expired")
+    membership = await membership_for(session, user.user_id)
+    organization = await session.get(OrganizationRecord, membership.organization_id)
+    if not organization.active and not user.is_super_admin:
+        raise HTTPException(status_code=403, detail="Organization is suspended")
     new_refresh = random_token()
     new_hash = hash_token(new_refresh)
     stored.revoked_at, stored.replaced_by_hash = now, new_hash
@@ -248,10 +254,8 @@ async def refresh(request: Request, response: Response, session: AsyncSession = 
     session.add(RefreshSessionRecord(session_id=str(uuid4()), family_id=stored.family_id, user_id=user.user_id, token_hash=new_hash, expires_at=now + timedelta(days=settings.refresh_token_days)))
     await session.commit()
     set_refresh_cookie(response, new_refresh)
-    membership = await membership_for(session, user.user_id)
-    organization = await session.get(OrganizationRecord, membership.organization_id)
     return AuthResponse(access_token=create_access_token(user, membership), expires_in=settings.access_token_minutes * 60,
-                        user={"user_id": user.user_id, "email": user.email, "display_name": user.display_name, "role": membership.role,
+                        user={"user_id": user.user_id, "email": user.email, "display_name": user.display_name, "role": membership.role, "is_super_admin": bool(user.is_super_admin),
                               "organization": {"organization_id": organization.organization_id, "name": organization.name, "slug": organization.slug}})
 
 
@@ -313,7 +317,7 @@ async def me(principal: Principal = Depends(require_principal), session: AsyncSe
     user = await session.get(UserRecord, principal.user_id)
     membership = await membership_for(session, principal.user_id)
     organization = await session.get(OrganizationRecord, membership.organization_id)
-    return {"user_id": user.user_id, "email": user.email, "display_name": user.display_name, "role": membership.role,
+    return {"user_id": user.user_id, "email": user.email, "display_name": user.display_name, "role": membership.role, "is_super_admin": bool(user.is_super_admin),
             "organization": {"organization_id": organization.organization_id, "name": organization.name, "slug": organization.slug}}
 
 

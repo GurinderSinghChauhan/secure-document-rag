@@ -17,6 +17,7 @@ class OrganizationRecord(Base):
     organization_id: Mapped[str] = mapped_column(String(64), primary_key=True)
     name: Mapped[str] = mapped_column(String(120))
     slug: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    active: Mapped[bool] = mapped_column(Boolean, default=True, server_default=text("true"), index=True)
     created_at: Mapped[object] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
@@ -29,6 +30,7 @@ class UserRecord(Base):
     password_hash: Mapped[str] = mapped_column(String(512))
     email_verified: Mapped[bool] = mapped_column(Boolean, default=False)
     active: Mapped[bool] = mapped_column(Boolean, default=True)
+    is_super_admin: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text("false"), index=True)
     token_version: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[object] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
