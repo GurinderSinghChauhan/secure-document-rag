@@ -55,9 +55,9 @@
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4v8Z"></path><path d="M8 9h8M8 13h5"></path></svg>
             Ask
           </a>
-          <a class="nav-item" href="#document-library" data-admin-only>
+          <a class="nav-item" href="/admin" data-admin-only>
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2Z"></path></svg>
-            Documents
+            Admin
           </a>
         </nav>
 
@@ -184,127 +184,6 @@
             <p class="assistant-disclaimer">AI responses can be incomplete. Verify consequential decisions against the original document.</p>
           </section>
 
-          <aside id="document-library" class="document-panel" data-admin-only aria-labelledby="upload-title">
-            <header class="panel-header">
-              <span class="panel-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"></path><path d="M14 2v6h6M12 18v-6M9 15h6"></path></svg>
-              </span>
-              <div>
-                <span class="section-kicker">Admin workflow</span>
-                <h2 id="upload-title">Upload documents</h2>
-              </div>
-            </header>
-            <p class="panel-description">Files are saved first. GPU processing stays off until an administrator releases a bounded batch.</p>
-
-            <form id="upload-form" class="upload-form">
-              <label id="file-dropzone" class="file-dropzone" for="document-file">
-                <input id="document-file" type="file" accept="text/plain,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.presentationml.presentation,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,image/png,image/jpeg,image/webp" multiple required>
-                <span class="upload-icon" aria-hidden="true">
-                  <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><path d="m17 8-5-5-5 5M12 3v12"></path></svg>
-                </span>
-                <strong id="file-label">Choose documents</strong>
-                <span>or drag and drop them here</span>
-                <small>PDF, DOCX, PPTX, XLSX, TXT, PNG, JPEG, or WebP · up to 25 MB each</small>
-              </label>
-
-              <fieldset class="access-fieldset">
-                <legend>Document access</legend>
-                <p>Leave blank to inherit the uploading administrator’s roles.</p>
-                <label>
-                  <span>Allowed roles <em>Optional</em></span>
-                  <input id="allowed-roles" placeholder="clinician, reviewer">
-                </label>
-                <label>
-                  <span>Allowed users <em>Optional</em></span>
-                  <input id="allowed-users" placeholder="user-123, user-456">
-                </label>
-              </fieldset>
-
-              <div id="upload-status" class="upload-status" role="status">
-                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20Z"></path><path d="M12 16v-4M12 8h.01"></path></svg>
-                Select one or more files to begin.
-              </div>
-              <div id="upload-progress" class="upload-progress" hidden>
-                <div class="upload-progress-row">
-                  <span>Upload</span>
-                  <div
-                    id="upload-progress-track"
-                    class="upload-progress-track"
-                    role="progressbar"
-                    aria-label="Document upload progress"
-                    aria-valuemin="0"
-                    aria-valuemax="100"
-                    aria-valuenow="0"
-                  >
-                    <span id="upload-progress-fill" class="upload-progress-fill"></span>
-                  </div>
-                  <strong id="upload-progress-value">0%</strong>
-                </div>
-                <div id="indexing-progress-row" class="upload-progress-row" hidden>
-                  <span>Processing</span>
-                  <div
-                    id="indexing-progress-track"
-                    class="upload-progress-track"
-                    role="progressbar"
-                    aria-label="Document indexing progress"
-                    aria-valuemin="0"
-                    aria-valuemax="100"
-                    aria-valuenow="0"
-                  >
-                    <span id="indexing-progress-fill" class="upload-progress-fill indexing-progress-fill"></span>
-                  </div>
-                  <strong id="indexing-progress-value">0%</strong>
-                </div>
-              </div>
-              <button id="upload-button" class="primary-button" type="submit">
-                <span>Upload and hold</span>
-                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 8l5-5 5 5M5 21h14"></path></svg>
-              </button>
-            </form>
-
-            <section class="compute-panel" aria-labelledby="compute-title">
-              <div class="compute-heading">
-                <div><span class="section-kicker">Cost control</span><h3 id="compute-title">Held for compute</h3></div>
-                <button id="refresh-jobs" class="secondary-button" type="button">Refresh</button>
-              </div>
-              <p id="compute-message">GPU processing is off; uploaded documents are saved and waiting.</p>
-              <div id="held-jobs" class="held-jobs"><small>Connect to view held documents.</small></div>
-              <div class="compute-limits">
-                <label><span>Max jobs</span><input id="max-jobs" type="number" min="1" value="10"></label>
-                <label><span>GPU minutes</span><input id="max-gpu-minutes" type="number" min="1" value="30"></label>
-                <label><span>Max cost USD <em>Optional</em></span><input id="max-cost" type="number" min="0.01" step="0.01"></label>
-              </div>
-              <button id="release-jobs" class="primary-button" type="button">Start bounded batch</button>
-            </section>
-
-            <section class="compute-panel" aria-labelledby="members-title">
-              <div class="compute-heading"><div><span class="section-kicker">Access</span><h3 id="members-title">Organization members</h3></div><button id="refresh-members" class="secondary-button" type="button">Refresh</button></div>
-              <form id="invite-form" class="invite-form">
-                <input id="invite-email" type="email" placeholder="person@example.com" required>
-                <select id="invite-role"><option value="member">Member</option><option value="admin">Admin</option></select>
-                <button class="primary-button" type="submit">Invite</button>
-              </form>
-              <p id="member-message"></p>
-              <div id="invite-link-panel" class="invite-link-panel" hidden>
-                <input id="invite-link" type="text" readonly aria-label="Invitation link">
-                <button id="copy-invite-link" class="secondary-button" type="button">Copy link</button>
-              </div>
-              <div id="member-list" class="held-jobs"></div>
-            </section>
-
-            <section class="trust-note" aria-labelledby="security-summary-title">
-              <div class="trust-note-heading">
-                <span class="security-shield" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 2.5 20 6v5.4c0 5-3.3 8.6-8 10.1-4.7-1.5-8-5.1-8-10.1V6l8-3.5Z"></path><path d="m8.7 12 2.1 2.1 4.6-4.7"></path></svg></span>
-                <div><strong id="security-summary-title">Security controls active</strong><small>Protection is enforced by the API, not only the interface.</small></div>
-              </div>
-              <ul>
-                <li><span aria-hidden="true"></span>Organization-isolated data</li>
-                <li><span aria-hidden="true"></span>Admin and member permissions</li>
-                <li><span aria-hidden="true"></span>Secure, rotating sessions</li>
-                <li><span aria-hidden="true"></span>Controlled document processing</li>
-              </ul>
-            </section>
-          </aside>
         </main>
       </div>
     </div>

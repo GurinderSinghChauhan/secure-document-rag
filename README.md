@@ -119,7 +119,7 @@ Every session requires `max_jobs` and `max_gpu_minutes`, plus an optional `max_e
 
 ## Chat UI
 
-The API serves a basic same-origin chat UI at `http://127.0.0.1:8080/`. An administrator can upload and index PDF, DOCX, PPTX, XLSX, TXT, PNG, JPEG, and WebP content from the UI, while users can ask questions and see only the final answer. The browser calls only the secured RAG API; it never connects to MinerU, the model server, or Qdrant directly.
+The API serves a same-origin chat UI at `http://127.0.0.1:8080/` and a separate administrator console at `http://127.0.0.1:8080/admin`. Members receive the focused chat workspace only. Administrators use the console to upload and index PDF, DOCX, PPTX, XLSX, TXT, PNG, JPEG, and WebP content, release compute, and manage organization access. The browser calls only the secured RAG API; it never connects to MinerU, the model server, or Qdrant directly.
 
 The UI keeps the short-lived access JWT only in memory and restores sessions through a rotating, HTTP-only refresh cookie. Registration creates an organization and its first administrator; additional accounts join by invitation.
 

@@ -19,6 +19,8 @@ Organization scope comes from the verified JWT and cannot be selected through a 
 
 ## Document ingestion
 
+Administrators open `/admin` to upload documents, release bounded compute batches, and manage organization members. The main `/` workspace remains focused on chat and does not embed administrative controls. Members are redirected away from the admin console, and the API independently rejects every unauthorized administrative request.
+
 An administrator uploads a PDF, DOCX, PPTX, XLSX, UTF-8 text file, or supported image through `POST /v1/documents`. The service:
 
 1. Enforces the configured upload size limit.

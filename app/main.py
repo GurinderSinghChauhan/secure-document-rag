@@ -414,6 +414,11 @@ async def chat_ui() -> FileResponse:
     return FileResponse("app/static/index.html")
 
 
+@app.get("/admin", include_in_schema=False)
+async def admin_ui() -> FileResponse:
+    return FileResponse("app/static/admin.html")
+
+
 @app.get("/readyz", response_model=ReadinessResponse)
 async def readyz(session: AsyncSession = Depends(get_session)) -> ReadinessResponse:
     # Readiness is intentionally control-plane only. It must never wake or poll
