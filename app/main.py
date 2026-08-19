@@ -26,6 +26,7 @@ from .mineru import MinerUClient, supports_mineru
 from .models import ChatDetail, ChatMessage, ChatSummary, ComputeSessionCreate, ComputeSessionRelease, ComputeSessionResponse, DeleteResponse, HeldIngestResponse, IngestionJobResponse, Principal, QueryRequest, QueryResponse, ReadinessResponse
 from .providers import ModelClient
 from .super_admin import router as super_admin_router
+from .trials import is_pdf, require_active_trial, reserve_pdf_trial_slot
 from .repository import add_chat_message, create_chat, database_is_ready, get_chat, get_document, get_document_by_content_hash, list_chat_messages, list_chats, mark_document_deleted
 from .vector_store import VectorStore
 
@@ -455,6 +456,9 @@ async def ingest_document(
     if not content:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Document cannot be empty")
     content_type = request.headers.get("content-type", "")
+    require_active_trial(principal)
+    if is_pdf(document_name, content_type):
+        await reserve_pdf_trial_slot(session, principal)
     allowed_roles = parse_acl(x_allowed_roles) or principal.roles
     allowed_users = parse_acl(x_allowed_users)
     job = await create_held_job(session=session, principal=principal, document_name=document_name, content=content, content_type=content_type, allowed_roles=allowed_roles, allowed_users=allowed_users)
@@ -476,6 +480,9 @@ async def stream_ingest_document(
     if not content:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Document cannot be empty")
     content_type = request.headers.get("content-type", "")
+    require_active_trial(principal)
+    if is_pdf(document_name, content_type):
+        await reserve_pdf_trial_slot(session, principal)
     allowed_roles = parse_acl(x_allowed_roles) or principal.roles
     allowed_users = parse_acl(x_allowed_users)
     job = await create_held_job(session=session, principal=principal, document_name=document_name, content=content, content_type=content_type, allowed_roles=allowed_roles, allowed_users=allowed_users)
@@ -511,6 +518,7 @@ async def open_compute_session(
     session: AsyncSession = Depends(get_session),
 ) -> ComputeSessionResponse:
     require_admin(principal)
+    require_active_trial(principal)
     settings = get_settings()
     if not settings.gpu_dispatch_enabled:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="GPU dispatch is disabled by configuration; no provider was contacted.")
@@ -545,6 +553,7 @@ async def release_compute_jobs(
     session: AsyncSession = Depends(get_session),
 ) -> ComputeSessionResponse:
     require_admin(principal)
+    require_active_trial(principal)
     settings = get_settings()
     if not settings.gpu_dispatch_enabled:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="GPU dispatch is disabled; no provider was contacted.")
@@ -662,6 +671,7 @@ async def query_documents(
     principal: Principal = Depends(require_principal),
     session: AsyncSession = Depends(get_session),
 ) -> QueryResponse:
+    require_active_trial(principal)
     await require_compute_for_query(session, principal)
     chat = await resolve_chat(payload, principal, session)
     embedding = (await model_server.embed([payload.question]))[0]
@@ -691,6 +701,7 @@ async def stream_query_documents(
     principal: Principal = Depends(require_principal),
     session: AsyncSession = Depends(get_session),
 ) -> StreamingResponse:
+    require_active_trial(principal)
     await require_compute_for_query(session, principal)
     chat = await resolve_chat(payload, principal, session)
     embedding = (await model_server.embed([payload.question]))[0]

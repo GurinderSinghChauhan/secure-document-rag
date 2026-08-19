@@ -17,6 +17,7 @@ from .config import get_settings
 from .database import AccountTokenRecord, MembershipRecord, OrganizationRecord, RefreshSessionRecord, UserRecord, get_session
 from .email_sender import send_account_email
 from .models import Principal
+from .trials import new_trial_window, trial_payload
 
 router = APIRouter(prefix="/v1")
 GENERIC_EMAIL_MESSAGE = "If the account is eligible, an email has been sent."
@@ -139,7 +140,7 @@ async def auth_response(session: AsyncSession, response: Response, user: UserRec
     set_refresh_cookie(response, refresh)
     return AuthResponse(
         access_token=create_access_token(user, membership), expires_in=settings.access_token_minutes * 60,
-        user={"user_id": user.user_id, "email": user.email, "display_name": user.display_name, "role": membership.role, "is_super_admin": bool(user.is_super_admin),
+        user={"user_id": user.user_id, "email": user.email, "display_name": user.display_name, "role": membership.role, "is_super_admin": bool(user.is_super_admin), "trial": trial_payload(organization, is_super_admin=bool(user.is_super_admin)),
               "organization": {"organization_id": organization.organization_id, "name": organization.name, "slug": organization.slug}},
     )
 
@@ -171,11 +172,13 @@ async def register(payload: RegisterRequest, request: Request, session: AsyncSes
     settings = get_settings()
     organization_id, user_id = str(uuid4()), str(uuid4())
     slug = await available_organization_slug(session, payload.organization_name)
+    trial_started_at, trial_ends_at = new_trial_window()
     user = UserRecord(
         user_id=user_id, email=payload.email, display_name=payload.display_name.strip(),
         password_hash=hash_password(payload.password), email_verified=not settings.email_verification_required,
     )
-    session.add(OrganizationRecord(organization_id=organization_id, name=payload.organization_name.strip(), slug=slug))
+    session.add(OrganizationRecord(organization_id=organization_id, name=payload.organization_name.strip(), slug=slug,
+                                   trial_started_at=trial_started_at, trial_ends_at=trial_ends_at))
     session.add(user)
     try:
         await session.flush()
@@ -255,7 +258,7 @@ async def refresh(request: Request, response: Response, session: AsyncSession = 
     await session.commit()
     set_refresh_cookie(response, new_refresh)
     return AuthResponse(access_token=create_access_token(user, membership), expires_in=settings.access_token_minutes * 60,
-                        user={"user_id": user.user_id, "email": user.email, "display_name": user.display_name, "role": membership.role, "is_super_admin": bool(user.is_super_admin),
+                        user={"user_id": user.user_id, "email": user.email, "display_name": user.display_name, "role": membership.role, "is_super_admin": bool(user.is_super_admin), "trial": trial_payload(organization, is_super_admin=bool(user.is_super_admin)),
                               "organization": {"organization_id": organization.organization_id, "name": organization.name, "slug": organization.slug}})
 
 
@@ -317,7 +320,7 @@ async def me(principal: Principal = Depends(require_principal), session: AsyncSe
     user = await session.get(UserRecord, principal.user_id)
     membership = await membership_for(session, principal.user_id)
     organization = await session.get(OrganizationRecord, membership.organization_id)
-    return {"user_id": user.user_id, "email": user.email, "display_name": user.display_name, "role": membership.role, "is_super_admin": bool(user.is_super_admin),
+    return {"user_id": user.user_id, "email": user.email, "display_name": user.display_name, "role": membership.role, "is_super_admin": bool(user.is_super_admin), "trial": trial_payload(organization, is_super_admin=bool(user.is_super_admin)),
             "organization": {"organization_id": organization.organization_id, "name": organization.name, "slug": organization.slug}}
 
 

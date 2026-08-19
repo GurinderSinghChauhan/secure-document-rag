@@ -94,7 +94,7 @@ async def require_principal(
     organization = await session.get(OrganizationRecord, membership.organization_id)
     if organization is None or (not organization.active and not user.is_super_admin):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Organization is suspended")
-    return Principal(tenant_id=membership.organization_id, user_id=user.user_id, roles=[membership.role], is_super_admin=bool(user.is_super_admin))
+    return Principal(tenant_id=membership.organization_id, user_id=user.user_id, roles=[membership.role], is_super_admin=bool(user.is_super_admin), trial_ends_at=organization.trial_ends_at)
 
 
 def require_admin(principal: Principal) -> Principal:

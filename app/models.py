@@ -8,6 +8,7 @@ class Principal(BaseModel):
     user_id: str
     roles: list[str]
     is_super_admin: bool = False
+    trial_ends_at: datetime | None = None
 
 
 class QueryRequest(BaseModel):

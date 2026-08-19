@@ -37,6 +37,7 @@ const inviteLink = document.querySelector("#invite-link");
 const copyInviteLink = document.querySelector("#copy-invite-link");
 const refreshMembers = document.querySelector("#refresh-members");
 const platformConsoleLink = document.querySelector("#platform-console-link");
+const trialStatus = document.querySelector("#trial-status");
 
 function requestHeaders() {
   return accessToken ? { Authorization: `Bearer ${accessToken}` } : {};
@@ -349,6 +350,18 @@ async function bootstrapAdmin() {
     adminUserName.textContent = currentUser.display_name;
     adminOrgName.textContent = `${currentUser.organization.name} · Admin`;
     platformConsoleLink.hidden = !currentUser.is_super_admin;
+    if (currentUser.is_super_admin) {
+      trialStatus.textContent = "Platform access · trial limits do not apply";
+    } else {
+      const ends = new Date(currentUser.trial.ends_at);
+      trialStatus.textContent = currentUser.trial.active
+        ? `Free trial · 2 PDFs per UTC day · ends ${ends.toLocaleString()}`
+        : "Free trial ended · querying and document processing are unavailable";
+      if (!currentUser.trial.active) {
+        uploadButton.disabled = true;
+        releaseJobsButton.disabled = true;
+      }
+    }
     adminLoading.hidden = true;
     adminShell.hidden = false;
     await Promise.all([loadHeldJobs(), loadMembers()]);

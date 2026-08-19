@@ -123,3 +123,9 @@
     padding: 16px;
   }
 }
+.trial-status {
+  color: #3159c9;
+  font-size: 0.9rem;
+  font-weight: 700;
+  margin-top: 0.65rem;
+}

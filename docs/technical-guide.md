@@ -135,3 +135,6 @@ The current service establishes a secure application baseline. Before handling r
 4. Alembic migrations, database backup/restore exercises, and an immutable external audit sink.
 5. Hybrid lexical + vector retrieval, reranking, evaluation datasets, and tenant-isolation / prompt-injection test suites.
 6. Legal-hold and retention-policy enforcement before enabling deletion for regulated records.
+# Trial enforcement
+
+Trial dates are stored in `organizations.trial_started_at` and `organizations.trial_ends_at`; migration `20260819_03` backfills existing organizations from their original creation time. Enforcement is server-side. PDF submissions are counted from durable ingestion jobs by organization and UTC day, with a row lock on the organization to serialize concurrent submissions. Expiry checks protect query, upload, compute-session creation, and job release. Super administrators bypass these checks. There is intentionally no renewal or paid-entitlement API yet.

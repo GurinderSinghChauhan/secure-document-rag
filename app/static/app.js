@@ -317,7 +317,12 @@ function applyAuthenticatedUser(payload) {
   currentUser = payload.user;
   authGate.hidden = true;
   updateTenantChip();
-  accountSummary.textContent = `${currentUser.display_name} · ${currentUser.role} at ${currentUser.organization.name}`;
+  const trialText = currentUser.is_super_admin
+    ? "Platform access · trial limits do not apply"
+    : currentUser.trial.active
+      ? `Free trial ends ${new Date(currentUser.trial.ends_at).toLocaleString()}`
+      : "Free trial ended · access is read-only";
+  accountSummary.textContent = `${currentUser.display_name} · ${currentUser.role} at ${currentUser.organization.name}. ${trialText}.`;
   const isAdmin = currentUser.role === "admin";
   document.querySelectorAll("[data-admin-only]").forEach((element) => { element.hidden = !isAdmin; });
   document.querySelectorAll("[data-super-admin-only]").forEach((element) => { element.hidden = !currentUser.is_super_admin; });

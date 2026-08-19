@@ -74,3 +74,6 @@ Do not enable this operation for records subject to legal hold, healthcare reten
 - Answers may be incomplete if source documents are incomplete, poorly scanned, inaccessible to the caller, or not retrieved.
 - Users should review source documents before relying on answers for clinical care, legal advice, trading, lending, compliance, or other high-impact decisions.
 - The service is not a substitute for professional review or a compliance certification.
+# Free trials
+
+Every newly created organization receives a non-extendable seven-day free trial shared by all its members. During the trial, its administrators can collectively submit at most two PDFs per UTC calendar day. Inviting another member or administrator does not reset the trial or increase the allowance. Non-PDF uploads do not consume this PDF allowance. Members remain query-only, as defined by their organization role. When the trial expires, people can still sign in and manage account access, but querying, new uploads, and starting or releasing compute are blocked. Held documents remain stored. Platform super administrators are exempt from trial restrictions.

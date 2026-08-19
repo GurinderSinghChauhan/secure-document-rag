@@ -18,6 +18,8 @@ class OrganizationRecord(Base):
     name: Mapped[str] = mapped_column(String(120))
     slug: Mapped[str] = mapped_column(String(64), unique=True, index=True)
     active: Mapped[bool] = mapped_column(Boolean, default=True, server_default=text("true"), index=True)
+    trial_started_at: Mapped[object] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    trial_ends_at: Mapped[object] = mapped_column(DateTime(timezone=True), index=True)
     created_at: Mapped[object] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
