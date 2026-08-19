@@ -48,6 +48,12 @@ def test_super_admin_page_is_platform_gated_and_contains_safe_controls():
     assert 'location.replace("/")' in script
 
 
+def test_hidden_role_navigation_cannot_be_overridden_by_component_display():
+    stylesheet = Path("app/static/app.css").read_text()
+
+    assert "[hidden] {\n  display: none !important;\n}" in stylesheet
+
+
 def test_platform_migration_adds_only_explicit_authority_fields():
     migration = Path("migrations/versions/20260819_02_platform_admin.py").read_text()
 
