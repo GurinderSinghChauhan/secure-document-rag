@@ -114,3 +114,8 @@ class IndexedDocumentResponse(BaseModel):
 class ReadinessResponse(BaseModel):
     status: str
     components: dict[str, str]
+
+
+class VersionResponse(BaseModel):
+    version: str
+    commit: str

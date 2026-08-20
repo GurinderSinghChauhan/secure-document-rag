@@ -1,0 +1,54 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          version: "0.6.5"
+          enable-cache: true
+
+      - name: Install Python and dependencies
+        run: |
+          uv python install 3.12
+          uv sync --frozen
+
+      - name: Validate version and lock file
+        run: |
+          uv run python tools/version.py --check
+          uv lock --check
+
+      - name: Run test suite
+        run: uv run pytest -q
+
+      - name: Run static checks
+        run: |
+          uv run python -m compileall -q app tests tools
+          node --check app/static/app.js
+          node --check app/static/admin.js
+          node --check app/static/super_admin.js
+          git diff --check
+
+      - name: Verify migration graph
+        run: test "$(uv run alembic heads | wc -l | tr -d ' ')" = "1"
+
+      - name: Build API image
+        run: docker build --build-arg APP_COMMIT="$GITHUB_SHA" -t secure-document-rag:ci .

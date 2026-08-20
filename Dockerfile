@@ -1,11 +1,13 @@
 FROM ghcr.io/astral-sh/uv:0.6.5 AS uv
 FROM python:3.12-slim
 
-ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PATH="/service/.venv/bin:$PATH"
+ARG APP_COMMIT=unknown
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PATH="/service/.venv/bin:$PATH" APP_COMMIT=$APP_COMMIT
 WORKDIR /service
 COPY --from=uv /uv /uvx /bin/
 COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev --no-install-project
+COPY VERSION ./
 COPY app ./app
 COPY alembic.ini ./
 COPY migrations ./migrations

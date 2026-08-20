@@ -23,12 +23,13 @@ from .compute import assert_release_within_limits, estimated_cost
 from .database import ComputeSessionRecord, DocumentRecord, IngestionJobRecord, SessionFactory, dispose_database, get_session, initialize_database
 from .document_parser import VisualAsset, extract_document
 from .mineru import MinerUClient, supports_mineru
-from .models import ChatDetail, ChatMessage, ChatSummary, ComputeSessionCreate, ComputeSessionRelease, ComputeSessionResponse, DeleteResponse, HeldIngestResponse, IndexedDocumentResponse, IngestionJobResponse, Principal, QueryRequest, QueryResponse, ReadinessResponse
+from .models import ChatDetail, ChatMessage, ChatSummary, ComputeSessionCreate, ComputeSessionRelease, ComputeSessionResponse, DeleteResponse, HeldIngestResponse, IndexedDocumentResponse, IngestionJobResponse, Principal, QueryRequest, QueryResponse, ReadinessResponse, VersionResponse
 from .providers import ModelClient
 from .super_admin import router as super_admin_router
 from .trials import is_pdf, require_active_trial, reserve_pdf_trial_slot
 from .repository import add_chat_message, create_chat, database_is_ready, get_chat, get_document, get_document_by_content_hash, list_chat_messages, list_chats, list_documents, mark_document_deleted
 from .vector_store import VectorStore
+from .version import APP_COMMIT, APP_VERSION
 
 model_server = ModelClient()
 mineru = MinerUClient()
@@ -58,7 +59,7 @@ async def lifespan(_: FastAPI):
     await dispose_database()
 
 
-app = FastAPI(title="Secure Document RAG", version="0.2.0", docs_url=None, redoc_url=None, lifespan=lifespan)
+app = FastAPI(title="Secure Document RAG", version=APP_VERSION, docs_url=None, redoc_url=None, lifespan=lifespan)
 app.include_router(accounts_router)
 app.include_router(super_admin_router)
 app.add_middleware(TrustedHostMiddleware, allowed_hosts=get_settings().allowed_host_list)
@@ -407,6 +408,11 @@ async def compute_session_payload(session: AsyncSession, record_: ComputeSession
 @app.get("/healthz")
 async def healthz() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@app.get("/version", response_model=VersionResponse)
+async def version() -> VersionResponse:
+    return VersionResponse(version=APP_VERSION, commit=APP_COMMIT)
 
 
 @app.get("/", include_in_schema=False)

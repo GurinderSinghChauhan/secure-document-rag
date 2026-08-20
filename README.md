@@ -21,6 +21,7 @@ This is an application foundation, not a compliance certification. HIPAA, GLBA, 
 - [Technical guide](docs/technical-guide.md): architecture, data flow, API contract, configuration, operations, and production gaps.
 - [Cloudflare tunnel laptop migration](docs/cloudflare-tunnel-runbook.md): securely move the stable demo connector to another laptop, verify cutover, and roll back.
 - [Design system](docs/design-system.md): visual tokens, accessible components, regulated workflows, privacy rules, and UI review criteria.
+- [Changelog](CHANGELOG.md): semantic versions and released capabilities.
 - [PDF test dataset](docs/test-dataset.md): download and batch-index a licensed 500-document healthcare and legal corpus.
 
 ## Quick start
@@ -134,6 +135,23 @@ docker compose exec api python -m tools.bootstrap_super_admin
 Every platform mutation is audited. The console prevents self-deactivation, deactivation of the final active super administrator, and removal of an organization's final active administrator. Suspending an organization revokes its non-super-admin sessions without deleting its data.
 
 Organization administrators can review their searchable document inventory in `/admin`. The inventory shows file name, indexed chunk count, size, indexing date, and access scope. Deleting a document removes its vectors from the organization's Qdrant collection, soft-deletes its PostgreSQL metadata, and records a metadata-only audit event. The API always derives the organization scope from the authenticated administrator rather than accepting a tenant identifier from the browser.
+
+## Versioning and releases
+
+The project uses stable semantic versions (`MAJOR.MINOR.PATCH`). `VERSION` is the runtime source, while `pyproject.toml` and the root project entry in `uv.lock` are kept synchronized. The unauthenticated `GET /version` endpoint reports the deployed version and build commit without exposing configuration.
+
+Use the version helper to prepare a release:
+
+```bash
+uv run python tools/version.py 0.4.0
+uv run pytest -q
+git add VERSION pyproject.toml uv.lock CHANGELOG.md
+git commit -m "Prepare v0.4.0"
+git tag -a v0.4.0 -m "v0.4.0"
+git push origin main v0.4.0
+```
+
+`.github/workflows/ci.yml` validates versions, the lockfile, tests, Python and browser-script syntax, the Alembic graph, and the API Docker build on pull requests and `main`. A matching `vX.Y.Z` tag triggers `.github/workflows/release.yml`, which reruns validation, publishes `ghcr.io/gurindersinghchauhan/secure-document-rag:X.Y.Z` and `:latest`, and creates a GitHub release. Repository Actions must have permission to write packages and contents for releases.
 
 ## Production deployment
 

@@ -66,8 +66,15 @@ Authorization: Bearer <short-lived-access-jwt>
 | `GET/PATCH/POST/PUT` | `/v1/super-admin/*` | Platform super admin | Inspect organizations/users, control access, and list or evaluate chat responses |
 | `GET` | `/v1/admin/documents` | Organization admin | List active indexed documents for the authenticated organization |
 | `DELETE` | `/v1/documents/{document_id}` | Organization admin | Remove document vectors and soft-delete organization-scoped metadata |
+| `GET` | `/version` | Public | Report semantic application version and source commit |
 
 Chat evaluations are stored separately in `chat_response_evaluations`, with one mutable evaluation per assistant message. The database constrains each rubric dimension (correctness, relevance, and clarity) to 1–5. The API computes the displayed overall score as the arithmetic mean, attributes updates to the current super administrator, and writes only response IDs and numeric scores—not question, answer, or reviewer-note content—to the audit event.
+
+### Build identity and automation
+
+`VERSION` is loaded by `app/version.py` and exposed by FastAPI and `GET /version`. `tools/version.py` updates `VERSION` and `pyproject.toml`, refreshes `uv.lock`, and rejects anything except a stable `X.Y.Z` semantic version. CI checks that all three declarations agree. Docker releases receive `APP_COMMIT` as a build argument and OCI source, revision, and version labels.
+
+GitHub Actions uses least-privilege read access for CI. Tag releases receive only `contents: write` and `packages: write`, verify that the pushed `vX.Y.Z` tag exactly matches the source version, run the tests, publish the API image to GHCR, and generate a GitHub release. The workflow does not build or publish the hardware-specific MinerU image.
 | `GET/POST/PATCH` | `/v1/admin/organization/*` | Organization admin | Manage invitations, members, roles, and sessions |
 | `POST` | `/v1/documents` | Admin | Ingest a document body |
 | `POST` | `/v1/query` | Authorized user | Retrieve and generate a cited answer |
