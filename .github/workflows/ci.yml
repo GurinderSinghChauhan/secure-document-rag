@@ -15,6 +15,7 @@ concurrency:
 
 jobs:
   validate:
+    name: Test, validate, and build
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
