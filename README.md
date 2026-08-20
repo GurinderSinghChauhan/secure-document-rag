@@ -103,7 +103,7 @@ Indexing is idempotent per tenant and file content. Releasing a repeat upload re
 - `X-Allowed-Roles`: comma-separated role list
 - `X-Allowed-Users`: comma-separated user IDs
 
-`POST /v1/query` and `/v1/query/stream` refuse inference when no compute session is open; queries never wake a GPU. `POST /v1/documents/stream` emits a completion event after the durable held job is created. Admin endpoints under `/v1/admin/compute-sessions` open, release, drain, cancel, and report bounded sessions. `GET /v1/admin/ingestion-jobs?state=held_for_compute` lists selectable work.
+`POST /v1/query` and `/v1/query/stream` use the always-available local model runtime whenever GPU dispatch is enabled with `COMPUTE_PROVIDER=local_docker`; they do not require an administrator to open a document-processing session. `POST /v1/documents/stream` emits a completion event after the durable held job is created. Admin endpoints under `/v1/admin/compute-sessions` open, release, drain, cancel, and report bounded document-processing sessions. `GET /v1/admin/ingestion-jobs?state=held_for_compute` lists selectable work.
 
 Chat conversations are stored in PostgreSQL and scoped to the authenticated tenant and user. `GET /v1/chats` lists the current user's recent conversations, while `GET /v1/chats/{chat_id}` restores its messages. Pass the returned `chat_id` in subsequent query requests to continue the same conversation.
 

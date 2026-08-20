@@ -133,15 +133,12 @@ async def get_open_compute_session(session: AsyncSession, tenant_id: str) -> Com
     )
 
 
-async def require_compute_for_query(session: AsyncSession, principal: Principal) -> ComputeSessionRecord:
-    if not get_settings().gpu_dispatch_enabled:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="GPU processing is off; an administrator must explicitly enable dispatch and open a bounded compute session.")
-    compute_session = await get_open_compute_session(session, principal.tenant_id)
-    if compute_session is None:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="No compute session is open; queries will not wake a GPU automatically.")
-    if compute_session.provider != "local_docker":
+def require_compute_for_query() -> None:
+    settings = get_settings()
+    if not settings.gpu_dispatch_enabled:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="GPU processing is off; an administrator must enable dispatch before chatting.")
+    if settings.compute_provider != "local_docker":
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Interactive queries are not enabled for this asynchronous compute provider.")
-    return compute_session
 
 
 def chat_title(question: str) -> str:
@@ -672,7 +669,7 @@ async def query_documents(
     session: AsyncSession = Depends(get_session),
 ) -> QueryResponse:
     require_active_trial(principal)
-    await require_compute_for_query(session, principal)
+    require_compute_for_query()
     chat = await resolve_chat(payload, principal, session)
     embedding = (await model_server.embed([payload.question]))[0]
     matches = await vectors.search(principal, embedding, payload.top_k)
@@ -702,7 +699,7 @@ async def stream_query_documents(
     session: AsyncSession = Depends(get_session),
 ) -> StreamingResponse:
     require_active_trial(principal)
-    await require_compute_for_query(session, principal)
+    require_compute_for_query()
     chat = await resolve_chat(payload, principal, session)
     embedding = (await model_server.embed([payload.question]))[0]
     matches = await vectors.search(principal, embedding, payload.top_k)

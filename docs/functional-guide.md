@@ -51,7 +51,7 @@ Documents indexed before multimodal support was enabled must be deleted and re-i
 
 ## Asking a question
 
-An authorized user sends `POST /v1/query` with a question and optional `top_k` value. The system embeds the question through the self-hosted model service, retrieves only chunks that match the tenant and document ACL, then asks the self-hosted chat model to answer from that context.
+An authorized user sends `POST /v1/query` with a question and optional `top_k` value. When local GPU dispatch is enabled, chat inference is available immediately and does not require an administrator to open a document-processing session. The system embeds the question through the self-hosted model service, retrieves only chunks that match the tenant and document ACL, then asks the self-hosted chat model to answer from that context.
 
 The chat interface uses `POST /v1/query/stream`, so the answer appears incrementally as soon as the model emits text instead of waiting for the full response. Retrieval and authorization still complete before generation begins.
 

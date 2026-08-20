@@ -1,8 +1,10 @@
 import httpx
 import pytest
+from fastapi import HTTPException
 
 from app.compute import RunpodProvider, assert_release_within_limits, estimated_cost
 from app.config import Settings
+from app import main
 
 
 def settings(**overrides) -> Settings:
@@ -10,7 +12,7 @@ def settings(**overrides) -> Settings:
         "tenant_api_keys_json": '{"a-very-long-api-key-with-32-characters":{"tenant_id":"tenant","user_id":"admin","roles":["admin"]}}',
         **overrides,
     }
-    return Settings(**values)
+    return Settings(_env_file=None, **values)
 
 
 def test_gpu_dispatch_is_disabled_and_credentials_optional_by_default():
@@ -47,3 +49,23 @@ def test_release_limits_are_enforced_before_dispatch():
 
 def test_gpu_cost_uses_recorded_seconds():
     assert estimated_cost(1800, 0.5) == 0.25
+
+
+def test_chat_compute_is_available_without_a_document_session(monkeypatch):
+    monkeypatch.setattr(main, "get_settings", lambda: settings(gpu_dispatch_enabled=True, compute_provider="local_docker"))
+
+    assert main.require_compute_for_query() is None
+
+
+def test_chat_compute_fails_closed_when_dispatch_is_disabled(monkeypatch):
+    monkeypatch.setattr(main, "get_settings", lambda: settings(gpu_dispatch_enabled=False))
+
+    with pytest.raises(HTTPException, match="enable dispatch"):
+        main.require_compute_for_query()
+
+
+def test_chat_compute_rejects_asynchronous_provider(monkeypatch):
+    monkeypatch.setattr(main, "get_settings", lambda: settings(gpu_dispatch_enabled=True, compute_provider="runpod"))
+
+    with pytest.raises(HTTPException, match="asynchronous compute provider"):
+        main.require_compute_for_query()
