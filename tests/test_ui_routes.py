@@ -26,6 +26,16 @@ def test_chat_page_links_to_admin_without_embedding_admin_controls():
     assert 'id="invite-form"' not in html
 
 
+def test_chat_composer_supports_voice_and_enter_to_send():
+    html = Path("app/static/index.html").read_text()
+    script = Path("app/static/app.js").read_text()
+
+    assert 'id="voice-input-button"' in html
+    assert "window.SpeechRecognition || window.webkitSpeechRecognition" in script
+    assert 'event.key === "Enter" && !event.shiftKey' in script
+    assert "form.requestSubmit()" in script
+
+
 def test_admin_page_is_role_gated_and_contains_management_workflows():
     html = Path("app/static/admin.html").read_text()
     script = Path("app/static/admin.js").read_text()

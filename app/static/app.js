@@ -4,6 +4,7 @@ let accessToken = null;
 let currentUser = null;
 const chatLog = document.querySelector("#chat-log");
 const sendButton = document.querySelector("#send-button");
+const voiceInputButton = document.querySelector("#voice-input-button");
 const status = document.querySelector("#status");
 const settingsToggle = document.querySelector("#settings-toggle");
 const settingsPanel = document.querySelector("#settings-panel");
@@ -25,6 +26,75 @@ const logoutButton = document.querySelector("#logout-button");
 const accountSummary = document.querySelector("#account-summary");
 const emptyChatMarkup = chatLog.innerHTML;
 let activeChatId = null;
+const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+let speechRecognition = null;
+let isListening = false;
+let voiceInputBase = "";
+let voiceInputError = "";
+
+function setComposerStatus(message) {
+  status.lastChild.textContent = ` ${message}`;
+}
+
+function setListening(listening) {
+  isListening = listening;
+  voiceInputButton.classList.toggle("listening", listening);
+  voiceInputButton.setAttribute("aria-pressed", String(listening));
+  voiceInputButton.setAttribute("aria-label", listening ? "Stop voice input" : "Start voice input");
+  voiceInputButton.title = listening ? "Stop voice input" : "Start voice input";
+  setComposerStatus(listening ? "Listening… speak now" : "Ready to search");
+}
+
+if (SpeechRecognition) {
+  speechRecognition = new SpeechRecognition();
+  speechRecognition.continuous = false;
+  speechRecognition.interimResults = true;
+  speechRecognition.lang = navigator.language || "en-US";
+  voiceInputButton.hidden = false;
+
+  speechRecognition.addEventListener("start", () => {
+    voiceInputError = "";
+    setListening(true);
+  });
+  speechRecognition.addEventListener("result", (event) => {
+    let transcript = "";
+    for (let index = 0; index < event.results.length; index += 1) {
+      transcript += event.results[index][0].transcript;
+    }
+    const separator = voiceInputBase && !voiceInputBase.endsWith(" ") ? " " : "";
+    question.value = `${voiceInputBase}${separator}${transcript}`.slice(0, question.maxLength);
+    question.focus();
+  });
+  speechRecognition.addEventListener("error", (event) => {
+    const messages = {
+      "not-allowed": "Microphone permission was denied",
+      "audio-capture": "No microphone is available",
+      "no-speech": "No speech was detected",
+      network: "Voice recognition is unavailable",
+    };
+    voiceInputError = messages[event.error] || "Voice input could not be completed";
+    setComposerStatus(voiceInputError);
+  });
+  speechRecognition.addEventListener("end", () => {
+    const hadActiveSession = isListening;
+    setListening(false);
+    if (voiceInputError) setComposerStatus(voiceInputError);
+    if (hadActiveSession) question.focus();
+  });
+
+  voiceInputButton.addEventListener("click", () => {
+    if (isListening) {
+      speechRecognition.stop();
+      return;
+    }
+    voiceInputBase = question.value.trimEnd();
+    try {
+      speechRecognition.start();
+    } catch {
+      setComposerStatus("Voice input is already starting");
+    }
+  });
+}
 
 function updateTenantChip() {
   tenantChip.textContent = currentUser?.organization?.name || "Signed out";
@@ -184,12 +254,14 @@ async function loadChat(chatId) {
 }
 
 function setBusy(isBusy) {
+  if (isBusy && isListening) speechRecognition?.stop();
   sendButton.disabled = isBusy;
+  voiceInputButton.disabled = isBusy;
   question.disabled = isBusy;
   newChatButton.disabled = isBusy;
   chatHistoryList.querySelectorAll("button").forEach((button) => { button.disabled = isBusy; });
   status.classList.toggle("busy", isBusy);
-  status.lastChild.textContent = isBusy ? " Searching authorized documents…" : " Ready to search";
+  setComposerStatus(isBusy ? "Searching authorized documents…" : "Ready to search");
 }
 
 function requestHeaders(selectedTenant, selectedApiKey) {
@@ -296,7 +368,7 @@ form.addEventListener("submit", async (event) => {
 });
 
 question.addEventListener("keydown", (event) => {
-  if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
+  if (event.key === "Enter" && !event.shiftKey && !event.isComposing) {
     event.preventDefault();
     form.requestSubmit();
   }
