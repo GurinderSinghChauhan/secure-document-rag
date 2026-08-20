@@ -99,6 +99,18 @@ class DeleteResponse(BaseModel):
     status: str
 
 
+class IndexedDocumentResponse(BaseModel):
+    document_id: str
+    document_name: str
+    content_type: str
+    size_bytes: int
+    chunk_count: int
+    allowed_roles: list[str]
+    allowed_users: list[str]
+    created_by: str
+    created_at: datetime
+
+
 class ReadinessResponse(BaseModel):
     status: str
     components: dict[str, str]

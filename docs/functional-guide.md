@@ -21,7 +21,7 @@ Organization scope comes from the verified JWT and cannot be selected through a 
 
 Administrators open `/admin` to upload documents, release bounded compute batches, and manage organization members. The main `/` workspace remains focused on chat and does not embed administrative controls. Members are redirected away from the admin console, and the API independently rejects every unauthorized administrative request.
 
-Platform super administrators have a separate `/super-admin` console. They can see organizations and users across the deployment, suspend access without deleting data, reactivate users or organizations, change organization roles, and revoke user sessions. These actions are audited and protected by final-administrator and self-lockout safeguards.
+Platform super administrators have a separate `/super-admin` console. They can see organizations and users across the deployment, suspend access without deleting data, reactivate users or organizations, change organization roles, and revoke user sessions. A response-quality view also lets them review cross-organization question-and-answer pairs, filter pending or completed reviews, and score correctness, relevance, and clarity from 1 to 5 with optional notes. Evaluations can be revised; the latest reviewer and scores are retained. These actions are audited and protected by final-administrator and self-lockout safeguards.
 
 An administrator uploads a PDF, DOCX, PPTX, XLSX, UTF-8 text file, or supported image through `POST /v1/documents`. The service:
 
@@ -66,6 +66,8 @@ The response includes only `answer`, a grounded response from the self-hosted mo
 ## Deleting a document
 
 An administrator can call `DELETE /v1/documents/{document_id}`. This removes the matching chunks from Qdrant and soft-deletes the PostgreSQL metadata record. The action is auditable.
+
+The admin console's **Indexed documents** section lists only active, searchable documents belonging to the administrator's organization. It shows the file size, chunk count, indexing date, and access assignment. An administrator can delete an entry after an explicit confirmation; it then disappears from the searchable inventory and can no longer contribute to answers. Held documents that have not completed indexing remain in the separate compute queue.
 
 Do not enable this operation for records subject to legal hold, healthcare retention requirements, or regulated retention schedules until a formal records-management workflow is added.
 

@@ -14,6 +14,11 @@ const organizationCount = document.querySelector("#organization-count");
 const userCount = document.querySelector("#user-count");
 const activeUserCount = document.querySelector("#active-user-count");
 const suspendedCount = document.querySelector("#suspended-count");
+const organizationsView = document.querySelector("#organizations-view");
+const qualityView = document.querySelector("#quality-view");
+const statusFilter = document.querySelector("#evaluation-status");
+const qualityMessage = document.querySelector("#quality-message");
+const responseList = document.querySelector("#response-list");
 
 function headers(json = false) {
   return { Authorization: `Bearer ${accessToken}`, ...(json ? { "Content-Type": "application/json" } : {}) };
@@ -91,6 +96,52 @@ async function loadOrganizations() {
   }
 }
 
+function ratingSelect(name, selected) {
+  return `<label>${name}<select name="${name.toLowerCase()}" required>${[1, 2, 3, 4, 5].map((score) => `<option value="${score}"${Number(selected || 3) === score ? " selected" : ""}>${score}</option>`).join("")}</select></label>`;
+}
+
+function responseCard(item) {
+  const evaluation = item.evaluation || {};
+  return `<article class="response-card"><header><div><span class="metric-pill">${escapeHtml(item.organization_name)}</span>${evaluation.overall ? `<span class="score-pill">${evaluation.overall} / 5</span>` : '<span class="status-pill suspended">Pending</span>'}<h3>${escapeHtml(item.chat_title)}</h3><small>${escapeHtml(item.user_name)} · ${new Date(item.created_at).toLocaleString()}</small></div></header><div class="response-context"><section><strong>Question</strong><p>${escapeHtml(item.question)}</p></section><section><strong>Assistant response</strong><p>${escapeHtml(item.answer)}</p></section></div><form class="evaluation-form" data-response-id="${item.response_message_id}"><div class="rating-grid">${ratingSelect("Correctness", evaluation.correctness)}${ratingSelect("Relevance", evaluation.relevance)}${ratingSelect("Clarity", evaluation.clarity)}</div><label>Reviewer notes<textarea name="notes" maxlength="2000" rows="3" placeholder="Record factual issues, missing context, or improvement ideas">${escapeHtml(evaluation.notes || "")}</textarea></label><button class="primary-button" type="submit">${item.evaluation ? "Update evaluation" : "Save evaluation"}</button></form></article>`;
+}
+
+async function loadResponses() {
+  qualityMessage.textContent = "Loading responses…";
+  responseList.innerHTML = "";
+  try {
+    const response = await fetch(`/v1/super-admin/chat-responses?status=${encodeURIComponent(statusFilter.value)}`, { headers: headers() });
+    const payload = await response.json();
+    if (!response.ok) throw new Error(responseError(payload, "Unable to load chat responses."));
+    responseList.innerHTML = payload.length ? payload.map(responseCard).join("") : '<p class="empty-platform">No responses match this review status.</p>';
+    qualityMessage.textContent = `${payload.length} response${payload.length === 1 ? "" : "s"} shown.`;
+  } catch (error) { qualityMessage.textContent = error.message; }
+}
+
+document.querySelectorAll(".platform-tab").forEach((tab) => tab.addEventListener("click", async () => {
+  const quality = tab.dataset.view === "quality";
+  organizationsView.hidden = quality;
+  qualityView.hidden = !quality;
+  document.querySelectorAll(".platform-tab").forEach((item) => { item.classList.toggle("active", item === tab); item.setAttribute("aria-selected", String(item === tab)); });
+  if (quality) await loadResponses();
+}));
+
+statusFilter.addEventListener("change", loadResponses);
+responseList.addEventListener("submit", async (event) => {
+  const form = event.target.closest(".evaluation-form");
+  if (!form) return;
+  event.preventDefault();
+  const button = form.querySelector("button[type=submit]");
+  const data = new FormData(form);
+  button.disabled = true;
+  qualityMessage.textContent = "Saving evaluation…";
+  try {
+    const response = await fetch(`/v1/super-admin/chat-responses/${form.dataset.responseId}/evaluation`, { method: "PUT", headers: headers(true), body: JSON.stringify({ correctness: Number(data.get("correctness")), relevance: Number(data.get("relevance")), clarity: Number(data.get("clarity")), notes: data.get("notes") }) });
+    const payload = await response.json();
+    if (!response.ok) throw new Error(responseError(payload, "Unable to save evaluation."));
+    await loadResponses();
+  } catch (error) { qualityMessage.textContent = error.message; button.disabled = false; }
+});
+
 async function mutate(path, options, successMessage) {
   message.textContent = "Applying platform change…";
   const response = await fetch(path, options);
@@ -140,7 +191,7 @@ organizationList.addEventListener("click", async (event) => {
 });
 
 searchInput.addEventListener("input", renderOrganizations);
-refreshButton.addEventListener("click", loadOrganizations);
+refreshButton.addEventListener("click", () => qualityView.hidden ? loadOrganizations() : loadResponses());
 logoutButton.addEventListener("click", async () => {
   try { await authJson("/v1/auth/logout", { method: "POST" }); } catch {}
   location.replace("/");

@@ -32,6 +32,16 @@ async def get_document(session: AsyncSession, tenant_id: str, document_id: str) 
     )
 
 
+async def list_documents(session: AsyncSession, tenant_id: str, limit: int = 500) -> list[DocumentRecord]:
+    result = await session.scalars(
+        select(DocumentRecord)
+        .where(DocumentRecord.tenant_id == tenant_id, DocumentRecord.deleted_at.is_(None))
+        .order_by(DocumentRecord.created_at.desc(), DocumentRecord.document_id.desc())
+        .limit(limit)
+    )
+    return list(result)
+
+
 async def mark_document_deleted(session: AsyncSession, record: DocumentRecord) -> None:
     record.deleted_at = datetime.now(UTC)
     await session.commit()

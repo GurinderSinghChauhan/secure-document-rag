@@ -27,10 +27,18 @@
         <header class="topbar"><div class="mobile-brand"><span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 2.5 20 6v5.4c0 5-3.3 8.6-8 10.1-4.7-1.5-8-5.1-8-10.1V6l8-3.5Z"></path></svg></span><strong>Arcline</strong></div><div class="breadcrumb"><span>Workspace</span><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m7.5 5 5 5-5 5"></path></svg><strong>Platform Admin</strong></div><div class="admin-account"><div class="admin-account-copy"><strong id="platform-user-name"></strong><small>Super administrator</small></div><button id="platform-logout" class="secondary-button" type="button">Sign out</button></div></header>
 
         <main class="platform-content">
-          <header class="admin-page-header"><div><span class="section-kicker">Platform administration</span><h1>Organizations and access</h1><p>Review every organization and user. Suspension, role, account-status, and session actions take effect immediately and are recorded in the audit log.</p></div><button id="refresh-platform" class="secondary-button" type="button">Refresh</button></header>
+          <header class="admin-page-header"><div><span class="section-kicker">Platform administration</span><h1>Platform oversight</h1><p>Manage access and review the quality of document-grounded chat responses. Platform actions are recorded in the audit log.</p></div><button id="refresh-platform" class="secondary-button" type="button">Refresh</button></header>
+          <div class="platform-tabs" role="tablist" aria-label="Platform tools"><button class="platform-tab active" data-view="organizations" role="tab" aria-selected="true" type="button">Organizations and access</button><button class="platform-tab" data-view="quality" role="tab" aria-selected="false" type="button">Response quality</button></div>
+          <section id="organizations-view">
           <section class="platform-summary" aria-label="Platform summary"><div><strong id="organization-count">0</strong><span>Organizations</span></div><div><strong id="user-count">0</strong><span>Users</span></div><div><strong id="active-user-count">0</strong><span>Active users</span></div><div><strong id="suspended-count">0</strong><span>Suspended organizations</span></div></section>
           <div class="platform-toolbar"><label class="platform-search"><span class="sr-only">Search organizations and users</span><input id="platform-search" type="search" placeholder="Search organization, person, or email"></label><p id="platform-message" role="status"></p></div>
           <div id="organization-list" class="organization-list" aria-live="polite"></div>
+          </section>
+          <section id="quality-view" hidden>
+            <div class="quality-toolbar"><div><h2>Chat response evaluator</h2><p>Score correctness, relevance, and clarity from 1 (poor) to 5 (excellent).</p></div><label>Status <select id="evaluation-status"><option value="pending">Pending review</option><option value="evaluated">Evaluated</option><option value="all">All responses</option></select></label></div>
+            <p id="quality-message" class="quality-message" role="status"></p>
+            <div id="response-list" class="response-list" aria-live="polite"></div>
+          </section>
         </main>
       </div>
     </div>

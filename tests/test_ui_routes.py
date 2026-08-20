@@ -43,6 +43,9 @@ def test_admin_page_is_role_gated_and_contains_management_workflows():
     assert 'id="upload-form"' in html
     assert 'id="held-jobs"' in html
     assert 'id="invite-form"' in html
+    assert 'id="indexed-document-list"' in html
+    assert "/v1/admin/documents" in script
+    assert "data-delete-document" in script
     assert 'payload.user?.role !== "admin"' in script
     assert 'location.replace("/")' in script
 
@@ -52,7 +55,10 @@ def test_super_admin_page_is_platform_gated_and_contains_safe_controls():
     script = Path("app/static/super_admin.js").read_text()
 
     assert "Organizations and access" in html
+    assert "Chat response evaluator" in html
     assert "/v1/super-admin/organizations" in script
+    assert "/v1/super-admin/chat-responses" in script
+    assert 'name="${name.toLowerCase()}"' in script
     assert "payload.user?.is_super_admin" in script
     assert "Revoke every active session" in script
     assert 'location.replace("/")' in script

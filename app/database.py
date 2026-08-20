@@ -1,6 +1,6 @@
 from collections.abc import AsyncIterator
 
-from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Integer, LargeBinary, String, Text, UniqueConstraint, func, text
+from sqlalchemy import JSON, Boolean, CheckConstraint, DateTime, Float, ForeignKey, Integer, LargeBinary, String, Text, UniqueConstraint, func, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -177,6 +177,26 @@ class ChatMessageRecord(Base):
     role: Mapped[str] = mapped_column(String(16))
     content: Mapped[str] = mapped_column(Text)
     created_at: Mapped[object] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
+
+
+class ChatResponseEvaluationRecord(Base):
+    __tablename__ = "chat_response_evaluations"
+    __table_args__ = (
+        UniqueConstraint("response_message_id", name="uq_chat_response_evaluation_message"),
+        CheckConstraint("correctness BETWEEN 1 AND 5", name="ck_chat_evaluation_correctness"),
+        CheckConstraint("relevance BETWEEN 1 AND 5", name="ck_chat_evaluation_relevance"),
+        CheckConstraint("clarity BETWEEN 1 AND 5", name="ck_chat_evaluation_clarity"),
+    )
+
+    evaluation_id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    response_message_id: Mapped[str] = mapped_column(ForeignKey("chat_messages.message_id", ondelete="CASCADE"), index=True)
+    evaluator_user_id: Mapped[str] = mapped_column(ForeignKey("users.user_id"), index=True)
+    correctness: Mapped[int] = mapped_column(Integer)
+    relevance: Mapped[int] = mapped_column(Integer)
+    clarity: Mapped[int] = mapped_column(Integer)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[object] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[object] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
 
 engine = create_async_engine(get_settings().database_url, pool_pre_ping=True, pool_size=10, max_overflow=20)

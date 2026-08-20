@@ -23,11 +23,11 @@ from .compute import assert_release_within_limits, estimated_cost
 from .database import ComputeSessionRecord, DocumentRecord, IngestionJobRecord, SessionFactory, dispose_database, get_session, initialize_database
 from .document_parser import VisualAsset, extract_document
 from .mineru import MinerUClient, supports_mineru
-from .models import ChatDetail, ChatMessage, ChatSummary, ComputeSessionCreate, ComputeSessionRelease, ComputeSessionResponse, DeleteResponse, HeldIngestResponse, IngestionJobResponse, Principal, QueryRequest, QueryResponse, ReadinessResponse
+from .models import ChatDetail, ChatMessage, ChatSummary, ComputeSessionCreate, ComputeSessionRelease, ComputeSessionResponse, DeleteResponse, HeldIngestResponse, IndexedDocumentResponse, IngestionJobResponse, Principal, QueryRequest, QueryResponse, ReadinessResponse
 from .providers import ModelClient
 from .super_admin import router as super_admin_router
 from .trials import is_pdf, require_active_trial, reserve_pdf_trial_slot
-from .repository import add_chat_message, create_chat, database_is_ready, get_chat, get_document, get_document_by_content_hash, list_chat_messages, list_chats, mark_document_deleted
+from .repository import add_chat_message, create_chat, database_is_ready, get_chat, get_document, get_document_by_content_hash, list_chat_messages, list_chats, list_documents, mark_document_deleted
 from .vector_store import VectorStore
 
 model_server = ModelClient()
@@ -506,6 +506,16 @@ async def list_ingestion_jobs(
         statement = statement.where(IngestionJobRecord.state == state)
     jobs = list(await session.scalars(statement.order_by(IngestionJobRecord.created_at.desc()).limit(500)))
     return [job_response(job) for job in jobs]
+
+
+@app.get("/v1/admin/documents", response_model=list[IndexedDocumentResponse])
+async def list_indexed_documents(
+    principal: Principal = Depends(require_principal),
+    session: AsyncSession = Depends(get_session),
+) -> list[IndexedDocumentResponse]:
+    require_admin(principal)
+    documents = await list_documents(session, principal.tenant_id)
+    return [IndexedDocumentResponse.model_validate(document, from_attributes=True) for document in documents]
 
 
 @app.post("/v1/admin/compute-sessions", response_model=ComputeSessionResponse, status_code=status.HTTP_201_CREATED)

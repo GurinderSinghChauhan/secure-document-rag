@@ -38,6 +38,28 @@
 .platform-toolbar p { margin: 0; color: var(--text-secondary); font-size: 12px; }
 
 .organization-list { display: grid; gap: 16px; }
+.platform-tabs { display: flex; gap: 6px; margin: 0 0 22px; border-bottom: 1px solid var(--border); }
+.platform-tab { padding: 10px 14px; border: 0; border-bottom: 2px solid transparent; color: var(--text-secondary); background: transparent; cursor: pointer; font-weight: 650; }
+.platform-tab.active { border-bottom-color: #3157d5; color: #2447bd; }
+.quality-toolbar { display: flex; align-items: end; justify-content: space-between; gap: 20px; margin-bottom: 12px; }
+.quality-toolbar h2 { margin: 0 0 5px; font-size: 20px; }
+.quality-toolbar p, .quality-message { margin: 0; color: var(--text-secondary); font-size: 12px; }
+.quality-toolbar label { display: grid; gap: 5px; color: var(--text-secondary); font-size: 11px; font-weight: 650; }
+.response-list { display: grid; gap: 16px; margin-top: 18px; }
+.response-card { overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); box-shadow: var(--shadow-sm); }
+.response-card > header { padding: 18px 20px; border-bottom: 1px solid var(--border); background: #fbfcfe; }
+.response-card h3 { margin: 8px 0 3px; font-size: 16px; }
+.response-card small { color: var(--text-tertiary); }
+.score-pill { margin-left: 7px; padding: 4px 8px; border-radius: 999px; color: #157052; background: #e8f7f1; font-size: 10px; font-weight: 700; }
+.response-context { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); gap: 16px; padding: 20px; }
+.response-context section { min-width: 0; padding: 14px; border-radius: 9px; background: #f7f8fa; }
+.response-context strong { color: var(--text-tertiary); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; }
+.response-context p { margin: 8px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.55; }
+.evaluation-form { display: grid; gap: 14px; padding: 18px 20px; border-top: 1px solid var(--border); }
+.rating-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.evaluation-form label { display: grid; gap: 6px; color: var(--text-secondary); font-size: 11px; font-weight: 650; }
+.evaluation-form textarea { width: 100%; resize: vertical; }
+.evaluation-form .primary-button { justify-self: start; }
 
 .organization-card {
   border: 1px solid var(--border);
@@ -113,4 +135,6 @@
   .platform-content { padding: 24px 14px 36px; }
   .platform-summary { grid-template-columns: 1fr 1fr; }
   .platform-toolbar, .organization-header { align-items: stretch; flex-direction: column; }
+  .quality-toolbar { align-items: stretch; flex-direction: column; }
+  .response-context, .rating-grid { grid-template-columns: 1fr; }
 }

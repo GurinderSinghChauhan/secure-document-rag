@@ -125,13 +125,15 @@ The API serves a same-origin chat UI at `http://127.0.0.1:8080/` and a separate 
 
 The UI keeps the short-lived access JWT only in memory and restores sessions through a rotating, HTTP-only refresh cookie. Registration creates an organization and its first administrator; additional accounts join by invitation.
 
-Platform super administrators use the separate `/super-admin` console to review all organizations and their users, suspend or reactivate organizations, activate or deactivate accounts, change organization roles, and revoke sessions. Platform authority is independent of the `admin` and `member` organization roles. Create the first super administrator by promoting an existing active, verified account through the interactive command below; the command verifies the account password and accepts no credentials through arguments or environment variables:
+Platform super administrators use the separate `/super-admin` console to review all organizations and their users, suspend or reactivate organizations, activate or deactivate accounts, change organization roles, revoke sessions, and evaluate chat-response quality. The response-quality queue shows the originating organization, user, question, and answer and records 1–5 scores for correctness, relevance, and clarity plus optional reviewer notes. Platform authority is independent of the `admin` and `member` organization roles. Create the first super administrator by promoting an existing active, verified account through the interactive command below; the command verifies the account password and accepts no credentials through arguments or environment variables:
 
 ```bash
 docker compose exec api python -m tools.bootstrap_super_admin
 ```
 
 Every platform mutation is audited. The console prevents self-deactivation, deactivation of the final active super administrator, and removal of an organization's final active administrator. Suspending an organization revokes its non-super-admin sessions without deleting its data.
+
+Organization administrators can review their searchable document inventory in `/admin`. The inventory shows file name, indexed chunk count, size, indexing date, and access scope. Deleting a document removes its vectors from the organization's Qdrant collection, soft-deletes its PostgreSQL metadata, and records a metadata-only audit event. The API always derives the organization scope from the authenticated administrator rather than accepting a tenant identifier from the browser.
 
 ## Production deployment
 

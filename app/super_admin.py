@@ -1,4 +1,5 @@
 from datetime import UTC, datetime
+from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, field_validator
@@ -9,6 +10,9 @@ from .audit import record
 from .auth import require_principal, require_super_admin
 from .database import (
     DocumentRecord,
+    ChatMessageRecord,
+    ChatResponseEvaluationRecord,
+    ChatSessionRecord,
     IngestionJobRecord,
     MembershipRecord,
     OrganizationRecord,
@@ -34,6 +38,30 @@ class PlatformRoleUpdate(BaseModel):
         if value not in {"admin", "member"}:
             raise ValueError("Role must be admin or member")
         return value
+
+
+class ResponseEvaluationUpdate(BaseModel):
+    correctness: int
+    relevance: int
+    clarity: int
+    notes: str | None = None
+
+    @field_validator("correctness", "relevance", "clarity")
+    @classmethod
+    def valid_rating(cls, value: int) -> int:
+        if not 1 <= value <= 5:
+            raise ValueError("Ratings must be between 1 and 5")
+        return value
+
+    @field_validator("notes")
+    @classmethod
+    def valid_notes(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        value = value.strip()
+        if len(value) > 2_000:
+            raise ValueError("Notes must be 2,000 characters or fewer")
+        return value or None
 
 
 async def super_principal(principal: Principal = Depends(require_principal)) -> Principal:
@@ -96,6 +124,114 @@ async def list_organizations(
             "users": members,
         })
     return result
+
+
+@router.get("/chat-responses")
+async def list_chat_responses(
+    status: str = "pending",
+    limit: int = 50,
+    _: Principal = Depends(super_principal),
+    session: AsyncSession = Depends(get_session),
+) -> list[dict[str, object]]:
+    if status not in {"pending", "evaluated", "all"}:
+        raise HTTPException(status_code=422, detail="Status must be pending, evaluated, or all")
+    if not 1 <= limit <= 100:
+        raise HTTPException(status_code=422, detail="Limit must be between 1 and 100")
+
+    statement = (
+        select(ChatMessageRecord, ChatSessionRecord, OrganizationRecord, UserRecord, ChatResponseEvaluationRecord)
+        .join(ChatSessionRecord, ChatSessionRecord.chat_id == ChatMessageRecord.chat_id)
+        .join(OrganizationRecord, OrganizationRecord.organization_id == ChatSessionRecord.tenant_id)
+        .join(UserRecord, UserRecord.user_id == ChatSessionRecord.user_id)
+        .outerjoin(ChatResponseEvaluationRecord, ChatResponseEvaluationRecord.response_message_id == ChatMessageRecord.message_id)
+        .where(ChatMessageRecord.role == "assistant")
+        .order_by(ChatMessageRecord.created_at.desc(), ChatMessageRecord.message_id.desc())
+        .limit(limit)
+    )
+    if status == "pending":
+        statement = statement.where(ChatResponseEvaluationRecord.evaluation_id.is_(None))
+    elif status == "evaluated":
+        statement = statement.where(ChatResponseEvaluationRecord.evaluation_id.is_not(None))
+
+    rows = (await session.execute(statement)).all()
+    result = []
+    for response, chat, organization, user, evaluation in rows:
+        question = await session.scalar(
+            select(ChatMessageRecord)
+            .where(
+                ChatMessageRecord.chat_id == chat.chat_id,
+                ChatMessageRecord.role == "user",
+                ChatMessageRecord.created_at <= response.created_at,
+            )
+            .order_by(ChatMessageRecord.created_at.desc(), ChatMessageRecord.message_id.desc())
+            .limit(1)
+        )
+        scores = None if evaluation is None else {
+            "correctness": evaluation.correctness,
+            "relevance": evaluation.relevance,
+            "clarity": evaluation.clarity,
+            "overall": round((evaluation.correctness + evaluation.relevance + evaluation.clarity) / 3, 1),
+            "notes": evaluation.notes,
+            "evaluator_user_id": evaluation.evaluator_user_id,
+            "updated_at": evaluation.updated_at,
+        }
+        result.append({
+            "response_message_id": response.message_id,
+            "chat_id": chat.chat_id,
+            "chat_title": chat.title,
+            "organization_id": organization.organization_id,
+            "organization_name": organization.name,
+            "user_id": user.user_id,
+            "user_name": user.display_name,
+            "question": question.content if question else "Question unavailable",
+            "answer": response.content,
+            "created_at": response.created_at,
+            "evaluation": scores,
+        })
+    return result
+
+
+@router.put("/chat-responses/{response_message_id}/evaluation")
+async def evaluate_chat_response(
+    response_message_id: str,
+    payload: ResponseEvaluationUpdate,
+    principal: Principal = Depends(super_principal),
+    session: AsyncSession = Depends(get_session),
+) -> dict[str, object]:
+    response = await session.get(ChatMessageRecord, response_message_id)
+    if response is None or response.role != "assistant":
+        raise HTTPException(status_code=404, detail="Assistant response not found")
+    evaluation = await session.scalar(
+        select(ChatResponseEvaluationRecord).where(ChatResponseEvaluationRecord.response_message_id == response_message_id)
+    )
+    if evaluation is None:
+        evaluation = ChatResponseEvaluationRecord(
+            evaluation_id=str(uuid4()),
+            response_message_id=response_message_id,
+            evaluator_user_id=principal.user_id,
+            **payload.model_dump(),
+        )
+        session.add(evaluation)
+    else:
+        evaluation.evaluator_user_id = principal.user_id
+        evaluation.correctness = payload.correctness
+        evaluation.relevance = payload.relevance
+        evaluation.clarity = payload.clarity
+        evaluation.notes = payload.notes
+        evaluation.updated_at = datetime.now(UTC)
+    await session.commit()
+    chat = await session.get(ChatSessionRecord, response.chat_id)
+    await record(
+        session,
+        "platform_chat_response_evaluated",
+        chat.tenant_id if chat else principal.tenant_id,
+        principal.user_id,
+        response_message_id=response_message_id,
+        correctness=payload.correctness,
+        relevance=payload.relevance,
+        clarity=payload.clarity,
+    )
+    return {"status": "evaluated", "overall": round((payload.correctness + payload.relevance + payload.clarity) / 3, 1)}
 
 
 async def membership_and_user(session: AsyncSession, user_id: str) -> tuple[MembershipRecord, UserRecord]:

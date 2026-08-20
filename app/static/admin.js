@@ -40,6 +40,10 @@ const platformConsoleLink = document.querySelector("#platform-console-link");
 const trialStatus = document.querySelector("#trial-status");
 const heldCount = document.querySelector("#held-count");
 const memberCount = document.querySelector("#member-count");
+const indexedCount = document.querySelector("#indexed-count");
+const indexedDocumentList = document.querySelector("#indexed-document-list");
+const documentsMessage = document.querySelector("#documents-message");
+const refreshDocuments = document.querySelector("#refresh-documents");
 
 function requestHeaders() {
   return accessToken ? { Authorization: `Bearer ${accessToken}` } : {};
@@ -238,6 +242,43 @@ async function loadHeldJobs() {
   computeMessage.textContent = payload.length ? `${payload.length} document${payload.length === 1 ? "" : "s"} safely held. Select a bounded batch to process.` : "Nothing is waiting for compute.";
 }
 
+function formatBytes(size) {
+  if (size < 1024) return `${size} B`;
+  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
+  return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+async function loadIndexedDocuments() {
+  refreshDocuments.disabled = true;
+  documentsMessage.textContent = "Loading indexed documents…";
+  try {
+    const response = await fetch("/v1/admin/documents", { headers: requestHeaders() });
+    const payload = await response.json();
+    if (!response.ok) throw new Error(responseError(payload, "Unable to load indexed documents."));
+    indexedCount.textContent = String(payload.length);
+    indexedDocumentList.innerHTML = payload.length ? payload.map((document) => `<article class="indexed-document-row"><div class="indexed-document-main"><strong>${escapeHtml(document.document_name)}</strong><small>${formatBytes(document.size_bytes)} · ${document.chunk_count} chunk${document.chunk_count === 1 ? "" : "s"} · indexed ${new Date(document.created_at).toLocaleDateString()}</small><small>Roles: ${escapeHtml(document.allowed_roles.join(", ") || "none")} · Explicit users: ${escapeHtml(document.allowed_users.join(", ") || "none")}</small></div><button class="text-button danger-action" data-delete-document="${document.document_id}" data-document-name="${escapeHtml(document.document_name)}" type="button">Delete</button></article>`).join("") : '<p class="empty-admin-list">No indexed documents in this organization.</p>';
+    documentsMessage.textContent = payload.length ? `${payload.length} searchable document${payload.length === 1 ? "" : "s"} in this organization.` : "No documents have been indexed yet.";
+  } catch (error) {
+    documentsMessage.textContent = error.message;
+  } finally { refreshDocuments.disabled = false; }
+}
+
+refreshDocuments.addEventListener("click", loadIndexedDocuments);
+indexedDocumentList.addEventListener("click", async (event) => {
+  const button = event.target.closest("[data-delete-document]");
+  if (!button) return;
+  if (!confirm(`Delete “${button.dataset.documentName}” from this organization's searchable index? This cannot be undone.`)) return;
+  button.disabled = true;
+  documentsMessage.textContent = "Deleting indexed document…";
+  try {
+    const response = await fetch(`/v1/documents/${button.dataset.deleteDocument}`, { method: "DELETE", headers: requestHeaders() });
+    const payload = await response.json();
+    if (!response.ok) throw new Error(responseError(payload, "Unable to delete the document."));
+    await loadIndexedDocuments();
+    documentsMessage.textContent = "Document deleted from the searchable index.";
+  } catch (error) { documentsMessage.textContent = error.message; button.disabled = false; }
+});
+
 function renderSessionJobs(payload) {
   heldJobs.innerHTML = payload.jobs.map((job) => `<div class="held-job"><span><strong>${escapeHtml(job.document_name)}</strong><small>${escapeHtml(job.stage.replaceAll("_", " "))} · ${job.progress}% — ${escapeHtml(job.message)}</small><span class="job-progress"><i style="width:${job.progress}%"></i></span></span></div>`).join("");
   const minutes = (payload.gpu_seconds / 60).toFixed(1);
@@ -368,7 +409,7 @@ async function bootstrapAdmin() {
     }
     adminLoading.hidden = true;
     adminShell.hidden = false;
-    await Promise.all([loadHeldJobs(), loadMembers()]);
+    await Promise.all([loadHeldJobs(), loadIndexedDocuments(), loadMembers()]);
   } catch {
     location.replace("/");
   }

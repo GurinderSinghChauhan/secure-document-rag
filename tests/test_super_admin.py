@@ -2,7 +2,7 @@ import pytest
 
 from app.database import MembershipRecord, UserRecord
 from app.models import Principal
-from app.super_admin import StatusUpdate, set_user_status
+from app.super_admin import ResponseEvaluationUpdate, StatusUpdate, set_user_status
 
 
 class RowResult:
@@ -72,3 +72,17 @@ async def test_super_admin_cannot_deactivate_final_platform_admin():
 
     with pytest.raises(Exception, match="final active super administrator"):
         await set_user_status(target.user_id, StatusUpdate(active=False), principal(), session)
+
+
+def test_response_evaluation_enforces_rubric_range_and_normalizes_notes():
+    evaluation = ResponseEvaluationUpdate(correctness=5, relevance=4, clarity=3, notes="  Missing citation.  ")
+
+    assert evaluation.notes == "Missing citation."
+
+    with pytest.raises(ValueError, match="between 1 and 5"):
+        ResponseEvaluationUpdate(correctness=0, relevance=4, clarity=3)
+
+
+def test_response_evaluation_rejects_oversized_notes():
+    with pytest.raises(ValueError, match="2,000 characters"):
+        ResponseEvaluationUpdate(correctness=5, relevance=4, clarity=3, notes="x" * 2_001)
