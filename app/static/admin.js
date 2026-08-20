@@ -38,6 +38,8 @@ const copyInviteLink = document.querySelector("#copy-invite-link");
 const refreshMembers = document.querySelector("#refresh-members");
 const platformConsoleLink = document.querySelector("#platform-console-link");
 const trialStatus = document.querySelector("#trial-status");
+const heldCount = document.querySelector("#held-count");
+const memberCount = document.querySelector("#member-count");
 
 function requestHeaders() {
   return accessToken ? { Authorization: `Bearer ${accessToken}` } : {};
@@ -232,6 +234,7 @@ async function loadHeldJobs() {
   heldJobs.innerHTML = payload.length
     ? payload.map((job) => `<label class="held-job"><input type="checkbox" value="${job.job_id}"><span><strong>${escapeHtml(job.document_name)}</strong><small>${escapeHtml(job.message)}</small></span></label>`).join("")
     : "<small>No documents are waiting for compute.</small>";
+  heldCount.textContent = String(payload.length);
   computeMessage.textContent = payload.length ? `${payload.length} document${payload.length === 1 ? "" : "s"} safely held. Select a bounded batch to process.` : "Nothing is waiting for compute.";
 }
 
@@ -290,7 +293,8 @@ async function loadMembers() {
     return;
   }
   const members = await response.json();
-  memberList.innerHTML = members.map((member) => `<div class="held-job"><span><strong>${escapeHtml(member.display_name)}</strong><small>${escapeHtml(member.email)} · ${member.role}${member.active ? "" : " · inactive"}</small>${member.active ? `<span><button class="text-button" data-member-action="role" data-user-id="${member.user_id}" data-role="${member.role}">Make ${member.role === "admin" ? "member" : "admin"}</button><button class="text-button" data-member-action="revoke" data-user-id="${member.user_id}">Revoke sessions</button><button class="text-button" data-member-action="deactivate" data-user-id="${member.user_id}">Deactivate</button></span>` : ""}</span></div>`).join("");
+  memberCount.textContent = String(members.length);
+  memberList.innerHTML = members.map((member) => `<div class="held-job member-row"><span><strong>${escapeHtml(member.display_name)}</strong><small>${escapeHtml(member.email)} · ${member.role}${member.active ? "" : " · inactive"}</small>${member.active ? `<span class="member-actions"><button class="text-button" data-member-action="role" data-user-id="${member.user_id}" data-role="${member.role}">Make ${member.role === "admin" ? "member" : "admin"}</button><button class="text-button" data-member-action="revoke" data-user-id="${member.user_id}">Revoke sessions</button><button class="text-button danger-action" data-member-action="deactivate" data-user-id="${member.user_id}">Deactivate</button></span>` : ""}</span></div>`).join("");
 }
 
 refreshMembers.addEventListener("click", loadMembers);
@@ -351,12 +355,12 @@ async function bootstrapAdmin() {
     adminOrgName.textContent = `${currentUser.organization.name} · Admin`;
     platformConsoleLink.hidden = !currentUser.is_super_admin;
     if (currentUser.is_super_admin) {
-      trialStatus.textContent = "Platform access · trial limits do not apply";
+      trialStatus.textContent = "Platform access · no trial limits";
     } else {
       const ends = new Date(currentUser.trial.ends_at);
       trialStatus.textContent = currentUser.trial.active
-        ? `Free trial · 2 PDFs per UTC day · ends ${ends.toLocaleString()}`
-        : "Free trial ended · querying and document processing are unavailable";
+        ? `Free trial · ends ${ends.toLocaleDateString()}`
+        : "Trial ended · processing unavailable";
       if (!currentUser.trial.active) {
         uploadButton.disabled = true;
         releaseJobsButton.disabled = true;

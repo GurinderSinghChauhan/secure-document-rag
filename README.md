@@ -1,5 +1,7 @@
 # Secure Document RAG
 
+Planned and deferred work is tracked in [`docs/backlog.md`](docs/backlog.md).
+
 Self-hosted, multi-tenant retrieval-augmented generation (RAG) for sensitive healthcare, legal, and financial documents. Documents, embeddings, vector search, and generation stay inside your controlled network.
 
 ## What this starter provides
