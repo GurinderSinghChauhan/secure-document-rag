@@ -4,6 +4,8 @@ This project follows [Semantic Versioning](https://semver.org/). Released change
 
 ## Unreleased
 
+## 0.4.0 - 2026-08-21
+
 - Added bulk compute selection, automatic selection for newly uploaded files, recommended job/GPU-minute guardrails, and a side-by-side upload/compute workflow on desktop.
 
 ## 0.3.3 - 2026-08-21
