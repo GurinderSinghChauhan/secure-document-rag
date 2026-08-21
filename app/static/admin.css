@@ -137,6 +137,8 @@
 .limit-heading strong { font-size: 12px; }
 .limit-heading small { color: var(--text-tertiary); font-size: 10px; }
 .guardrail-note { margin: -4px 0 12px; color: var(--text-tertiary); font-size: 10px; line-height: 1.45; }
+.admin-card .compute-limits { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.compute-limits input[readonly] { color: #3159d5; background: #f2f5ff; cursor: default; font-weight: 750; }
 .full-button { width: 100%; justify-content: center; }
 
 .members-card { grid-column: 1 / -1; }
@@ -230,6 +232,10 @@
 
   .admin-card {
     padding: 16px;
+  }
+
+  .admin-card .compute-limits {
+    grid-template-columns: 1fr;
   }
 
   .indexed-document-row {

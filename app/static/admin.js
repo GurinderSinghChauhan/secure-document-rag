@@ -32,7 +32,6 @@ const clearJobSelection = document.querySelector("#clear-job-selection");
 const selectedJobCount = document.querySelector("#selected-job-count");
 const maxJobs = document.querySelector("#max-jobs");
 const maxGpuMinutes = document.querySelector("#max-gpu-minutes");
-const maxCost = document.querySelector("#max-cost");
 const inviteForm = document.querySelector("#invite-form");
 const memberList = document.querySelector("#member-list");
 const memberMessage = document.querySelector("#member-message");
@@ -245,11 +244,14 @@ function updateComputeSelection() {
   clearJobSelection.disabled = selectedJobs.length === 0;
   selectedJobCount.textContent = `${selectedJobs.length} selected`;
   releaseJobsButton.disabled = selectedJobs.length === 0;
+  const suggestedMinutes = selectedJobs.reduce(
+    (total, job) => total + Number(job.recommended_gpu_minutes || 0),
+    0,
+  );
+  maxJobs.value = String(selectedJobs.length);
+  maxGpuMinutes.value = String(suggestedMinutes);
   if (selectedJobs.length) {
-    const suggestedMinutes = selectedJobs.reduce((total, job) => total + job.recommended_gpu_minutes, 0);
-    maxJobs.value = String(selectedJobs.length);
-    maxGpuMinutes.value = String(Math.max(1, suggestedMinutes));
-    computeMessage.textContent = `${selectedJobs.length} of ${heldJobData.length} waiting documents selected. Guardrails were calculated automatically.`;
+    computeMessage.textContent = `${selectedJobs.length} of ${heldJobData.length} waiting documents selected. Estimated GPU time: ${suggestedMinutes} minute${suggestedMinutes === 1 ? "" : "s"}.`;
   } else {
     computeMessage.textContent = heldJobData.length
       ? `${heldJobData.length} document${heldJobData.length === 1 ? "" : "s"} safely held. Select individual files or all waiting documents.`
@@ -381,7 +383,6 @@ releaseJobsButton.addEventListener("click", async () => {
   releaseJobsButton.disabled = true;
   try {
     const limits = { max_jobs: Number(maxJobs.value), max_gpu_minutes: Number(maxGpuMinutes.value) };
-    if (maxCost.value) limits.max_estimated_cost_usd = Number(maxCost.value);
     const opened = await fetch("/v1/admin/compute-sessions", { method: "POST", headers: { ...requestHeaders(), "Content-Type": "application/json" }, body: JSON.stringify(limits) });
     const session = await opened.json();
     if (!opened.ok) throw new Error(responseError(session, "Unable to open compute session."));

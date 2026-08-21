@@ -45,11 +45,17 @@ def test_admin_page_is_role_gated_and_contains_management_workflows():
     assert 'id="held-jobs"' in html
     assert 'id="select-all-jobs" type="checkbox"' in html
     assert 'id="selected-job-count" role="status"' in html
+    assert 'id="max-jobs" type="number" min="0" value="0" readonly' in html
+    assert 'id="max-gpu-minutes" type="number" min="0" value="0" readonly' in html
+    assert 'id="max-cost"' not in html
     assert 'id="invite-form"' in html
     assert 'id="indexed-document-list"' in html
     assert 'id="indexed-document-search" type="search"' in html
     assert "/v1/admin/documents" in script
     assert "recommended_gpu_minutes" in script
+    assert "maxJobs.value = String(selectedJobs.length)" in script
+    assert "maxGpuMinutes.value = String(suggestedMinutes)" in script
+    assert "max_estimated_cost_usd" not in script
     assert "new Set(queued.map" in script
     assert 'indexedDocumentSearch.addEventListener("input", renderIndexedDocuments)' in script
     assert "data-delete-document" in script

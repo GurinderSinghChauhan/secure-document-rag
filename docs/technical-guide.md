@@ -70,7 +70,7 @@ Authorization: Bearer <short-lived-access-jwt>
 
 Chat evaluations are stored separately in `chat_response_evaluations`, with one mutable evaluation per assistant message. The database constrains each rubric dimension (correctness, relevance, and clarity) to 1–5. The API computes the displayed overall score as the arithmetic mean, attributes updates to the current super administrator, and writes only response IDs and numeric scores—not question, answer, or reviewer-note content—to the audit event.
 
-Held-job responses include file type, byte size, and a conservative GPU-minute ceiling hint. Plain text uses the lightest baseline, images use a moderate baseline, and PDF/Office formats use the parsing-heavy baseline, with a size-based increment. The browser sums those hints for the selected jobs. This is a guardrail recommendation rather than a throughput promise: actual GPU seconds remain measured by the dispatcher, and the session closes when its selected work drains.
+Held-job responses include file type, byte size, and a conservative GPU-minute ceiling hint. Plain text uses the lightest baseline, images use a moderate baseline, and PDF/Office formats use the parsing-heavy baseline, with a size-based increment. The browser sums those hints and counts the jobs whenever the selection changes, exposing both as read-only controls. This is a guardrail estimate rather than a throughput promise: actual GPU seconds remain measured by the dispatcher, and the session closes when its selected work drains.
 
 ### Build identity and automation
 
