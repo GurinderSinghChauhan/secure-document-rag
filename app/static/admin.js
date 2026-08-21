@@ -42,8 +42,10 @@ const heldCount = document.querySelector("#held-count");
 const memberCount = document.querySelector("#member-count");
 const indexedCount = document.querySelector("#indexed-count");
 const indexedDocumentList = document.querySelector("#indexed-document-list");
+const indexedDocumentSearch = document.querySelector("#indexed-document-search");
 const documentsMessage = document.querySelector("#documents-message");
 const refreshDocuments = document.querySelector("#refresh-documents");
+let indexedDocuments = [];
 
 function requestHeaders() {
   return accessToken ? { Authorization: `Bearer ${accessToken}` } : {};
@@ -248,6 +250,27 @@ function formatBytes(size) {
   return `${(size / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+function renderIndexedDocuments() {
+  const query = indexedDocumentSearch.value.trim().toLocaleLowerCase();
+  const matches = query
+    ? indexedDocuments.filter((document) => [
+      document.document_name,
+      document.content_type,
+      document.created_by,
+      ...(document.allowed_roles || []),
+      ...(document.allowed_users || []),
+    ].some((value) => String(value || "").toLocaleLowerCase().includes(query)))
+    : indexedDocuments;
+
+  indexedDocumentList.innerHTML = matches.length
+    ? matches.map((document) => `<article class="indexed-document-row"><div class="indexed-document-main"><strong>${escapeHtml(document.document_name)}</strong><small>${formatBytes(document.size_bytes)} · ${document.chunk_count} chunk${document.chunk_count === 1 ? "" : "s"} · indexed ${new Date(document.created_at).toLocaleDateString()}</small><small>Roles: ${escapeHtml(document.allowed_roles.join(", ") || "none")} · Explicit users: ${escapeHtml(document.allowed_users.join(", ") || "none")}</small></div><button class="text-button danger-action" data-delete-document="${document.document_id}" data-document-name="${escapeHtml(document.document_name)}" type="button">Delete</button></article>`).join("")
+    : `<p class="empty-admin-list">${indexedDocuments.length ? "No indexed documents match this search." : "No indexed documents in this organization."}</p>`;
+
+  if (!indexedDocuments.length) documentsMessage.textContent = "No documents have been indexed yet.";
+  else if (query) documentsMessage.textContent = `${matches.length} of ${indexedDocuments.length} searchable documents shown.`;
+  else documentsMessage.textContent = `${indexedDocuments.length} searchable document${indexedDocuments.length === 1 ? "" : "s"} in this organization.`;
+}
+
 async function loadIndexedDocuments() {
   refreshDocuments.disabled = true;
   documentsMessage.textContent = "Loading indexed documents…";
@@ -255,15 +278,16 @@ async function loadIndexedDocuments() {
     const response = await fetch("/v1/admin/documents", { headers: requestHeaders() });
     const payload = await response.json();
     if (!response.ok) throw new Error(responseError(payload, "Unable to load indexed documents."));
-    indexedCount.textContent = String(payload.length);
-    indexedDocumentList.innerHTML = payload.length ? payload.map((document) => `<article class="indexed-document-row"><div class="indexed-document-main"><strong>${escapeHtml(document.document_name)}</strong><small>${formatBytes(document.size_bytes)} · ${document.chunk_count} chunk${document.chunk_count === 1 ? "" : "s"} · indexed ${new Date(document.created_at).toLocaleDateString()}</small><small>Roles: ${escapeHtml(document.allowed_roles.join(", ") || "none")} · Explicit users: ${escapeHtml(document.allowed_users.join(", ") || "none")}</small></div><button class="text-button danger-action" data-delete-document="${document.document_id}" data-document-name="${escapeHtml(document.document_name)}" type="button">Delete</button></article>`).join("") : '<p class="empty-admin-list">No indexed documents in this organization.</p>';
-    documentsMessage.textContent = payload.length ? `${payload.length} searchable document${payload.length === 1 ? "" : "s"} in this organization.` : "No documents have been indexed yet.";
+    indexedDocuments = payload;
+    indexedCount.textContent = String(indexedDocuments.length);
+    renderIndexedDocuments();
   } catch (error) {
     documentsMessage.textContent = error.message;
   } finally { refreshDocuments.disabled = false; }
 }
 
 refreshDocuments.addEventListener("click", loadIndexedDocuments);
+indexedDocumentSearch.addEventListener("input", renderIndexedDocuments);
 indexedDocumentList.addEventListener("click", async (event) => {
   const button = event.target.closest("[data-delete-document]");
   if (!button) return;

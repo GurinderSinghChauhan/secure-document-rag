@@ -134,7 +134,7 @@ docker compose exec api python -m tools.bootstrap_super_admin
 
 Every platform mutation is audited. The console prevents self-deactivation, deactivation of the final active super administrator, and removal of an organization's final active administrator. Suspending an organization revokes its non-super-admin sessions without deleting its data.
 
-Organization administrators can review their searchable document inventory in `/admin`. The inventory shows file name, indexed chunk count, size, indexing date, and access scope. Deleting a document removes its vectors from the organization's Qdrant collection, soft-deletes its PostgreSQL metadata, and records a metadata-only audit event. The API always derives the organization scope from the authenticated administrator rather than accepting a tenant identifier from the browser.
+Organization administrators can review their searchable document inventory in `/admin`. The scrollable inventory shows file name, indexed chunk count, size, indexing date, and access scope, and its search field filters by filename, content type, role, or explicit user. Deleting a document removes its vectors from the organization's Qdrant collection, soft-deletes its PostgreSQL metadata, and records a metadata-only audit event. The API always derives the organization scope from the authenticated administrator rather than accepting a tenant identifier from the browser.
 
 ## Versioning and releases
 

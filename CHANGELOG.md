@@ -2,6 +2,10 @@
 
 This project follows [Semantic Versioning](https://semver.org/). Released changes are recorded here; GitHub also generates release notes from merged commits.
 
+## 0.3.2 - 2026-08-21
+
+- Added instant search and a bounded, scrollable organization document inventory.
+
 ## 0.3.1 - 2026-08-21
 
 - Added automatic semantic-version tagging after successful `main` CI runs.

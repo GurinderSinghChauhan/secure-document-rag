@@ -44,7 +44,9 @@ def test_admin_page_is_role_gated_and_contains_management_workflows():
     assert 'id="held-jobs"' in html
     assert 'id="invite-form"' in html
     assert 'id="indexed-document-list"' in html
+    assert 'id="indexed-document-search" type="search"' in html
     assert "/v1/admin/documents" in script
+    assert 'indexedDocumentSearch.addEventListener("input", renderIndexedDocuments)' in script
     assert "data-delete-document" in script
     assert 'payload.user?.role !== "admin"' in script
     assert 'location.replace("/")' in script

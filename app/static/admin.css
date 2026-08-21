@@ -129,7 +129,10 @@
 
 .members-card { grid-column: 1 / -1; }
 .indexed-documents-card { grid-column: 1 / -1; }
-.indexed-document-list { overflow: hidden; border: 1px solid var(--border); border-radius: 11px; }
+.indexed-document-search { position: relative; display: block; margin-bottom: 12px; }
+.indexed-document-search svg { position: absolute; top: 50%; left: 13px; width: 17px; transform: translateY(-50%); fill: none; stroke: var(--text-tertiary); stroke-width: 1.8; stroke-linecap: round; }
+.indexed-document-search input { width: 100%; padding-left: 40px; }
+.indexed-document-list { max-height: min(460px, 55vh); overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; border: 1px solid var(--border); border-radius: 11px; }
 .indexed-document-row { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 14px 16px; border-bottom: 1px solid var(--border); }
 .indexed-document-row:last-child { border-bottom: 0; }
 .indexed-document-main { display: grid; gap: 4px; min-width: 0; }
@@ -215,6 +218,10 @@
 
   .admin-card {
     padding: 16px;
+  }
+
+  .indexed-document-row {
+    align-items: flex-start;
   }
 }
 @media (max-width: 720px) {

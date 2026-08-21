@@ -67,7 +67,7 @@ The response includes only `answer`, a grounded response from the self-hosted mo
 
 An administrator can call `DELETE /v1/documents/{document_id}`. This removes the matching chunks from Qdrant and soft-deletes the PostgreSQL metadata record. The action is auditable.
 
-The admin console's **Indexed documents** section lists only active, searchable documents belonging to the administrator's organization. It shows the file size, chunk count, indexing date, and access assignment. An administrator can delete an entry after an explicit confirmation; it then disappears from the searchable inventory and can no longer contribute to answers. Held documents that have not completed indexing remain in the separate compute queue.
+The admin console's **Indexed documents** section lists only active, searchable documents belonging to the administrator's organization. The list stays within a scrollable panel as it grows, and administrators can filter it instantly by filename, content type, role, or explicit user. It shows the file size, chunk count, indexing date, and access assignment. An administrator can delete an entry after an explicit confirmation; it then disappears from the searchable inventory and can no longer contribute to answers. Held documents that have not completed indexing remain in the separate compute queue.
 
 Do not enable this operation for records subject to legal hold, healthcare retention requirements, or regulated retention schedules until a formal records-management workflow is added.
 
