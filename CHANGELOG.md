@@ -4,6 +4,8 @@ This project follows [Semantic Versioning](https://semver.org/). Released change
 
 ## Unreleased
 
+## 0.4.1 - 2026-08-21
+
 - Made selected-document count and estimated GPU minutes recalculate automatically from the current compute selection, and removed the unnecessary cost input.
 
 ## 0.4.0 - 2026-08-21
