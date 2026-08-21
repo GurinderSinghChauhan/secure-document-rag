@@ -147,11 +147,10 @@ uv run python tools/version.py 0.4.0
 uv run pytest -q
 git add VERSION pyproject.toml uv.lock CHANGELOG.md
 git commit -m "Prepare v0.4.0"
-git tag -a v0.4.0 -m "v0.4.0"
-git push origin main v0.4.0
+git push origin main
 ```
 
-`.github/workflows/ci.yml` validates versions, the lockfile, tests, Python and browser-script syntax, the Alembic graph, and the API Docker build on pull requests and `main`. A matching `vX.Y.Z` tag triggers `.github/workflows/release.yml`, which reruns validation, publishes `ghcr.io/gurindersinghchauhan/secure-document-rag:X.Y.Z` and `:latest`, and creates a GitHub release. Repository Actions must have permission to write packages and contents for releases.
+`.github/workflows/ci.yml` contains a read-only validation job for pull requests and `main`, followed by a release job that runs only after validation succeeds on `main`. For a new version, the release job creates the matching `vX.Y.Z` tag, publishes `ghcr.io/gurindersinghchauhan/secure-document-rag:X.Y.Z` and `:latest`, and creates a GitHub release. Its write permissions are scoped to that job. An unchanged version is a successful no-op. Repository Actions must have permission to write packages and contents for releases.
 
 ## Production deployment
 

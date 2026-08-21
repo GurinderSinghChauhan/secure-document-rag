@@ -74,7 +74,7 @@ Chat evaluations are stored separately in `chat_response_evaluations`, with one 
 
 `VERSION` is loaded by `app/version.py` and exposed by FastAPI and `GET /version`. `tools/version.py` updates `VERSION` and `pyproject.toml`, refreshes `uv.lock`, and rejects anything except a stable `X.Y.Z` semantic version. CI checks that all three declarations agree. Docker releases receive `APP_COMMIT` as a build argument and OCI source, revision, and version labels.
 
-GitHub Actions uses least-privilege read access for CI. Tag releases receive only `contents: write` and `packages: write`, verify that the pushed `vX.Y.Z` tag exactly matches the source version, run the tests, publish the API image to GHCR, and generate a GitHub release. The workflow does not build or publish the hardware-specific MinerU image.
+GitHub Actions uses one workflow with dependent jobs. The validation job has read-only access. After it succeeds on `main`, the release job alone receives `contents: write` and `packages: write`, creates a missing `vX.Y.Z` tag for the exact validated commit, publishes the API image to GHCR, and generates a GitHub release. If that version already belongs to an older commit, the job exits successfully without moving the immutable tag. Pull requests never run the release job, and the workflow does not build or publish the hardware-specific MinerU image.
 | `GET/POST/PATCH` | `/v1/admin/organization/*` | Organization admin | Manage invitations, members, roles, and sessions |
 | `POST` | `/v1/documents` | Admin | Ingest a document body |
 | `POST` | `/v1/query` | Authorized user | Retrieve and generate a cited answer |

@@ -1,4 +1,5 @@
 import tomllib
+from pathlib import Path
 
 import pytest
 
@@ -20,3 +21,13 @@ async def test_version_endpoint_reports_build_identity():
 
     assert payload.version == APP_VERSION
     assert payload.commit
+
+
+def test_release_workflow_auto_tags_successful_main_builds():
+    workflow = Path(".github/workflows/ci.yml").read_text()
+
+    assert "needs: validate" in workflow
+    assert "github.ref == 'refs/heads/main'" in workflow
+    assert 'git tag -a "$tag" "$GITHUB_SHA"' in workflow
+    assert 'git push origin "$tag"' in workflow
+    assert 'echo "publish=false"' in workflow

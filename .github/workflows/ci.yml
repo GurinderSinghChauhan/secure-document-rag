@@ -11,7 +11,7 @@ permissions:
 
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   validate:
@@ -53,3 +53,65 @@ jobs:
 
       - name: Build API image
         run: docker build --build-arg APP_COMMIT="$GITHUB_SHA" -t secure-document-rag:ci .
+
+  release:
+    name: Tag and publish release
+    needs: validate
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: write
+      packages: write
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out validated source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Create semantic version tag
+        id: version
+        run: |
+          version="$(cat VERSION)"
+          tag="v$version"
+          existing_sha="$(git rev-list -n 1 "$tag" 2>/dev/null || true)"
+          if [ -n "$existing_sha" ] && [ "$existing_sha" != "$GITHUB_SHA" ]; then
+            echo "Version $version was already released from $existing_sha; no new release is required."
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [ -z "$existing_sha" ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git tag -a "$tag" "$GITHUB_SHA" -m "$tag"
+            git push origin "$tag"
+          fi
+          echo "publish=true" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+      - name: Sign in to GitHub Container Registry
+        if: steps.version.outputs.publish == 'true'
+        run: echo "$GITHUB_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and publish API image
+        if: steps.version.outputs.publish == 'true'
+        run: |
+          version="${{ steps.version.outputs.version }}"
+          image="ghcr.io/${GITHUB_REPOSITORY,,}"
+          docker build \
+            --build-arg APP_COMMIT="$GITHUB_SHA" \
+            --label "org.opencontainers.image.source=$GITHUB_SERVER_URL/$GITHUB_REPOSITORY" \
+            --label "org.opencontainers.image.revision=$GITHUB_SHA" \
+            --label "org.opencontainers.image.version=$version" \
+            -t "$image:$version" \
+            -t "$image:latest" .
+          docker push "$image:$version"
+          docker push "$image:latest"
+
+      - name: Create GitHub release
+        if: steps.version.outputs.publish == 'true'
+        run: gh release view "${{ steps.version.outputs.tag }}" >/dev/null 2>&1 || gh release create "${{ steps.version.outputs.tag }}" --verify-tag --generate-notes
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
