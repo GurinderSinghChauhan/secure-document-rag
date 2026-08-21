@@ -5,7 +5,7 @@ import pytest
 
 from app.main import app, version
 from app.version import APP_VERSION
-from tools.version import bump_kind, increment
+from tools.version import bump_kind, finalized_changelog, increment
 
 
 def test_runtime_and_package_versions_match():
@@ -48,6 +48,14 @@ def test_conventional_commit_messages_select_increment(messages, expected):
 )
 def test_semantic_version_increment(current, part, expected):
     assert increment(current, part) == expected
+
+
+def test_automatic_bump_finalizes_unreleased_changelog():
+    content = "# Changelog\n\n## Unreleased\n\n- Added bulk selection.\n\n## 0.3.3 - 2026-08-21\n"
+
+    result = finalized_changelog(content, "0.4.0", "2026-08-22")
+
+    assert "## Unreleased\n\n## 0.4.0 - 2026-08-22\n\n- Added bulk selection." in result
 
 
 def test_release_workflow_auto_versions_and_tags_successful_main_builds():

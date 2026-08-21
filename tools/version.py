@@ -1,6 +1,7 @@
 """Check, update, or automatically bump the repository's semantic version."""
 
 import argparse
+from datetime import UTC, datetime
 from pathlib import Path
 import re
 import subprocess
@@ -61,6 +62,13 @@ def git_messages(since: str | None = None) -> str:
     return subprocess.check_output(["git", "log", revision, "--format=%B"], cwd=ROOT, text=True)
 
 
+def finalized_changelog(content: str, version: str, release_date: str) -> str:
+    marker = "## Unreleased"
+    if marker not in content:
+        raise ValueError("CHANGELOG.md must contain an Unreleased section before an automatic bump")
+    return content.replace(marker, f"{marker}\n\n## {version} - {release_date}", 1)
+
+
 def update(new_version: str) -> None:
     if not SEMVER.fullmatch(new_version):
         raise SystemExit("Version must use stable semantic version X.Y.Z")
@@ -78,7 +86,13 @@ def bump(part: str, since: str | None = None) -> None:
     if len(set(current)) != 1:
         raise SystemExit(f"Version mismatch: VERSION={current[0]}, pyproject={current[1]}, uv.lock={current[2]}")
     selected_part = bump_kind(git_messages(since)) if part == "auto" else part
-    update(increment(current[0], selected_part))
+    new_version = increment(current[0], selected_part)
+    update(new_version)
+    changelog_path = ROOT / "CHANGELOG.md"
+    changelog_path.write_text(
+        finalized_changelog(changelog_path.read_text(encoding="utf-8"), new_version, datetime.now(UTC).date().isoformat()),
+        encoding="utf-8",
+    )
 
 
 def main() -> None:

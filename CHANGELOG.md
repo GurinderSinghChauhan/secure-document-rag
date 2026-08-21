@@ -2,6 +2,10 @@
 
 This project follows [Semantic Versioning](https://semver.org/). Released changes are recorded here; GitHub also generates release notes from merged commits.
 
+## Unreleased
+
+- Added bulk compute selection, automatic selection for newly uploaded files, recommended job/GPU-minute guardrails, and a side-by-side upload/compute workflow on desktop.
+
 ## 0.3.3 - 2026-08-21
 
 - Limited free-trial chat usage to five questions per user per UTC day.

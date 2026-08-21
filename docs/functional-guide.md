@@ -34,6 +34,8 @@ An administrator uploads a PDF, DOCX, PPTX, XLSX, UTF-8 text file, or supported 
 7. Registers document metadata and a SHA-256 content fingerprint in PostgreSQL.
 8. Records a metadata-only audit event, including extracted table and visual counts. Document content and user questions are not written to the audit table.
 
+When several files are uploaded together, the successfully held files are selected automatically in the compute queue. Administrators can select all waiting files or clear the selection in one action. The console sets the job limit to the selected count and recommends a GPU-minute safety ceiling from file type and size, while leaving both controls editable. A ceiling is not a reservation: processing closes as soon as the selected batch finishes.
+
 Visual search is caption-based: raw image pixels are analyzed transiently by the private vision model, but Qdrant stores only the resulting text description and embedding. This allows normal text questions to retrieve information represented in charts and diagrams without introducing a second incompatible image-vector space.
 
 By default, a document inherits the uploader's roles. An administrator can narrow access using:

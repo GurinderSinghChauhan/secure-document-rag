@@ -56,6 +56,9 @@ class HeldIngestResponse(BaseModel):
 class IngestionJobResponse(BaseModel):
     job_id: str
     document_name: str
+    content_type: str
+    size_bytes: int
+    recommended_gpu_minutes: int
     state: str
     stage: str
     progress: int

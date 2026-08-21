@@ -120,6 +120,8 @@ Chat conversations are stored in PostgreSQL and scoped to the authenticated tena
 
 Every session requires `max_jobs` and `max_gpu_minutes`, plus an optional `max_estimated_cost_usd`. The dispatcher stops at its bounds, returns retryable failures to held state, and closes the session when released work drains. The initial profile targets a quantized Qwen3-VL-4B on a 16 GB NVIDIA pool, with a configurable 24 GB fallback for out-of-memory retries.
 
+For large uploads, the admin console automatically selects the files that were just uploaded. Administrators can also select or clear every waiting document with one action. The selected document count becomes the job ceiling, while a conservative GPU-minute ceiling is calculated from each file's type and size. These values remain editable; they are safety limits rather than reserved usage, and compute stops as soon as the selected work finishes.
+
 ## Chat UI
 
 The API serves a same-origin chat UI at `http://127.0.0.1:8080/` and a separate administrator console at `http://127.0.0.1:8080/admin`. Members receive the focused chat workspace only. Administrators use the console to upload and index PDF, DOCX, PPTX, XLSX, TXT, PNG, JPEG, and WebP content, release compute, and manage organization access. The browser calls only the secured RAG API; it never connects to MinerU, the model server, or Qdrant directly.
@@ -148,7 +150,7 @@ Versioning is automatic after a successful `main` build. The release job retains
 - a header containing `!` or a `BREAKING CHANGE:` footer increments `MAJOR`;
 - every other commit defaults to a `PATCH` increment.
 
-The job commits the synchronized version files back to `main` with `[skip ci]`, tags that generated commit, publishes the versioned and `latest` container images, and creates the GitHub release. A manual override remains available when a specific next version is required:
+The job finalizes the `Unreleased` changelog section, commits the synchronized release metadata back to `main` with `[skip ci]`, tags that generated commit, publishes the versioned and `latest` container images, and creates the GitHub release. A manual override remains available when a specific next version is required:
 
 ```bash
 uv run python tools/version.py 0.4.0

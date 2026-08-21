@@ -43,14 +43,26 @@ def test_admin_page_is_role_gated_and_contains_management_workflows():
 
     assert 'id="upload-form"' in html
     assert 'id="held-jobs"' in html
+    assert 'id="select-all-jobs" type="checkbox"' in html
+    assert 'id="selected-job-count" role="status"' in html
     assert 'id="invite-form"' in html
     assert 'id="indexed-document-list"' in html
     assert 'id="indexed-document-search" type="search"' in html
     assert "/v1/admin/documents" in script
+    assert "recommended_gpu_minutes" in script
+    assert "new Set(queued.map" in script
     assert 'indexedDocumentSearch.addEventListener("input", renderIndexedDocuments)' in script
     assert "data-delete-document" in script
     assert 'payload.user?.role !== "admin"' in script
     assert 'location.replace("/")' in script
+
+
+def test_admin_page_places_compute_beside_upload_before_indexed_library():
+    html = Path("app/static/admin.html").read_text()
+
+    assert html.index('id="documents"') < html.index('id="compute"')
+    assert html.index('id="compute"') < html.index('id="indexed-documents"')
+    assert html.count('class="admin-card workflow-card"') == 2
 
 
 def test_super_admin_page_is_platform_gated_and_contains_safe_controls():

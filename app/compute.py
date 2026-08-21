@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import math
 from typing import Literal, Protocol
 
 import httpx
@@ -142,6 +143,19 @@ class RunpodProvider:
 
 def estimated_cost(gpu_seconds: float, hourly_rate_usd: float) -> float:
     return round((gpu_seconds / 3600) * hourly_rate_usd, 6)
+
+
+def recommended_gpu_minutes(content_type: str, size_bytes: int) -> int:
+    """Return a conservative session ceiling hint; actual usage stops when work finishes."""
+    normalized_type = content_type.split(";", 1)[0].strip().lower()
+    size_megabytes = max(size_bytes, 0) / (1024 * 1024)
+    if normalized_type == "text/plain":
+        estimate = 0.5 + (size_megabytes * 0.1)
+    elif normalized_type.startswith("image/"):
+        estimate = 2 + (size_megabytes * 0.25)
+    else:
+        estimate = 5 + (size_megabytes * 0.5)
+    return max(1, math.ceil(estimate))
 
 
 def assert_release_within_limits(

@@ -26,6 +26,10 @@ const heldJobs = document.querySelector("#held-jobs");
 const refreshJobsButton = document.querySelector("#refresh-jobs");
 const releaseJobsButton = document.querySelector("#release-jobs");
 const computeMessage = document.querySelector("#compute-message");
+const computeSelectionToolbar = document.querySelector("#compute-selection-toolbar");
+const selectAllJobs = document.querySelector("#select-all-jobs");
+const clearJobSelection = document.querySelector("#clear-job-selection");
+const selectedJobCount = document.querySelector("#selected-job-count");
 const maxJobs = document.querySelector("#max-jobs");
 const maxGpuMinutes = document.querySelector("#max-gpu-minutes");
 const maxCost = document.querySelector("#max-cost");
@@ -46,6 +50,7 @@ const indexedDocumentSearch = document.querySelector("#indexed-document-search")
 const documentsMessage = document.querySelector("#documents-message");
 const refreshDocuments = document.querySelector("#refresh-documents");
 let indexedDocuments = [];
+let heldJobData = [];
 
 function requestHeaders() {
   return accessToken ? { Authorization: `Bearer ${accessToken}` } : {};
@@ -209,7 +214,7 @@ uploadForm.addEventListener("submit", async (event) => {
       try {
         const { ok, payload } = await uploadDocument(file, headers, batchLabel);
         if (!ok) throw new Error(responseError(payload, "Unable to save the document."));
-        queued.push(file.name);
+        queued.push({ name: file.name, jobId: payload.job_id });
         setUploadProgress(100, "success");
       } catch (error) {
         failed.push({ name: file.name, message: error.message });
@@ -223,25 +228,52 @@ uploadForm.addEventListener("submit", async (event) => {
       documentFile.value = "";
       fileLabel.textContent = "Choose more documents";
       uploadButton.querySelector("span").textContent = "Upload and hold";
-      await loadHeldJobs();
     }
+    if (queued.length) await loadHeldJobs(new Set(queued.map(({ jobId }) => jobId)));
   } finally {
     uploadButton.disabled = false;
   }
 });
 
-async function loadHeldJobs() {
+function updateComputeSelection() {
+  const checkboxes = Array.from(heldJobs.querySelectorAll('input[type="checkbox"]'));
+  const selectedIds = new Set(checkboxes.filter((input) => input.checked).map((input) => input.value));
+  const selectedJobs = heldJobData.filter((job) => selectedIds.has(job.job_id));
+  selectAllJobs.disabled = checkboxes.length === 0;
+  selectAllJobs.checked = checkboxes.length > 0 && selectedJobs.length === checkboxes.length;
+  selectAllJobs.indeterminate = selectedJobs.length > 0 && selectedJobs.length < checkboxes.length;
+  clearJobSelection.disabled = selectedJobs.length === 0;
+  selectedJobCount.textContent = `${selectedJobs.length} selected`;
+  releaseJobsButton.disabled = selectedJobs.length === 0;
+  if (selectedJobs.length) {
+    const suggestedMinutes = selectedJobs.reduce((total, job) => total + job.recommended_gpu_minutes, 0);
+    maxJobs.value = String(selectedJobs.length);
+    maxGpuMinutes.value = String(Math.max(1, suggestedMinutes));
+    computeMessage.textContent = `${selectedJobs.length} of ${heldJobData.length} waiting documents selected. Guardrails were calculated automatically.`;
+  } else {
+    computeMessage.textContent = heldJobData.length
+      ? `${heldJobData.length} document${heldJobData.length === 1 ? "" : "s"} safely held. Select individual files or all waiting documents.`
+      : "Nothing is waiting for compute.";
+  }
+}
+
+async function loadHeldJobs(preselectedIds = null) {
+  const previousSelection = new Set(Array.from(heldJobs.querySelectorAll('input[type="checkbox"]:checked'), (input) => input.value));
+  const selectedIds = preselectedIds || previousSelection;
   const response = await fetch("/v1/admin/ingestion-jobs?state=held_for_compute", { headers: requestHeaders() });
   const payload = await response.json();
   if (!response.ok) {
     computeMessage.textContent = responseError(payload, "Unable to load held documents.");
     return;
   }
+  heldJobData = payload;
   heldJobs.innerHTML = payload.length
-    ? payload.map((job) => `<label class="held-job"><input type="checkbox" value="${job.job_id}"><span><strong>${escapeHtml(job.document_name)}</strong><small>${escapeHtml(job.message)}</small></span></label>`).join("")
+    ? payload.map((job) => `<label class="held-job"><input type="checkbox" value="${job.job_id}"${selectedIds.has(job.job_id) ? " checked" : ""}><span><strong>${escapeHtml(job.document_name)}</strong><small>${formatBytes(job.size_bytes)} · suggested ceiling ${job.recommended_gpu_minutes} GPU minute${job.recommended_gpu_minutes === 1 ? "" : "s"}</small><small>${escapeHtml(job.message)}</small></span></label>`).join("")
     : "<small>No documents are waiting for compute.</small>";
   heldCount.textContent = String(payload.length);
-  computeMessage.textContent = payload.length ? `${payload.length} document${payload.length === 1 ? "" : "s"} safely held. Select a bounded batch to process.` : "Nothing is waiting for compute.";
+  computeSelectionToolbar.hidden = false;
+  refreshJobsButton.disabled = false;
+  updateComputeSelection();
 }
 
 function formatBytes(size) {
@@ -304,6 +336,9 @@ indexedDocumentList.addEventListener("click", async (event) => {
 });
 
 function renderSessionJobs(payload) {
+  computeSelectionToolbar.hidden = true;
+  releaseJobsButton.disabled = true;
+  refreshJobsButton.disabled = true;
   heldJobs.innerHTML = payload.jobs.map((job) => `<div class="held-job"><span><strong>${escapeHtml(job.document_name)}</strong><small>${escapeHtml(job.stage.replaceAll("_", " "))} · ${job.progress}% — ${escapeHtml(job.message)}</small><span class="job-progress"><i style="width:${job.progress}%"></i></span></span></div>`).join("");
   const minutes = (payload.gpu_seconds / 60).toFixed(1);
   computeMessage.textContent = payload.status === "closed"
@@ -326,6 +361,17 @@ async function pollComputeSession(sessionId) {
 }
 
 refreshJobsButton.addEventListener("click", loadHeldJobs);
+heldJobs.addEventListener("change", (event) => {
+  if (event.target.matches('input[type="checkbox"]')) updateComputeSelection();
+});
+selectAllJobs.addEventListener("change", () => {
+  heldJobs.querySelectorAll('input[type="checkbox"]').forEach((input) => { input.checked = selectAllJobs.checked; });
+  updateComputeSelection();
+});
+clearJobSelection.addEventListener("click", () => {
+  heldJobs.querySelectorAll('input[type="checkbox"]').forEach((input) => { input.checked = false; });
+  updateComputeSelection();
+});
 releaseJobsButton.addEventListener("click", async () => {
   const selected = Array.from(heldJobs.querySelectorAll("input:checked"), (input) => input.value);
   if (!selected.length) {
@@ -347,7 +393,7 @@ releaseJobsButton.addEventListener("click", async () => {
   } catch (error) {
     computeMessage.textContent = error.message;
   } finally {
-    releaseJobsButton.disabled = false;
+    if (!computeSelectionToolbar.hidden) updateComputeSelection();
   }
 });
 

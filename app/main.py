@@ -19,7 +19,7 @@ from .accounts import router as accounts_router
 from .auth import require_admin, require_principal
 from .chunking import chunk_text
 from .config import get_settings
-from .compute import assert_release_within_limits, estimated_cost
+from .compute import assert_release_within_limits, estimated_cost, recommended_gpu_minutes
 from .database import ComputeSessionRecord, DocumentRecord, IngestionJobRecord, SessionFactory, dispose_database, get_session, initialize_database
 from .document_parser import VisualAsset, extract_document
 from .mineru import MinerUClient, supports_mineru
@@ -107,7 +107,9 @@ def existing_document_event(document: DocumentRecord) -> dict[str, object]:
 
 
 def job_response(job: IngestionJobRecord) -> IngestionJobResponse:
-    return IngestionJobResponse.model_validate(job, from_attributes=True)
+    values = {column.name: getattr(job, column.name) for column in IngestionJobRecord.__table__.columns}
+    values["recommended_gpu_minutes"] = recommended_gpu_minutes(job.content_type, job.size_bytes)
+    return IngestionJobResponse.model_validate(values)
 
 
 async def create_held_job(
