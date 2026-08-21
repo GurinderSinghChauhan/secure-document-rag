@@ -392,7 +392,7 @@ function applyAuthenticatedUser(payload) {
   const trialText = currentUser.is_super_admin
     ? "Platform access · trial limits do not apply"
     : currentUser.trial.active
-      ? `Free trial ends ${new Date(currentUser.trial.ends_at).toLocaleString()}`
+      ? `Free trial · ${currentUser.trial.question_daily_limit} questions per UTC day · ends ${new Date(currentUser.trial.ends_at).toLocaleString()}`
       : "Free trial ended · access is read-only";
   accountSummary.textContent = `${currentUser.display_name} · ${currentUser.role} at ${currentUser.organization.name}. ${trialText}.`;
   const isAdmin = currentUser.role === "admin";

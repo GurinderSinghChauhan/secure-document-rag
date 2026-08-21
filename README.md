@@ -126,6 +126,8 @@ The API serves a same-origin chat UI at `http://127.0.0.1:8080/` and a separate 
 
 The UI keeps the short-lived access JWT only in memory and restores sessions through a rotating, HTTP-only refresh cookie. Registration creates an organization and its first administrator; additional accounts join by invitation.
 
+During the seven-day free trial, each user can submit up to five chat questions per UTC day. The allowance is isolated per user, resets at UTC midnight, and is enforced by the API for both standard and streaming query endpoints. Platform super administrators are exempt.
+
 Platform super administrators use the separate `/super-admin` console to review all organizations and their users, suspend or reactivate organizations, activate or deactivate accounts, change organization roles, revoke sessions, and evaluate chat-response quality. The response-quality queue shows the originating organization, user, question, and answer and records 1–5 scores for correctness, relevance, and clarity plus optional reviewer notes. Platform authority is independent of the `admin` and `member` organization roles. Create the first super administrator by promoting an existing active, verified account through the interactive command below; the command verifies the account password and accepts no credentials through arguments or environment variables:
 
 ```bash
@@ -140,17 +142,19 @@ Organization administrators can review their searchable document inventory in `/
 
 The project uses stable semantic versions (`MAJOR.MINOR.PATCH`). `VERSION` is the runtime source, while `pyproject.toml` and the root project entry in `uv.lock` are kept synchronized. The unauthenticated `GET /version` endpoint reports the deployed version and build commit without exposing configuration.
 
-Use the version helper to prepare a release:
+Versioning is automatic after a successful `main` build. The release job retains an explicitly prepared, not-yet-released version; otherwise it increments from the current version using commit intent across the unreleased commits:
+
+- a `feat:` Conventional Commit increments `MINOR`;
+- a header containing `!` or a `BREAKING CHANGE:` footer increments `MAJOR`;
+- every other commit defaults to a `PATCH` increment.
+
+The job commits the synchronized version files back to `main` with `[skip ci]`, tags that generated commit, publishes the versioned and `latest` container images, and creates the GitHub release. A manual override remains available when a specific next version is required:
 
 ```bash
 uv run python tools/version.py 0.4.0
-uv run pytest -q
-git add VERSION pyproject.toml uv.lock CHANGELOG.md
-git commit -m "Prepare v0.4.0"
-git push origin main
 ```
 
-`.github/workflows/ci.yml` contains a read-only validation job for pull requests and `main`, followed by a release job that runs only after validation succeeds on `main`. For a new version, the release job creates the matching `vX.Y.Z` tag, publishes `ghcr.io/gurindersinghchauhan/secure-document-rag:X.Y.Z` and `:latest`, and creates a GitHub release. Its write permissions are scoped to that job. An unchanged version is a successful no-op. Repository Actions must have permission to write packages and contents for releases.
+`.github/workflows/ci.yml` contains a read-only validation job for pull requests and `main`, followed by a release job that runs only after validation succeeds on `main`. Its write permissions are scoped to that job. Repository Actions must have permission to write packages and contents, and branch rules must allow the GitHub Actions bot to push the generated version commit.
 
 ## Production deployment
 

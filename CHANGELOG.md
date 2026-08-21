@@ -2,6 +2,11 @@
 
 This project follows [Semantic Versioning](https://semver.org/). Released changes are recorded here; GitHub also generates release notes from merged commits.
 
+## 0.3.3 - 2026-08-21
+
+- Limited free-trial chat usage to five questions per user per UTC day.
+- Automated semantic-version increments from Conventional Commit intent after successful `main` validation.
+
 ## 0.3.2 - 2026-08-21
 
 - Added instant search and a bounded, scrollable organization document inventory.

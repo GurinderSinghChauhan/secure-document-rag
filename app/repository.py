@@ -55,8 +55,7 @@ async def write_audit_event(session: AsyncSession, tenant_id: str, user_id: str,
 async def create_chat(session: AsyncSession, tenant_id: str, user_id: str, title: str) -> ChatSessionRecord:
     chat = ChatSessionRecord(chat_id=str(uuid4()), tenant_id=tenant_id, user_id=user_id, title=title)
     session.add(chat)
-    await session.commit()
-    await session.refresh(chat)
+    await session.flush()
     return chat
 
 

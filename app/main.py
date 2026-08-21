@@ -26,7 +26,7 @@ from .mineru import MinerUClient, supports_mineru
 from .models import ChatDetail, ChatMessage, ChatSummary, ComputeSessionCreate, ComputeSessionRelease, ComputeSessionResponse, DeleteResponse, HeldIngestResponse, IndexedDocumentResponse, IngestionJobResponse, Principal, QueryRequest, QueryResponse, ReadinessResponse, VersionResponse
 from .providers import ModelClient
 from .super_admin import router as super_admin_router
-from .trials import is_pdf, require_active_trial, reserve_pdf_trial_slot
+from .trials import is_pdf, require_active_trial, reserve_pdf_trial_slot, reserve_question_trial_slot
 from .repository import add_chat_message, create_chat, database_is_ready, get_chat, get_document, get_document_by_content_hash, list_chat_messages, list_chats, list_documents, mark_document_deleted
 from .vector_store import VectorStore
 from .version import APP_COMMIT, APP_VERSION
@@ -154,6 +154,7 @@ async def resolve_chat(payload: QueryRequest, principal: Principal, session: Asy
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Chat not found")
     else:
         chat = await create_chat(session, principal.tenant_id, principal.user_id, chat_title(payload.question))
+    await reserve_question_trial_slot(session, principal)
     await add_chat_message(session, chat, "user", payload.question)
     return chat
 

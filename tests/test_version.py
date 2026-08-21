@@ -5,6 +5,7 @@ import pytest
 
 from app.main import app, version
 from app.version import APP_VERSION
+from tools.version import bump_kind, increment
 
 
 def test_runtime_and_package_versions_match():
@@ -23,11 +24,38 @@ async def test_version_endpoint_reports_build_identity():
     assert payload.commit
 
 
-def test_release_workflow_auto_tags_successful_main_builds():
+@pytest.mark.parametrize(
+    ("messages", "expected"),
+    [
+        ("fix: correct quota", "patch"),
+        ("Update documentation", "patch"),
+        ("feat(chat): add quotas", "minor"),
+        ("feat!: replace API\n\nBREAKING CHANGE: new contract", "major"),
+        ("fix(api)!: remove field", "major"),
+    ],
+)
+def test_conventional_commit_messages_select_increment(messages, expected):
+    assert bump_kind(messages) == expected
+
+
+@pytest.mark.parametrize(
+    ("current", "part", "expected"),
+    [
+        ("1.2.3", "patch", "1.2.4"),
+        ("1.2.3", "minor", "1.3.0"),
+        ("1.2.3", "major", "2.0.0"),
+    ],
+)
+def test_semantic_version_increment(current, part, expected):
+    assert increment(current, part) == expected
+
+
+def test_release_workflow_auto_versions_and_tags_successful_main_builds():
     workflow = Path(".github/workflows/ci.yml").read_text()
 
     assert "needs: validate" in workflow
     assert "github.ref == 'refs/heads/main'" in workflow
-    assert 'git tag -a "$tag" "$GITHUB_SHA"' in workflow
+    assert 'python tools/version.py --bump auto --since "$tag"' in workflow
+    assert 'git push origin HEAD:main' in workflow
+    assert 'git tag -a "$tag" "$release_sha"' in workflow
     assert 'git push origin "$tag"' in workflow
-    assert 'echo "publish=false"' in workflow

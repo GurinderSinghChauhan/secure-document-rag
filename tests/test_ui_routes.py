@@ -34,6 +34,7 @@ def test_chat_composer_supports_voice_and_enter_to_send():
     assert "window.SpeechRecognition || window.webkitSpeechRecognition" in script
     assert 'event.key === "Enter" && !event.shiftKey' in script
     assert "form.requestSubmit()" in script
+    assert "question_daily_limit" in script
 
 
 def test_admin_page_is_role_gated_and_contains_management_workflows():

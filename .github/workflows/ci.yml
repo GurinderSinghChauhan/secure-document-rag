@@ -68,26 +68,43 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Create semantic version tag
+      - name: Install uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          version: "0.6.5"
+          enable-cache: false
+
+      - name: Increment version and create semantic version tag
         id: version
         run: |
           version="$(cat VERSION)"
           tag="v$version"
           existing_sha="$(git rev-list -n 1 "$tag" 2>/dev/null || true)"
           if [ -n "$existing_sha" ] && [ "$existing_sha" != "$GITHUB_SHA" ]; then
-            echo "Version $version was already released from $existing_sha; no new release is required."
-            echo "publish=false" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          if [ -z "$existing_sha" ]; then
+            python tools/version.py --bump auto --since "$tag"
+            version="$(cat VERSION)"
+            tag="v$version"
+            if git rev-parse --verify --quiet "$tag" >/dev/null; then
+              echo "Calculated version $version already exists." >&2
+              exit 1
+            fi
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git tag -a "$tag" "$GITHUB_SHA" -m "$tag"
+            git add VERSION pyproject.toml uv.lock
+            git commit -m "chore(release): v$version [skip ci]"
+            git push origin HEAD:main
+          fi
+          release_sha="$(git rev-parse HEAD)"
+          if ! git rev-parse --verify --quiet "$tag" >/dev/null; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git tag -a "$tag" "$release_sha" -m "$tag"
             git push origin "$tag"
           fi
           echo "publish=true" >> "$GITHUB_OUTPUT"
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "release_sha=$release_sha" >> "$GITHUB_OUTPUT"
 
       - name: Sign in to GitHub Container Registry
         if: steps.version.outputs.publish == 'true'
@@ -101,9 +118,9 @@ jobs:
           version="${{ steps.version.outputs.version }}"
           image="ghcr.io/${GITHUB_REPOSITORY,,}"
           docker build \
-            --build-arg APP_COMMIT="$GITHUB_SHA" \
+            --build-arg APP_COMMIT="${{ steps.version.outputs.release_sha }}" \
             --label "org.opencontainers.image.source=$GITHUB_SERVER_URL/$GITHUB_REPOSITORY" \
-            --label "org.opencontainers.image.revision=$GITHUB_SHA" \
+            --label "org.opencontainers.image.revision=${{ steps.version.outputs.release_sha }}" \
             --label "org.opencontainers.image.version=$version" \
             -t "$image:$version" \
             -t "$image:latest" .
