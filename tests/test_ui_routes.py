@@ -37,6 +37,15 @@ def test_chat_composer_supports_voice_and_enter_to_send():
     assert "question_daily_limit" in script
 
 
+def test_chat_loads_authentication_session_controller_before_application():
+    html = Path("app/static/index.html").read_text()
+
+    session_script = '<script src="/assets/auth_session.js" defer></script>'
+    application_script = '<script src="/assets/app.js" defer></script>'
+    assert session_script in html
+    assert html.index(session_script) < html.index(application_script)
+
+
 def test_admin_page_is_role_gated_and_contains_management_workflows():
     html = Path("app/static/admin.html").read_text()
     script = Path("app/static/admin.js").read_text()

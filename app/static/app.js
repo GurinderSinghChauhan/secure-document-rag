@@ -1,6 +1,5 @@
 const form = document.querySelector("#chat-form");
 const question = document.querySelector("#question");
-let accessToken = null;
 let currentUser = null;
 const chatLog = document.querySelector("#chat-log");
 const sendButton = document.querySelector("#send-button");
@@ -26,6 +25,10 @@ const logoutButton = document.querySelector("#logout-button");
 const accountSummary = document.querySelector("#account-summary");
 const emptyChatMarkup = chatLog.innerHTML;
 let activeChatId = null;
+const authSession = window.AuthSession.createAuthSession({
+  onAuthenticated: (payload, context) => applyAuthenticatedUser(payload, context),
+  onCleared: clearAuthenticationView,
+});
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 let speechRecognition = null;
 let isListening = false;
@@ -225,7 +228,7 @@ async function loadChatHistory() {
   chatHistoryEmpty.hidden = false;
   chatHistoryEmpty.textContent = "Loading chats…";
   try {
-    const response = await fetch("/v1/chats", { headers: requestHeaders(selectedTenant, selectedApiKey) });
+    const response = await authSession.request("/v1/chats");
     const payload = await response.json();
     if (!response.ok) throw new Error(responseError(payload, "Unable to load chat history."));
     renderChatHistory(payload);
@@ -238,9 +241,8 @@ async function loadChatHistory() {
 
 async function loadChat(chatId) {
   if (sendButton.disabled) return;
-  const { tenant: selectedTenant, apiKey: selectedApiKey } = connectionSettings();
   try {
-    const response = await fetch(`/v1/chats/${encodeURIComponent(chatId)}`, { headers: requestHeaders(selectedTenant, selectedApiKey) });
+    const response = await authSession.request(`/v1/chats/${encodeURIComponent(chatId)}`);
     const payload = await response.json();
     if (!response.ok) throw new Error(responseError(payload, "Unable to load this chat."));
     chatLog.replaceChildren();
@@ -264,14 +266,25 @@ function setBusy(isBusy) {
   setComposerStatus(isBusy ? "Searching authorized documents…" : "Ready to search");
 }
 
-function requestHeaders(selectedTenant, selectedApiKey) {
-  return accessToken ? { Authorization: `Bearer ${accessToken}` } : {};
+function clearAuthenticationView() {
+  currentUser = null;
+  authGate.hidden = false;
+  accountSummary.textContent = "";
+  document.querySelectorAll("[data-admin-only], [data-super-admin-only]").forEach((element) => { element.hidden = true; });
+  chatHistoryList.replaceChildren();
+  chatHistoryEmpty.hidden = false;
+  chatHistoryEmpty.textContent = "Connect to load your chat history.";
+  chatLog.innerHTML = emptyChatMarkup;
+  activeChatId = null;
+  question.value = "";
+  setSettingsOpen(false);
+  updateTenantChip();
 }
 
 function connectionSettings() {
   return {
     tenant: currentUser?.organization?.organization_id || "",
-    apiKey: accessToken || "",
+    apiKey: authSession.getAccessToken() || "",
   };
 }
 
@@ -305,11 +318,10 @@ async function submitQuestion() {
   setBusy(true);
 
   try {
-    const response = await fetch("/v1/query/stream", {
+    const response = await authSession.request("/v1/query/stream", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        ...requestHeaders(selectedTenant, selectedApiKey),
       },
       body: JSON.stringify({ question: userQuestion, ...(activeChatId ? { chat_id: activeChatId } : {}) }),
     });
@@ -384,8 +396,7 @@ chatLog.addEventListener("click", (event) => {
 
 newChatButton.addEventListener("click", resetConversation);
 
-function applyAuthenticatedUser(payload) {
-  accessToken = payload.access_token;
+function applyAuthenticatedUser(payload, { loadHistory = true } = {}) {
   currentUser = payload.user;
   authGate.hidden = true;
   updateTenantChip();
@@ -398,7 +409,7 @@ function applyAuthenticatedUser(payload) {
   const isAdmin = currentUser.role === "admin";
   document.querySelectorAll("[data-admin-only]").forEach((element) => { element.hidden = !isAdmin; });
   document.querySelectorAll("[data-super-admin-only]").forEach((element) => { element.hidden = !currentUser.is_super_admin; });
-  loadChatHistory();
+  if (loadHistory) loadChatHistory();
 }
 
 async function authJson(path, options = {}) {
@@ -423,7 +434,7 @@ loginForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   try {
     const payload = await authJson("/v1/auth/login", { method: "POST", body: JSON.stringify({ email: document.querySelector("#login-email").value, password: document.querySelector("#login-password").value }) });
-    applyAuthenticatedUser(payload);
+    authSession.establish(payload, { loadHistory: true });
     loginForm.reset();
   } catch (error) { authMessage.textContent = error.message; }
 });
@@ -458,12 +469,10 @@ document.querySelector("#forgot-password-button").addEventListener("click", asyn
 });
 
 logoutButton.addEventListener("click", async () => {
-  try { await authJson("/v1/auth/logout", { method: "POST" }); } catch {}
-  accessToken = null;
-  currentUser = null;
-  setSettingsOpen(false);
-  authGate.hidden = false;
-  updateTenantChip();
+  logoutButton.disabled = true;
+  try { await authSession.logout(); }
+  catch {}
+  finally { logoutButton.disabled = false; }
 });
 
 async function handleActionLink() {
@@ -504,7 +513,7 @@ accountActionForm.addEventListener("submit", async (event) => {
 async function bootstrapAuthentication() {
   updateTenantChip();
   await handleActionLink();
-  try { applyAuthenticatedUser(await authJson("/v1/auth/refresh", { method: "POST", body: "{}" })); }
+  try { await authSession.refresh({ loadHistory: true }); }
   catch { authGate.hidden = false; }
 }
 

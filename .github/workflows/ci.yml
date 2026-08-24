@@ -38,11 +38,14 @@ jobs:
           uv lock --check
 
       - name: Run test suite
-        run: uv run pytest -q
+        run: |
+          uv run pytest -q
+          node --test tests/js/*.test.js
 
       - name: Run static checks
         run: |
           uv run python -m compileall -q app tests tools
+          node --check app/static/auth_session.js
           node --check app/static/app.js
           node --check app/static/admin.js
           node --check app/static/super_admin.js
