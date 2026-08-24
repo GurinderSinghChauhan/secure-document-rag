@@ -19,7 +19,7 @@ from .accounts import router as accounts_router
 from .auth import require_admin, require_principal
 from .chunking import chunk_text
 from .config import get_settings
-from .compute import assert_release_within_limits, estimated_cost, recommended_gpu_minutes
+from .compute import assert_release_within_limits, recommended_gpu_minutes
 from .database import ComputeSessionRecord, DocumentRecord, IngestionJobRecord, SessionFactory, dispose_database, get_session, initialize_database
 from .document_parser import VisualAsset, extract_document
 from .mineru import MinerUClient, supports_mineru
@@ -264,6 +264,7 @@ async def index_document_events(
             "message": f"Embedded {completed} of {total} chunks",
         }
 
+    was_deleted = existing_document is not None and existing_document.deleted_at is not None
     document_id = existing_document.document_id if existing_document is not None else str(uuid4())
     yield {"type": "progress", "percentage": 90, "stage": "vector_storage", "message": "Saving searchable vectors"}
     if existing_document is not None:
@@ -280,6 +281,7 @@ async def index_document_events(
             existing_document.chunk_count = len(chunks)
             existing_document.allowed_roles = allowed_roles
             existing_document.allowed_users = allowed_users
+            existing_document.deleted_at = None
         await session.commit()
     except IntegrityError as error:
         await session.rollback()
@@ -291,7 +293,7 @@ async def index_document_events(
         return
     await record(
         session,
-        "document_reindexed" if existing_document is not None else "document_ingested",
+        "document_restored" if was_deleted else "document_reindexed" if existing_document is not None else "document_ingested",
         principal.tenant_id,
         principal.user_id,
         document_id=document_id,
@@ -307,7 +309,7 @@ async def index_document_events(
         "tables_indexed": parsed.table_count,
         "visuals_indexed": visuals_indexed,
         "reindexed": existing_document is not None,
-        "message": "Document was re-indexed" if existing_document is not None else "Document is searchable",
+        "message": "Document was restored and re-indexed" if was_deleted else "Document was re-indexed" if existing_document is not None else "Document is searchable",
     }
 
 
@@ -333,10 +335,11 @@ async def run_local_compute_session(compute_session_id: str, job_ids: list[str])
                 break
             job.state, job.stage, job.progress = "processing", "cold_start", 1
             job.message = "Compute available; starting document worker."
-            job.attempt_count += 1
+            attempt_count = job.attempt_count + 1
+            job.attempt_count = attempt_count
             await session.commit()
             principal = Principal(tenant_id=job.tenant_id, user_id=job.created_by, roles=job.allowed_roles)
-            existing = await get_document_by_content_hash(session, job.tenant_id, job.content_sha256)
+            existing = await get_document_by_content_hash(session, job.tenant_id, job.content_sha256, include_deleted=True)
             try:
                 async for event in index_document_events(job.content, job.content_type, job.content_sha256, job.document_name, job.allowed_roles, job.allowed_users, principal, session, existing):
                     elapsed = monotonic() - started
@@ -353,26 +356,57 @@ async def run_local_compute_session(compute_session_id: str, job_ids: list[str])
                         job.visuals_indexed = int(event["visuals_indexed"])
                     await session.commit()
             except asyncio.CancelledError:
-                job.state, job.stage, job.progress = "held_for_compute", "held", 0
-                job.message = "Session cancelled; document returned to held state."
+                await session.rollback()
+                await session.execute(
+                    update(IngestionJobRecord)
+                    .where(IngestionJobRecord.job_id == job_id)
+                    .values(
+                        state="held_for_compute",
+                        stage="held",
+                        progress=0,
+                        message="Session cancelled; document returned to held state.",
+                    )
+                )
                 await session.commit()
                 raise
             except Exception as error:
-                exhausted = job.attempt_count >= job.retry_limit
+                await session.rollback()
+                retry_limit = await session.scalar(
+                    select(IngestionJobRecord.retry_limit).where(IngestionJobRecord.job_id == job_id)
+                )
+                exhausted = retry_limit is None or attempt_count >= retry_limit
                 is_oom = "out of memory" in str(error).lower() or "oom" in str(error).lower()
-                job.state = "failed" if exhausted else "held_for_compute"
-                job.stage = "failed" if exhausted else "held"
-                job.progress = 0
-                job.error_code = "gpu_out_of_memory" if is_oom else "processing_failed"
-                job.error_message = str(error)[:500]
-                job.message = ("Retry limit exhausted." if exhausted else "Processing failed; document returned to held state for retry.")
+                await session.execute(
+                    update(IngestionJobRecord)
+                    .where(IngestionJobRecord.job_id == job_id)
+                    .values(
+                        state="failed" if exhausted else "held_for_compute",
+                        stage="failed" if exhausted else "held",
+                        progress=0,
+                        error_code="gpu_out_of_memory" if is_oom else "processing_failed",
+                        error_message=str(error)[:500],
+                        message="Retry limit exhausted." if exhausted else "Processing failed; document returned to held state for retry.",
+                    )
+                )
                 await session.commit()
             finally:
                 elapsed = monotonic() - started
-                job.gpu_seconds += elapsed
-                job.estimated_cost_usd = estimated_cost(job.gpu_seconds, settings.compute_gpu_hourly_cost_usd)
-                compute_session.gpu_seconds += elapsed
-                compute_session.estimated_cost_usd = estimated_cost(compute_session.gpu_seconds, settings.compute_gpu_hourly_cost_usd)
+                await session.execute(
+                    update(IngestionJobRecord)
+                    .where(IngestionJobRecord.job_id == job_id)
+                    .values(
+                        gpu_seconds=IngestionJobRecord.gpu_seconds + elapsed,
+                        estimated_cost_usd=(IngestionJobRecord.gpu_seconds + elapsed) * settings.compute_gpu_hourly_cost_usd / 3600,
+                    )
+                )
+                await session.execute(
+                    update(ComputeSessionRecord)
+                    .where(ComputeSessionRecord.session_id == compute_session_id)
+                    .values(
+                        gpu_seconds=ComputeSessionRecord.gpu_seconds + elapsed,
+                        estimated_cost_usd=(ComputeSessionRecord.gpu_seconds + elapsed) * settings.compute_gpu_hourly_cost_usd / 3600,
+                    )
+                )
                 await session.commit()
 
     async with SessionFactory() as session:

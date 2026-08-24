@@ -1,5 +1,14 @@
-from app.database import DocumentRecord
+from datetime import UTC, datetime
+from types import SimpleNamespace
+from unittest.mock import AsyncMock
+
+import pytest
+
+from app import main
+from app.database import ComputeSessionRecord, DocumentRecord, IngestionJobRecord
 from app.main import existing_document_event
+from app.models import Principal
+from app.repository import get_document_by_content_hash
 
 
 def test_existing_document_event_returns_existing_document_as_success() -> None:
@@ -26,3 +35,168 @@ def test_existing_document_event_returns_existing_document_as_success() -> None:
         "reindexed": False,
         "message": "Document is searchable",
     }
+
+
+class CapturingSession:
+    def __init__(self):
+        self.statement = None
+
+    async def scalar(self, statement):
+        self.statement = statement
+        return None
+
+
+@pytest.mark.asyncio
+async def test_content_hash_lookup_can_include_soft_deleted_documents() -> None:
+    session = CapturingSession()
+
+    await get_document_by_content_hash(session, "tenant-a", "a" * 64, include_deleted=True)
+
+    sql = str(session.statement.compile(compile_kwargs={"literal_binds": True}))
+    assert "documents.tenant_id = 'tenant-a'" in sql
+    assert "documents.content_sha256" in sql
+    assert "documents.deleted_at IS NULL" not in sql
+
+
+@pytest.mark.asyncio
+async def test_reindexing_soft_deleted_content_restores_existing_row(monkeypatch) -> None:
+    deleted_at = datetime.now(UTC)
+    document = DocumentRecord(
+        document_id="00000000-0000-0000-0000-000000000001",
+        tenant_id="tenant-a",
+        document_name="old.pdf",
+        content_type="application/pdf",
+        content_sha256="a" * 64,
+        size_bytes=100,
+        chunk_count=1,
+        allowed_roles=["admin"],
+        allowed_users=[],
+        created_by="user-a",
+        deleted_at=deleted_at,
+    )
+    session = AsyncMock()
+    delete_document = AsyncMock()
+    upsert_document = AsyncMock()
+
+    async def embed_batches(_chunks):
+        yield 1, 1, [[0.1, 0.2]]
+
+    monkeypatch.setattr(
+        main,
+        "get_settings",
+        lambda: SimpleNamespace(mineru_enabled=False, max_visuals_per_document=10, max_document_chunks=100),
+    )
+    monkeypatch.setattr(
+        main,
+        "extract_document",
+        lambda *_args: SimpleNamespace(text="restored text", visuals=[], described_visual_count=0, table_count=0),
+    )
+    monkeypatch.setattr(main, "chunk_text", lambda _text: ["restored text"])
+    monkeypatch.setattr(main.model_server, "embed_batches", embed_batches)
+    monkeypatch.setattr(main.vectors, "delete_document", delete_document)
+    monkeypatch.setattr(main.vectors, "upsert_document", upsert_document)
+    monkeypatch.setattr(main, "record", AsyncMock())
+
+    events = [
+        event
+        async for event in main.index_document_events(
+            b"restored content",
+            "application/pdf",
+            "a" * 64,
+            "restored.pdf",
+            ["admin"],
+            [],
+            Principal(tenant_id="tenant-a", user_id="user-a", roles=["admin"]),
+            session,
+            document,
+        )
+    ]
+
+    assert document.deleted_at is None
+    assert document.document_name == "restored.pdf"
+    assert events[-1]["percentage"] == 100
+    assert events[-1]["document_id"] == document.document_id
+    assert events[-1]["message"] == "Document was restored and re-indexed"
+    delete_document.assert_awaited_once_with("tenant-a", document.document_id)
+    assert upsert_document.await_args.args[1] == document.document_id
+
+
+@pytest.mark.asyncio
+async def test_compute_failure_after_rollback_is_persisted_with_sql_update(monkeypatch) -> None:
+    compute_session = ComputeSessionRecord(
+        session_id="session-a",
+        tenant_id="tenant-a",
+        provider="local_docker",
+        status="open",
+        max_jobs=1,
+        max_gpu_minutes=10,
+        max_estimated_cost_usd=None,
+        released_job_count=1,
+        gpu_seconds=0,
+        estimated_cost_usd=0,
+        created_by="user-a",
+    )
+    job = IngestionJobRecord(
+        job_id="job-a",
+        tenant_id="tenant-a",
+        state="provider_queued",
+        stage="queued",
+        progress=0,
+        message="Queued",
+        document_name="policy.pdf",
+        content_type="application/pdf",
+        content_sha256="a" * 64,
+        content=b"content",
+        size_bytes=7,
+        allowed_roles=["admin"],
+        allowed_users=[],
+        created_by="user-a",
+        attempt_count=0,
+        retry_limit=3,
+        chunks_indexed=0,
+        tables_indexed=0,
+        visuals_indexed=0,
+        gpu_seconds=0,
+        estimated_cost_usd=0,
+    )
+    session = AsyncMock()
+
+    async def get_record(model, _record_id):
+        return compute_session if model is ComputeSessionRecord else job
+
+    session.get.side_effect = get_record
+    session.scalar.side_effect = [3, 0]
+
+    class SessionContext:
+        async def __aenter__(self):
+            return session
+
+        async def __aexit__(self, *_args):
+            return False
+
+    async def failing_events(*_args, **_kwargs):
+        yield {"type": "progress", "percentage": 96, "stage": "metadata", "message": "Saving document metadata"}
+        await session.rollback()
+        raise RuntimeError("metadata commit failed")
+
+    monkeypatch.setattr(main, "SessionFactory", SessionContext)
+    monkeypatch.setattr(main, "get_document_by_content_hash", AsyncMock(return_value=None))
+    monkeypatch.setattr(main, "index_document_events", failing_events)
+    monkeypatch.setattr(
+        main,
+        "get_settings",
+        lambda: SimpleNamespace(compute_gpu_hourly_cost_usd=0.5),
+    )
+
+    await main.run_local_compute_session("session-a", ["job-a"])
+
+    update_parameters = [
+        call.args[0].compile().params
+        for call in session.execute.await_args_list
+        if call.args and hasattr(call.args[0], "compile")
+    ]
+    failure_updates = [parameters for parameters in update_parameters if parameters.get("error_code") == "processing_failed"]
+    assert len(failure_updates) == 1
+    assert failure_updates[0]["stage"] == "held"
+    assert failure_updates[0]["progress"] == 0
+    assert failure_updates[0]["error_code"] == "processing_failed"

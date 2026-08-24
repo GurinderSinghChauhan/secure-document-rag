@@ -17,7 +17,7 @@ async def test_chat_and_admin_pages_are_served_separately():
 
 
 def test_chat_page_links_to_admin_without_embedding_admin_controls():
-    html = Path("app/static/index.html").read_text()
+    html = Path("app/static/index.html").read_text(encoding="utf-8")
 
     assert 'href="/admin" data-admin-only' in html
     assert 'id="auth-gate" class="auth-gate" aria-labelledby="auth-title" hidden' in html
@@ -27,8 +27,8 @@ def test_chat_page_links_to_admin_without_embedding_admin_controls():
 
 
 def test_chat_composer_supports_voice_and_enter_to_send():
-    html = Path("app/static/index.html").read_text()
-    script = Path("app/static/app.js").read_text()
+    html = Path("app/static/index.html").read_text(encoding="utf-8")
+    script = Path("app/static/app.js").read_text(encoding="utf-8")
 
     assert 'id="voice-input-button"' in html
     assert "window.SpeechRecognition || window.webkitSpeechRecognition" in script
@@ -38,7 +38,7 @@ def test_chat_composer_supports_voice_and_enter_to_send():
 
 
 def test_chat_loads_authentication_session_controller_before_application():
-    html = Path("app/static/index.html").read_text()
+    html = Path("app/static/index.html").read_text(encoding="utf-8")
 
     session_script = '<script src="/assets/auth_session.js" defer></script>'
     application_script = '<script src="/assets/app.js" defer></script>'
@@ -47,8 +47,8 @@ def test_chat_loads_authentication_session_controller_before_application():
 
 
 def test_admin_page_is_role_gated_and_contains_management_workflows():
-    html = Path("app/static/admin.html").read_text()
-    script = Path("app/static/admin.js").read_text()
+    html = Path("app/static/admin.html").read_text(encoding="utf-8")
+    script = Path("app/static/admin.js").read_text(encoding="utf-8")
 
     assert 'id="upload-form"' in html
     assert 'id="held-jobs"' in html
@@ -73,7 +73,7 @@ def test_admin_page_is_role_gated_and_contains_management_workflows():
 
 
 def test_admin_page_places_compute_beside_upload_before_indexed_library():
-    html = Path("app/static/admin.html").read_text()
+    html = Path("app/static/admin.html").read_text(encoding="utf-8")
 
     assert html.index('id="documents"') < html.index('id="compute"')
     assert html.index('id="compute"') < html.index('id="indexed-documents"')
@@ -81,8 +81,8 @@ def test_admin_page_places_compute_beside_upload_before_indexed_library():
 
 
 def test_super_admin_page_is_platform_gated_and_contains_safe_controls():
-    html = Path("app/static/super_admin.html").read_text()
-    script = Path("app/static/super_admin.js").read_text()
+    html = Path("app/static/super_admin.html").read_text(encoding="utf-8")
+    script = Path("app/static/super_admin.js").read_text(encoding="utf-8")
 
     assert "Organizations and access" in html
     assert "Chat response evaluator" in html
@@ -95,13 +95,13 @@ def test_super_admin_page_is_platform_gated_and_contains_safe_controls():
 
 
 def test_hidden_role_navigation_cannot_be_overridden_by_component_display():
-    stylesheet = Path("app/static/app.css").read_text()
+    stylesheet = Path("app/static/app.css").read_text(encoding="utf-8")
 
     assert "[hidden] {\n  display: none !important;\n}" in stylesheet
 
 
 def test_platform_migration_adds_only_explicit_authority_fields():
-    migration = Path("migrations/versions/20260819_02_platform_admin.py").read_text()
+    migration = Path("migrations/versions/20260819_02_platform_admin.py").read_text(encoding="utf-8")
 
     assert 'op.add_column("organizations"' in migration
     assert 'op.add_column("users"' in migration
