@@ -1,5 +1,19 @@
+import re
+
+
+INDEX_NOISE_PATTERN = re.compile(r"mineru", re.IGNORECASE)
+
+
+def sanitize_index_text(text: str) -> str:
+    """Remove parser branding that must never be persisted in searchable chunks."""
+    sanitized = INDEX_NOISE_PATTERN.sub("", text)
+    sanitized = re.sub(r"[ \t]+", " ", sanitized)
+    sanitized = re.sub(r" *\n *", "\n", sanitized)
+    return re.sub(r"\n{3,}", "\n\n", sanitized).strip()
+
+
 def chunk_text(text: str, chunk_size: int = 1_200, overlap: int = 200) -> list[str]:
-    normalized = " ".join(text.split())
+    normalized = " ".join(sanitize_index_text(text).split())
     if not normalized:
         return []
     if len(normalized) <= chunk_size:

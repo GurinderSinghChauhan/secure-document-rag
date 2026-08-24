@@ -67,7 +67,7 @@ class ModelClient:
 
     async def describe_visual(self, visual: VisualAsset) -> str:
         encoded = base64.b64encode(visual.content).decode("ascii")
-        if visual.location.startswith("MinerU table"):
+        if visual.location.startswith("Extracted table"):
             prompt = (
                 "Transcribe this document table into clean Markdown for semantic search. Preserve the exact title, headers, "
                 "row labels, values, signs, dates, and units. Reconstruct merged cells into repeated values where useful. "

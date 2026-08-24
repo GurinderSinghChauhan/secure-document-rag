@@ -49,8 +49,9 @@ def test_parse_archive_extracts_markdown_tables_and_visuals():
     assert "Risk report" in parsed.text
     assert parsed.table_count == 1
     assert len(parsed.visuals) == 1
-    assert parsed.visuals[0].location == "MinerU chart, page 2"
+    assert parsed.visuals[0].location == "Extracted chart, page 2"
     assert parsed.described_visual_count == 0
+    assert "mineru" not in parsed.text.lower()
     assert "<td>" not in parsed.text
     assert "| High |" in parsed.text
 
@@ -65,7 +66,8 @@ After"""
 
     assert "<table>" not in normalized
     assert "<td>" not in normalized
-    assert "[MinerU table 1]" in normalized
+    assert "[Table 1]" in normalized
+    assert "mineru" not in normalized.lower()
     assert "| Tax | Year | Year |" in normalized
     assert "| Tax | 2025 | 2026 |" in normalized
     assert "| Total | 10 | 12 |" in normalized
@@ -80,7 +82,8 @@ def test_parse_archive_prefers_table_image_over_mineru_html() -> None:
 
     assert "| High |" not in parsed.text
     assert "transcribed from its extracted image" in parsed.text
-    assert any(visual.location == "MinerU table, page 1" for visual in parsed.visuals)
+    assert any(visual.location == "Extracted table, page 1" for visual in parsed.visuals)
+    assert "mineru" not in parsed.text.lower()
 
 
 def test_parse_archive_skips_redundant_enrichment_for_detailed_visual_content():

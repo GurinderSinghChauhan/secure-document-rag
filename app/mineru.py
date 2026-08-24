@@ -109,10 +109,10 @@ def normalize_html_tables(markdown: str, omit_tables: bool = False) -> str:
         nonlocal table_number
         table_number += 1
         if omit_tables:
-            return f"[MinerU table {table_number} is transcribed from its extracted image below]"
+            return f"[Table {table_number} is transcribed from its extracted image below]"
         try:
             rows = _html_table_rows(match.group(0))
-            return table_to_markdown(rows, f"MinerU table {table_number}")
+            return table_to_markdown(rows, f"Table {table_number}")
         except (ValueError, TypeError):
             return " ".join(html.fromstring(match.group(0)).text_content().split())
 
@@ -167,14 +167,14 @@ def _parse_archive(
                 image_references.append(
                     (
                         image_path,
-                        f"MinerU {item_type}, page {page_label}",
+                        f"Extracted {item_type}, page {page_label}",
                         "" if item_type == "table" else _visual_description(item),
                     )
                 )
 
             if not image_references:
                 image_references = [
-                    (name, f"MinerU extracted visual {index}", "")
+                    (name, f"Extracted visual {index}", "")
                     for index, name in enumerate(
                         sorted(name for name in names if "/images/" in f"/{name}"), start=1
                     )
