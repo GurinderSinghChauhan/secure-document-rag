@@ -69,7 +69,11 @@ app.mount("/assets", StaticFiles(directory="app/static"), name="assets")
 @app.middleware("http")
 async def security_headers(request: Request, call_next):
     response = await call_next(request)
-    response.headers["Cache-Control"] = "no-store"
+    response.headers["Cache-Control"] = (
+        "public, max-age=31536000, immutable"
+        if request.url.path.startswith("/assets/spa/assets/")
+        else "no-store"
+    )
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["Referrer-Policy"] = "no-referrer"
@@ -454,17 +458,17 @@ async def version() -> VersionResponse:
 
 @app.get("/", include_in_schema=False)
 async def chat_ui() -> FileResponse:
-    return FileResponse("app/static/index.html")
+    return FileResponse("app/static/spa/index.html")
 
 
 @app.get("/admin", include_in_schema=False)
 async def admin_ui() -> FileResponse:
-    return FileResponse("app/static/admin.html")
+    return FileResponse("app/static/spa/index.html")
 
 
 @app.get("/super-admin", include_in_schema=False)
 async def super_admin_ui() -> FileResponse:
-    return FileResponse("app/static/super_admin.html")
+    return FileResponse("app/static/spa/index.html")
 
 
 @app.get("/readyz", response_model=ReadinessResponse)

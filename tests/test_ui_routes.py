@@ -5,99 +5,85 @@ import pytest
 from app.main import admin_ui, chat_ui, super_admin_ui
 
 
+FRONTEND = Path("frontend")
+
+
 @pytest.mark.asyncio
-async def test_chat_and_admin_pages_are_served_separately():
-    chat_response = await chat_ui()
-    admin_response = await admin_ui()
-    super_admin_response = await super_admin_ui()
+async def test_all_application_routes_use_the_shared_spa_entrypoint():
+    responses = [await chat_ui(), await admin_ui(), await super_admin_ui()]
 
-    assert Path(chat_response.path).name == "index.html"
-    assert Path(admin_response.path).name == "admin.html"
-    assert Path(super_admin_response.path).name == "super_admin.html"
+    assert {Path(response.path) for response in responses} == {Path("app/static/spa/index.html")}
 
 
-def test_chat_page_links_to_admin_without_embedding_admin_controls():
-    html = Path("app/static/index.html").read_text(encoding="utf-8")
+def test_frontend_uses_the_approved_framework_foundation():
+    package = (FRONTEND / "package.json").read_text(encoding="utf-8")
 
-    assert 'href="/admin" data-admin-only' in html
-    assert 'id="auth-gate" class="auth-gate" aria-labelledby="auth-title" hidden' in html
-    assert 'id="upload-form"' not in html
-    assert 'id="held-jobs"' not in html
-    assert 'id="invite-form"' not in html
+    for dependency in ("react", "react-router-dom", "@tanstack/react-query", "@radix-ui/react-tabs", "vite", "typescript"):
+        assert f'"{dependency}"' in package
+    assert '"check": "npm run format:check && npm run lint && npm run typecheck && npm run test && npm run build"' in package
 
 
-def test_chat_composer_supports_voice_and_enter_to_send():
-    html = Path("app/static/index.html").read_text(encoding="utf-8")
-    script = Path("app/static/app.js").read_text(encoding="utf-8")
+def test_route_modules_are_lazy_loaded_and_role_guarded():
+    application = (FRONTEND / "src/app/App.tsx").read_text(encoding="utf-8")
 
-    assert 'id="voice-input-button"' in html
-    assert "window.SpeechRecognition || window.webkitSpeechRecognition" in script
-    assert 'event.key === "Enter" && !event.shiftKey' in script
-    assert "form.requestSubmit()" in script
-    assert "question_daily_limit" in script
-
-
-def test_chat_loads_authentication_session_controller_before_application():
-    html = Path("app/static/index.html").read_text(encoding="utf-8")
-
-    session_script = '<script src="/assets/auth_session.js" defer></script>'
-    application_script = '<script src="/assets/app.js" defer></script>'
-    assert session_script in html
-    assert html.index(session_script) < html.index(application_script)
+    assert 'import("../routes/ask/AskRoute")' in application
+    assert 'import("../routes/admin/AdminRoute")' in application
+    assert 'import("../routes/platform-admin/PlatformAdminRoute")' in application
+    assert 'path="/admin"' in application
+    assert 'role="admin"' in application
+    assert 'path="/super-admin"' in application
+    assert 'role="super-admin"' in application
 
 
-def test_admin_page_is_role_gated_and_contains_management_workflows():
-    html = Path("app/static/admin.html").read_text(encoding="utf-8")
-    script = Path("app/static/admin.js").read_text(encoding="utf-8")
+def test_react_features_preserve_existing_backend_workflows():
+    sources = "\n".join(path.read_text(encoding="utf-8") for path in (FRONTEND / "src/features").rglob("*.ts*"))
 
-    assert 'id="upload-form"' in html
-    assert 'id="held-jobs"' in html
-    assert 'id="select-all-jobs" type="checkbox"' in html
-    assert 'id="selected-job-count" role="status"' in html
-    assert 'id="max-jobs" type="number" min="0" value="0" readonly' in html
-    assert 'id="max-gpu-minutes" type="number" min="0" value="0" readonly' in html
-    assert 'id="max-cost"' not in html
-    assert 'id="invite-form"' in html
-    assert 'id="indexed-document-list"' in html
-    assert 'id="indexed-document-search" type="search"' in html
-    assert "/v1/admin/documents" in script
-    assert "recommended_gpu_minutes" in script
-    assert "maxJobs.value = String(selectedJobs.length)" in script
-    assert "maxGpuMinutes.value = String(suggestedMinutes)" in script
-    assert "max_estimated_cost_usd" not in script
-    assert "new Set(queued.map" in script
-    assert 'indexedDocumentSearch.addEventListener("input", renderIndexedDocuments)' in script
-    assert "data-delete-document" in script
-    assert 'payload.user?.role !== "admin"' in script
-    assert 'location.replace("/")' in script
+    for endpoint in (
+        "/v1/query/stream",
+        "/v1/chats",
+        "/v1/documents/stream",
+        "/v1/admin/documents",
+        "/v1/admin/ingestion-jobs?state=held_for_compute",
+        "/v1/admin/compute-sessions",
+        "/v1/admin/organization/members",
+        "/v1/admin/organization/invitations",
+        "/v1/super-admin/organizations",
+        "/v1/super-admin/chat-responses",
+    ):
+        assert endpoint in sources
 
 
-def test_admin_page_places_compute_beside_upload_before_indexed_library():
-    html = Path("app/static/admin.html").read_text(encoding="utf-8")
+def test_frontend_is_feature_first_and_route_composed():
+    expected = (
+        "src/app/App.tsx",
+        "src/api/client.ts",
+        "src/components/layout/AppShell.tsx",
+        "src/components/ui/PasswordField.tsx",
+        "src/features/auth/index.ts",
+        "src/features/chat/index.ts",
+        "src/features/compute/index.ts",
+        "src/features/documents/index.ts",
+        "src/features/organization/index.ts",
+        "src/features/platform-oversight/index.ts",
+        "src/routes/ask/AskRoute.tsx",
+        "src/routes/admin/AdminRoute.tsx",
+        "src/routes/platform-admin/PlatformAdminRoute.tsx",
+    )
 
-    assert html.index('id="documents"') < html.index('id="compute"')
-    assert html.index('id="compute"') < html.index('id="indexed-documents"')
-    assert html.count('class="admin-card workflow-card"') == 2
-
-
-def test_super_admin_page_is_platform_gated_and_contains_safe_controls():
-    html = Path("app/static/super_admin.html").read_text(encoding="utf-8")
-    script = Path("app/static/super_admin.js").read_text(encoding="utf-8")
-
-    assert "Organizations and access" in html
-    assert "Chat response evaluator" in html
-    assert "/v1/super-admin/organizations" in script
-    assert "/v1/super-admin/chat-responses" in script
-    assert 'name="${name.toLowerCase()}"' in script
-    assert "payload.user?.is_super_admin" in script
-    assert "Revoke every active session" in script
-    assert 'location.replace("/")' in script
+    assert all((FRONTEND / path).is_file() for path in expected)
 
 
-def test_hidden_role_navigation_cannot_be_overridden_by_component_display():
-    stylesheet = Path("app/static/app.css").read_text(encoding="utf-8")
+def test_production_build_is_node_free_and_uses_hashed_asset_caching():
+    dockerfile = Path("Dockerfile").read_text(encoding="utf-8")
+    server = Path("app/main.py").read_text(encoding="utf-8")
+    vite = (FRONTEND / "vite.config.ts").read_text(encoding="utf-8")
 
-    assert "[hidden] {\n  display: none !important;\n}" in stylesheet
+    assert "FROM node:" in dockerfile
+    assert "COPY --from=frontend" in dockerfile
+    assert dockerfile.rindex("FROM python:") > dockerfile.index("FROM node:")
+    assert 'command === "build" ? "/assets/spa/" : "/"' in vite
+    assert 'request.url.path.startswith("/assets/spa/assets/")' in server
+    assert '"public, max-age=31536000, immutable"' in server
 
 
 def test_platform_migration_adds_only_explicit_authority_fields():
