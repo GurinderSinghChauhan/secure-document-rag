@@ -77,6 +77,7 @@ async def test_reindexing_soft_deleted_content_restores_existing_row(monkeypatch
     session = AsyncMock()
     delete_document = AsyncMock()
     upsert_document = AsyncMock()
+    extract_metadata = AsyncMock(return_value={"invoice_number": "INV-42", "total_amount": "1250.00"})
 
     async def embed_batches(_chunks):
         yield 1, 1, [[0.1, 0.2]]
@@ -93,6 +94,7 @@ async def test_reindexing_soft_deleted_content_restores_existing_row(monkeypatch
     )
     monkeypatch.setattr(main, "chunk_text", lambda _text: ["restored text"])
     monkeypatch.setattr(main.model_server, "embed_batches", embed_batches)
+    monkeypatch.setattr(main.model_server, "extract_metadata", extract_metadata)
     monkeypatch.setattr(main.vectors, "delete_document", delete_document)
     monkeypatch.setattr(main.vectors, "upsert_document", upsert_document)
     monkeypatch.setattr(main, "record", AsyncMock())
@@ -109,16 +111,25 @@ async def test_reindexing_soft_deleted_content_restores_existing_row(monkeypatch
             Principal(tenant_id="tenant-a", user_id="user-a", roles=["admin"]),
             session,
             document,
+            "accounts_payable.invoice",
         )
     ]
 
     assert document.deleted_at is None
     assert document.document_name == "restored.pdf"
+    assert document.document_type == "accounts_payable.invoice"
+    assert document.schema_version == 1
+    assert document.extraction_status == "completed"
+    assert document.extracted_metadata == {"invoice_number": "INV-42", "total_amount": "1250.00"}
+    assert any(event.get("stage") == "metadata_extraction" for event in events)
     assert events[-1]["percentage"] == 100
     assert events[-1]["document_id"] == document.document_id
     assert events[-1]["message"] == "Document was restored and re-indexed"
     delete_document.assert_awaited_once_with("tenant-a", document.document_id)
     assert upsert_document.await_args.args[1] == document.document_id
+    extract_metadata.assert_awaited_once()
+    assert extract_metadata.await_args.args[0] == "Invoice"
+    assert "invoice_number" in extract_metadata.await_args.args[1]
 
 
 @pytest.mark.asyncio

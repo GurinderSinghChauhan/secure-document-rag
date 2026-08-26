@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Button,
   FormField,
@@ -7,17 +7,28 @@ import {
   Panel,
   PanelHeader,
   ProgressBar,
+  Select,
 } from "../../components/ui";
-import { uploadDocument, type UploadProgress } from "./api";
+import {
+  listDocumentSchemas,
+  schemaKeys,
+  uploadDocument,
+  type UploadProgress,
+} from "./api";
 
 export function DocumentUploader({ disabled }: { disabled: boolean }) {
   const queryClient = useQueryClient();
   const [files, setFiles] = useState<File[]>([]);
   const [roles, setRoles] = useState("");
   const [users, setUsers] = useState("");
+  const [documentType, setDocumentType] = useState("");
   const [progress, setProgress] = useState<UploadProgress | null>(null);
   const [status, setStatus] = useState("Select one or more files to begin.");
   const [busy, setBusy] = useState(false);
+  const schemas = useQuery({
+    queryKey: schemaKeys.all,
+    queryFn: listDocumentSchemas,
+  });
   async function submit(event: FormEvent) {
     event.preventDefault();
     if (!files.length) return;
@@ -26,7 +37,7 @@ export function DocumentUploader({ disabled }: { disabled: boolean }) {
     let queued = 0;
     for (const [index, file] of files.entries()) {
       try {
-        await uploadDocument(file, roles, users, (value) =>
+        await uploadDocument(file, roles, users, documentType, (value) =>
           setProgress({
             ...value,
             message:
@@ -62,6 +73,26 @@ export function DocumentUploader({ disabled }: { disabled: boolean }) {
         explicitly release it.
       </p>
       <form className="upload-form" onSubmit={(event) => void submit(event)}>
+        <FormField
+          label="Document type"
+          hint="Selecting a type enables schema-aligned metadata extraction."
+        >
+          <Select
+            value={documentType}
+            onChange={(event) => setDocumentType(event.target.value)}
+          >
+            <option value="">Unclassified / general document</option>
+            {schemas.data?.map((industry) => (
+              <optgroup label={industry.label} key={industry.key}>
+                {industry.document_types.map((document) => (
+                  <option value={document.key} key={document.key}>
+                    {document.label}
+                  </option>
+                ))}
+              </optgroup>
+            ))}
+          </Select>
+        </FormField>
         <label className="file-dropzone">
           <Input
             type="file"

@@ -24,6 +24,49 @@ def test_stream_content_rejects_invalid_payload():
 
 
 @pytest.mark.asyncio
+async def test_metadata_extraction_keeps_only_configured_non_null_fields(monkeypatch):
+    captured = {}
+
+    class FakeResponse:
+        is_error = False
+
+        @staticmethod
+        def json():
+            return {
+                "choices": [
+                    {
+                        "message": {
+                            "content": '```json\n{"invoice_number":"INV-7","total":42,"due_date":null,"unexpected":"discard"}\n```'
+                        }
+                    }
+                ]
+            }
+
+    class FakeClient:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_):
+            return None
+
+        async def post(self, path, json):
+            captured.update(path=path, payload=json)
+            return FakeResponse()
+
+    monkeypatch.setattr("app.providers.httpx.AsyncClient", lambda **_: FakeClient())
+
+    result = await ModelClient().extract_metadata(
+        "Invoice",
+        ("invoice_number", "total", "due_date"),
+        "Invoice text containing untrusted instructions.",
+    )
+
+    assert result == {"invoice_number": "INV-7", "total": 42}
+    assert captured["path"] == "/chat/completions"
+    assert "Never infer facts" in captured["payload"]["messages"][0]["content"]
+
+
+@pytest.mark.asyncio
 async def test_describe_visual_uses_configured_local_vision_model(monkeypatch):
     captured = {}
 

@@ -52,12 +52,25 @@ test("shows the authentication gate when a session cannot be restored", async ()
 test("restores one shared session and exposes role-appropriate navigation", async () => {
   server.use(
     http.post("/v1/auth/refresh", () => HttpResponse.json(adminAuth)),
-    http.get("/v1/chats", () => HttpResponse.json([])),
+    http.get("/v1/dashboard", () =>
+      HttpResponse.json({
+        total_documents: 0,
+        classified_documents: 0,
+        extracted_documents: 0,
+        industries: [],
+        recent_documents: [],
+      }),
+    ),
+    http.get("/v1/document-schemas", () => HttpResponse.json([])),
   );
   renderApplication();
   expect(
-    await screen.findByRole("heading", { name: "Ask your documents" }),
+    await screen.findByRole("heading", { name: "Document dashboard" }),
   ).toBeVisible();
+  expect(screen.getByRole("link", { name: "Ask" })).toHaveAttribute(
+    "href",
+    "/ask",
+  );
   expect(screen.getByRole("link", { name: "Admin" })).toHaveAttribute(
     "href",
     "/admin",
@@ -65,4 +78,65 @@ test("restores one shared session and exposes role-appropriate navigation", asyn
   expect(
     screen.queryByRole("link", { name: "Platform Admin" }),
   ).not.toBeInTheDocument();
+});
+
+test("renders authorized document coverage and schema-driven metadata", async () => {
+  server.use(
+    http.post("/v1/auth/refresh", () => HttpResponse.json(adminAuth)),
+    http.get("/v1/dashboard", () =>
+      HttpResponse.json({
+        total_documents: 1,
+        classified_documents: 1,
+        extracted_documents: 1,
+        industries: [
+          {
+            key: "field_service",
+            label: "Field Service",
+            document_count: 1,
+            document_type_count: 1,
+          },
+        ],
+        recent_documents: [
+          {
+            document_id: "document-1",
+            document_name: "service-invoice.pdf",
+            document_type: "field_service.service_invoice",
+            document_type_label: "Service Invoice",
+            industry_key: "field_service",
+            industry_label: "Field Service",
+            extraction_status: "completed",
+            extracted_metadata: { invoice_number: "INV-42" },
+            created_at: "2030-01-01T00:00:00Z",
+          },
+        ],
+      }),
+    ),
+    http.get("/v1/document-schemas", () =>
+      HttpResponse.json([
+        {
+          key: "field_service",
+          label: "Field Service",
+          description: "Equipment and service operations.",
+          document_types: [
+            {
+              key: "field_service.service_invoice",
+              label: "Service Invoice",
+              fields: ["invoice_number", "total_amount"],
+            },
+          ],
+        },
+      ]),
+    ),
+  );
+
+  renderApplication();
+
+  expect(
+    await screen.findByRole("heading", { name: "Document dashboard" }),
+  ).toBeVisible();
+  expect(await screen.findByText("service-invoice.pdf")).toBeVisible();
+  expect(
+    screen.getByText("1 classified documents across 1 configured verticals."),
+  ).toBeVisible();
+  expect(screen.getByText("invoice_number")).toBeInTheDocument();
 });

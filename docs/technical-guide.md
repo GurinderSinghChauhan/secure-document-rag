@@ -31,10 +31,11 @@ All services are intended to run in a private network. Docker Compose publishes 
 4. PDF, DOCX, PPTX, and XLSX bodies are sent over the private network to MinerU's `/file_parse` endpoint. The API requests an in-memory ZIP containing Markdown, legacy content-list JSON, and extracted images; it rejects unsafe paths and archives exceeding `MINERU_MAX_OUTPUT_BYTES`.
 5. MinerU preserves reading order and emits OCR text, HTML tables, formulas, captions, chart content, and figure paths. Detailed visual descriptions are indexed directly, avoiding a redundant model call. Only descriptions shorter than `MINERU_VISUAL_ENRICHMENT_MIN_CHARACTERS` are normalized by Pillow and sent to `VISION_MODEL`.
 6. Remaining visual requests run with bounded `VISUAL_ANALYSIS_CONCURRENCY`. The vision prompt asks for searchable chart values, diagram relationships, labels, OCR text, and visible objects while treating image text as untrusted data. Raw visual bytes are released after ingestion and are not stored in Qdrant or PostgreSQL.
-7. `chunk_text` combines extracted text, table content, and visual descriptions into 1,200-character chunks with a 200-character overlap.
-8. The model server creates dense text embeddings using `EMBEDDING_MODEL` in batches of `EMBEDDING_BATCH_SIZE`. This implementation uses caption-based visual retrieval rather than a separate image embedding space.
-9. Qdrant stores each vector with `document_id`, `document_name`, `chunk_index`, `text`, `allowed_roles`, and `allowed_users`.
-10. PostgreSQL records the document metadata and SHA-256 content hash. A duplicate active hash within the same tenant is rejected.
+7. If `X-Document-Type` contains a registered schema key, the model server extracts only that schema's configured fields from the combined untrusted text. PostgreSQL records the schema version, extraction status, and filtered JSON result; extraction failure does not prevent indexing.
+8. `chunk_text` combines extracted text, table content, and visual descriptions into 1,200-character chunks with a 200-character overlap.
+9. The model server creates dense text embeddings using `EMBEDDING_MODEL` in batches of `EMBEDDING_BATCH_SIZE`. This implementation uses caption-based visual retrieval rather than a separate image embedding space.
+10. Qdrant stores each vector with `document_id`, `document_name`, `chunk_index`, `text`, `allowed_roles`, and `allowed_users`.
+11. PostgreSQL records the document metadata and SHA-256 content hash. A duplicate active hash within the same tenant is rejected.
 
 ### Retrieval
 
@@ -65,6 +66,8 @@ Authorization: Bearer <short-lived-access-jwt>
 | `GET` | `/v1/auth/me` | Authorized user | Return the current account, role, and organization |
 | `GET/PATCH/POST/PUT` | `/v1/super-admin/*` | Platform super admin | Inspect organizations/users, control access, and list or evaluate chat responses |
 | `GET` | `/v1/admin/documents` | Organization admin | List active indexed documents for the authenticated organization |
+| `GET` | `/v1/document-schemas` | Authorized user | List versioned industry and document-type extraction schemas |
+| `GET` | `/v1/dashboard` | Authorized user | Return ACL-filtered document-intelligence summaries and recent documents |
 | `DELETE` | `/v1/documents/{document_id}` | Organization admin | Remove document vectors and soft-delete organization-scoped metadata |
 | `GET` | `/version` | Public | Report semantic application version and source commit |
 

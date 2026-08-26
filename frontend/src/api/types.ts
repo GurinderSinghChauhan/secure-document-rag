@@ -47,6 +47,7 @@ export interface ChatDetail extends ChatSummary {
 export interface IngestionJob {
   job_id: string;
   document_name: string;
+  document_type: string | null;
   content_type: string;
   size_bytes: number;
   recommended_gpu_minutes: number;
@@ -68,6 +69,10 @@ export interface IngestionJob {
 export interface IndexedDocument {
   document_id: string;
   document_name: string;
+  document_type: string | null;
+  schema_version: number;
+  extraction_status: "not_requested" | "completed" | "failed";
+  extracted_metadata: Record<string, unknown>;
   content_type: string;
   size_bytes: number;
   chunk_count: number;
@@ -75,6 +80,46 @@ export interface IndexedDocument {
   allowed_users: string[];
   created_by: string;
   created_at: string;
+}
+
+export interface DocumentTypeSchema {
+  key: string;
+  label: string;
+  fields: string[];
+}
+
+export interface IndustrySchema {
+  key: string;
+  label: string;
+  description: string;
+  document_types: DocumentTypeSchema[];
+}
+
+export interface DashboardDocument {
+  document_id: string;
+  document_name: string;
+  document_type: string | null;
+  document_type_label: string;
+  industry_key: string | null;
+  industry_label: string;
+  extraction_status: "not_requested" | "completed" | "failed";
+  extracted_metadata: Record<string, unknown>;
+  created_at: string;
+}
+
+export interface DashboardIndustry {
+  key: string;
+  label: string;
+  document_count: number;
+  document_type_count: number;
+}
+
+export interface Dashboard {
+  total_documents: number;
+  classified_documents: number;
+  extracted_documents: number;
+  industries: DashboardIndustry[];
+  recent_documents: DashboardDocument[];
 }
 
 export interface ComputeSession {

@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from app.main import admin_ui, chat_ui, super_admin_ui
+from app.main import admin_ui, ask_ui, chat_ui, super_admin_ui
 
 
 FRONTEND = Path("frontend")
@@ -10,7 +10,7 @@ FRONTEND = Path("frontend")
 
 @pytest.mark.asyncio
 async def test_all_application_routes_use_the_shared_spa_entrypoint():
-    responses = [await chat_ui(), await admin_ui(), await super_admin_ui()]
+    responses = [await chat_ui(), await ask_ui(), await admin_ui(), await super_admin_ui()]
 
     assert {Path(response.path) for response in responses} == {Path("app/static/spa/index.html")}
 
@@ -27,6 +27,7 @@ def test_route_modules_are_lazy_loaded_and_role_guarded():
     application = (FRONTEND / "src/app/App.tsx").read_text(encoding="utf-8")
 
     assert 'import("../routes/ask/AskRoute")' in application
+    assert 'import("../routes/dashboard/DashboardRoute")' in application
     assert 'import("../routes/admin/AdminRoute")' in application
     assert 'import("../routes/platform-admin/PlatformAdminRoute")' in application
     assert 'path="/admin"' in application
@@ -43,6 +44,8 @@ def test_react_features_preserve_existing_backend_workflows():
         "/v1/chats",
         "/v1/documents/stream",
         "/v1/admin/documents",
+        "/v1/dashboard",
+        "/v1/document-schemas",
         "/v1/admin/ingestion-jobs?state=held_for_compute",
         "/v1/admin/compute-sessions",
         "/v1/admin/organization/members",
@@ -63,10 +66,12 @@ def test_frontend_is_feature_first_and_route_composed():
         "src/features/chat/index.ts",
         "src/features/compute/index.ts",
         "src/features/documents/index.ts",
+        "src/features/dashboard/index.ts",
         "src/features/organization/index.ts",
         "src/features/platform-oversight/index.ts",
         "src/routes/ask/AskRoute.tsx",
         "src/routes/admin/AdminRoute.tsx",
+        "src/routes/dashboard/DashboardRoute.tsx",
         "src/routes/platform-admin/PlatformAdminRoute.tsx",
     )
 

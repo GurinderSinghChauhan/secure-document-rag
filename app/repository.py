@@ -1,7 +1,8 @@
 from datetime import UTC, datetime
 from uuid import uuid4
 
-from sqlalchemy import select, text
+from sqlalchemy import cast, or_, select, text
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .database import AuditEvent, ChatMessageRecord, ChatSessionRecord, DocumentRecord
@@ -44,6 +45,26 @@ async def list_documents(session: AsyncSession, tenant_id: str, limit: int = 500
         .where(DocumentRecord.tenant_id == tenant_id, DocumentRecord.deleted_at.is_(None))
         .order_by(DocumentRecord.created_at.desc(), DocumentRecord.document_id.desc())
         .limit(limit)
+    )
+    return list(result)
+
+
+async def list_authorized_documents(
+    session: AsyncSession,
+    tenant_id: str,
+    roles: list[str],
+    user_id: str,
+) -> list[DocumentRecord]:
+    access_conditions = [cast(DocumentRecord.allowed_users, JSONB).contains([user_id])]
+    access_conditions.extend(cast(DocumentRecord.allowed_roles, JSONB).contains([role]) for role in roles)
+    result = await session.scalars(
+        select(DocumentRecord)
+        .where(
+            DocumentRecord.tenant_id == tenant_id,
+            DocumentRecord.deleted_at.is_(None),
+            or_(*access_conditions),
+        )
+        .order_by(DocumentRecord.created_at.desc(), DocumentRecord.document_id.desc())
     )
     return list(result)
 
