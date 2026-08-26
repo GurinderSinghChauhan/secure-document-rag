@@ -108,6 +108,9 @@ class IndexedDocumentResponse(BaseModel):
     document_name: str
     document_type: str | None = None
     schema_version: int = 1
+    classification_status: str = "unclassified"
+    classification_source: str = "automatic"
+    classification_confidence: float | None = None
     extraction_status: str = "not_requested"
     extracted_metadata: dict[str, object] = Field(default_factory=dict)
     content_type: str
@@ -139,6 +142,9 @@ class DashboardDocumentResponse(BaseModel):
     document_type_label: str
     industry_key: str | None
     industry_label: str
+    classification_status: str
+    classification_source: str
+    classification_confidence: float | None
     extraction_status: str
     extracted_metadata: dict[str, object]
     created_at: datetime
@@ -155,6 +161,7 @@ class DashboardResponse(BaseModel):
     total_documents: int
     classified_documents: int
     extracted_documents: int
+    review_required_documents: int
     industries: list[DashboardIndustryResponse]
     recent_documents: list[DashboardDocumentResponse]
 

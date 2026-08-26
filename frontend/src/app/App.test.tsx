@@ -57,6 +57,7 @@ test("restores one shared session and exposes role-appropriate navigation", asyn
         total_documents: 0,
         classified_documents: 0,
         extracted_documents: 0,
+        review_required_documents: 0,
         industries: [],
         recent_documents: [],
       }),
@@ -88,6 +89,7 @@ test("renders authorized document coverage and schema-driven metadata", async ()
         total_documents: 1,
         classified_documents: 1,
         extracted_documents: 1,
+        review_required_documents: 1,
         industries: [
           {
             key: "field_service",
@@ -104,6 +106,9 @@ test("renders authorized document coverage and schema-driven metadata", async ()
             document_type_label: "Service Invoice",
             industry_key: "field_service",
             industry_label: "Field Service",
+            classification_status: "review_required",
+            classification_source: "automatic",
+            classification_confidence: 0.72,
             extraction_status: "completed",
             extracted_metadata: { invoice_number: "INV-42" },
             created_at: "2030-01-01T00:00:00Z",
@@ -139,4 +144,6 @@ test("renders authorized document coverage and schema-driven metadata", async ()
     screen.getByText("1 classified documents across 1 configured verticals."),
   ).toBeVisible();
   expect(screen.getByText("invoice_number")).toBeInTheDocument();
+  expect(screen.getByText("Review type")).toBeVisible();
+  expect(screen.getByText("Detection confidence: 72%")).toBeVisible();
 });

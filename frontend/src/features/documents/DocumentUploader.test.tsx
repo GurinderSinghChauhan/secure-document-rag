@@ -18,6 +18,10 @@ function renderUploader() {
 test("selecting a folder keeps PDFs and reports ignored non-PDF files", async () => {
   server.use(http.get("/v1/document-schemas", () => HttpResponse.json([])));
   renderUploader();
+  expect(screen.getByLabelText("Document type")).toHaveValue("");
+  expect(
+    screen.getByRole("option", { name: "Auto-detect document type" }),
+  ).toBeVisible();
   const pdf = new File(["pdf"], "invoice.pdf", {
     type: "application/pdf",
   });

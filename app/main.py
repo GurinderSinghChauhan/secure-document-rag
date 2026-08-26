@@ -106,6 +106,19 @@ def document_is_authorized(document: DocumentRecord, principal: Principal) -> bo
     return bool(set(document.allowed_roles).intersection(principal.roles)) or principal.user_id in document.allowed_users
 
 
+def classification_decision(
+    candidate: str,
+    confidence: float,
+    auto_accept_threshold: float,
+    review_threshold: float,
+) -> tuple[str | None, str]:
+    if confidence >= auto_accept_threshold:
+        return candidate, "confirmed"
+    if confidence >= review_threshold:
+        return candidate, "review_required"
+    return None, "unclassified"
+
+
 def encode_event(event: dict[str, object]) -> str:
     return json.dumps(event) + "\n"
 
@@ -132,6 +145,8 @@ def job_response(job: IngestionJobRecord) -> IngestionJobResponse:
 def indexed_document_response(document: DocumentRecord) -> IndexedDocumentResponse:
     values = {column.name: getattr(document, column.name) for column in DocumentRecord.__table__.columns}
     values["schema_version"] = values.get("schema_version") or SCHEMA_VERSION
+    values["classification_status"] = values.get("classification_status") or "unclassified"
+    values["classification_source"] = values.get("classification_source") or "automatic"
     values["extraction_status"] = values.get("extraction_status") or "not_requested"
     values["extracted_metadata"] = values.get("extracted_metadata") or {}
     return IndexedDocumentResponse.model_validate(values)
@@ -280,9 +295,48 @@ async def index_document_events(
     if len(chunks) > settings.max_document_chunks:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Document exceeds configured chunk limit")
 
+    resolved_document_type = document_type
+    classification_status = "confirmed" if document_type else "unclassified"
+    classification_source = "manual" if document_type else "automatic"
+    classification_confidence: float | None = None
+    if document_type is None:
+        yield {
+            "type": "progress",
+            "percentage": 25,
+            "stage": "classification",
+            "message": "Detecting document type",
+        }
+        try:
+            candidate, confidence = await model_server.classify_document(
+                tuple(
+                    (key, schema.label)
+                    for key, (_, schema) in DOCUMENT_SCHEMAS.items()
+                ),
+                index_text,
+            )
+            classification_confidence = confidence
+            auto_accept_threshold = getattr(
+                settings,
+                "classification_auto_accept_threshold",
+                0.85,
+            )
+            review_threshold = getattr(
+                settings,
+                "classification_review_threshold",
+                0.60,
+            )
+            resolved_document_type, classification_status = classification_decision(
+                candidate,
+                confidence,
+                auto_accept_threshold,
+                review_threshold,
+            )
+        except HTTPException:
+            classification_status = "failed"
+
     extracted_metadata: dict[str, object] = {}
     extraction_status = "not_requested"
-    schema = require_document_schema(document_type)
+    schema = require_document_schema(resolved_document_type)
     if schema is not None:
         yield {"type": "progress", "percentage": 26, "stage": "metadata_extraction", "message": f"Extracting {schema.label} fields"}
         try:
@@ -312,11 +366,14 @@ async def index_document_events(
     yield {"type": "progress", "percentage": 96, "stage": "metadata", "message": "Saving document metadata"}
     try:
         if existing_document is None:
-            session.add(DocumentRecord(document_id=document_id, tenant_id=principal.tenant_id, document_name=document_name, document_type=document_type, schema_version=SCHEMA_VERSION, extraction_status=extraction_status, extracted_metadata=extracted_metadata, content_type=content_type, content_sha256=content_sha256, size_bytes=len(content), chunk_count=len(chunks), allowed_roles=allowed_roles, allowed_users=allowed_users, created_by=principal.user_id))
+            session.add(DocumentRecord(document_id=document_id, tenant_id=principal.tenant_id, document_name=document_name, document_type=resolved_document_type, schema_version=SCHEMA_VERSION, classification_status=classification_status, classification_source=classification_source, classification_confidence=classification_confidence, extraction_status=extraction_status, extracted_metadata=extracted_metadata, content_type=content_type, content_sha256=content_sha256, size_bytes=len(content), chunk_count=len(chunks), allowed_roles=allowed_roles, allowed_users=allowed_users, created_by=principal.user_id))
         else:
             existing_document.document_name = document_name
-            existing_document.document_type = document_type
+            existing_document.document_type = resolved_document_type
             existing_document.schema_version = SCHEMA_VERSION
+            existing_document.classification_status = classification_status
+            existing_document.classification_source = classification_source
+            existing_document.classification_confidence = classification_confidence
             existing_document.extraction_status = extraction_status
             existing_document.extracted_metadata = extracted_metadata
             existing_document.content_type = content_type
@@ -343,6 +400,10 @@ async def index_document_events(
         chunks=len(chunks),
         tables=parsed.table_count,
         visuals=visuals_indexed,
+        document_type=resolved_document_type,
+        classification_status=classification_status,
+        classification_source=classification_source,
+        classification_confidence=classification_confidence,
     )
     yield {
         "type": "complete",
@@ -553,6 +614,7 @@ async def dashboard(
     recent_documents: list[DashboardDocumentResponse] = []
     classified_documents = 0
     extracted_documents = 0
+    review_required_documents = 0
     for document in documents:
         match = DOCUMENT_SCHEMAS.get(document.document_type or "")
         if match:
@@ -567,6 +629,10 @@ async def dashboard(
             industry_key = None
             industry_label = "Needs classification"
         extraction_status = document.extraction_status or "not_requested"
+        classification_status = document.classification_status or "unclassified"
+        classification_source = document.classification_source or "automatic"
+        if classification_status == "review_required":
+            review_required_documents += 1
         extracted_metadata = document.extracted_metadata or {}
         if extraction_status == "completed":
             extracted_documents += 1
@@ -579,6 +645,9 @@ async def dashboard(
                     document_type_label=document_type_label,
                     industry_key=industry_key,
                     industry_label=industry_label,
+                    classification_status=classification_status,
+                    classification_source=classification_source,
+                    classification_confidence=document.classification_confidence,
                     extraction_status=extraction_status,
                     extracted_metadata=extracted_metadata,
                     created_at=document.created_at,
@@ -588,6 +657,7 @@ async def dashboard(
         total_documents=len(documents),
         classified_documents=classified_documents,
         extracted_documents=extracted_documents,
+        review_required_documents=review_required_documents,
         industries=[
             DashboardIndustryResponse(
                 key=industry.key,

@@ -207,6 +207,19 @@
   gap: 4px;
 }
 
+.document-status-badges {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.classification-confidence {
+  margin: 10px 0 0;
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+
 .dashboard-document-card small,
 .dashboard-document-card time {
   color: var(--text-secondary);

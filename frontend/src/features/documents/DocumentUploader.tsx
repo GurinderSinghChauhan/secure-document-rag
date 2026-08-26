@@ -98,13 +98,13 @@ export function DocumentUploader({ disabled }: { disabled: boolean }) {
       <form className="upload-form" onSubmit={(event) => void submit(event)}>
         <FormField
           label="Document type"
-          hint="Selecting a type enables schema-aligned metadata extraction."
+          hint="Auto-detect classifies each document independently. Select a type only to override detection for every selected file."
         >
           <Select
             value={documentType}
             onChange={(event) => setDocumentType(event.target.value)}
           >
-            <option value="">Unclassified / general document</option>
+            <option value="">Auto-detect document type</option>
             {schemas.data?.map((industry) => (
               <optgroup label={industry.label} key={industry.key}>
                 {industry.document_types.map((document) => (

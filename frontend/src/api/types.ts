@@ -71,6 +71,10 @@ export interface IndexedDocument {
   document_name: string;
   document_type: string | null;
   schema_version: number;
+  classification_status:
+    "confirmed" | "review_required" | "unclassified" | "failed";
+  classification_source: "automatic" | "manual";
+  classification_confidence: number | null;
   extraction_status: "not_requested" | "completed" | "failed";
   extracted_metadata: Record<string, unknown>;
   content_type: string;
@@ -102,6 +106,10 @@ export interface DashboardDocument {
   document_type_label: string;
   industry_key: string | null;
   industry_label: string;
+  classification_status:
+    "confirmed" | "review_required" | "unclassified" | "failed";
+  classification_source: "automatic" | "manual";
+  classification_confidence: number | null;
   extraction_status: "not_requested" | "completed" | "failed";
   extracted_metadata: Record<string, unknown>;
   created_at: string;
@@ -118,6 +126,7 @@ export interface Dashboard {
   total_documents: number;
   classified_documents: number;
   extracted_documents: number;
+  review_required_documents: number;
   industries: DashboardIndustry[];
   recent_documents: DashboardDocument[];
 }

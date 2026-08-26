@@ -57,6 +57,7 @@ test("an administrator navigates across lazy routes without reloading the sessio
           total_documents: 0,
           classified_documents: 0,
           extracted_documents: 0,
+          review_required_documents: 0,
           industries: [],
           recent_documents: [],
         }),

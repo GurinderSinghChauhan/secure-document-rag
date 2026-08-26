@@ -78,6 +78,7 @@ async def test_reindexing_soft_deleted_content_restores_existing_row(monkeypatch
     delete_document = AsyncMock()
     upsert_document = AsyncMock()
     extract_metadata = AsyncMock(return_value={"invoice_number": "INV-42", "total_amount": "1250.00"})
+    classify_document = AsyncMock()
 
     async def embed_batches(_chunks):
         yield 1, 1, [[0.1, 0.2]]
@@ -95,6 +96,7 @@ async def test_reindexing_soft_deleted_content_restores_existing_row(monkeypatch
     monkeypatch.setattr(main, "chunk_text", lambda _text: ["restored text"])
     monkeypatch.setattr(main.model_server, "embed_batches", embed_batches)
     monkeypatch.setattr(main.model_server, "extract_metadata", extract_metadata)
+    monkeypatch.setattr(main.model_server, "classify_document", classify_document)
     monkeypatch.setattr(main.vectors, "delete_document", delete_document)
     monkeypatch.setattr(main.vectors, "upsert_document", upsert_document)
     monkeypatch.setattr(main, "record", AsyncMock())
@@ -119,6 +121,9 @@ async def test_reindexing_soft_deleted_content_restores_existing_row(monkeypatch
     assert document.document_name == "restored.pdf"
     assert document.document_type == "accounts_payable.invoice"
     assert document.schema_version == 1
+    assert document.classification_status == "confirmed"
+    assert document.classification_source == "manual"
+    assert document.classification_confidence is None
     assert document.extraction_status == "completed"
     assert document.extracted_metadata == {"invoice_number": "INV-42", "total_amount": "1250.00"}
     assert any(event.get("stage") == "metadata_extraction" for event in events)
@@ -130,6 +135,91 @@ async def test_reindexing_soft_deleted_content_restores_existing_row(monkeypatch
     extract_metadata.assert_awaited_once()
     assert extract_metadata.await_args.args[0] == "Invoice"
     assert "invoice_number" in extract_metadata.await_args.args[1]
+    classify_document.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_automatic_classification_persists_type_confidence_and_metadata(monkeypatch) -> None:
+    document = DocumentRecord(
+        document_id="00000000-0000-0000-0000-000000000002",
+        tenant_id="tenant-a",
+        document_name="unknown.pdf",
+        content_type="application/pdf",
+        content_sha256="b" * 64,
+        size_bytes=100,
+        chunk_count=1,
+        allowed_roles=["admin"],
+        allowed_users=[],
+        created_by="user-a",
+    )
+    session = AsyncMock()
+
+    async def embed_batches(_chunks):
+        yield 1, 1, [[0.1, 0.2]]
+
+    monkeypatch.setattr(
+        main,
+        "get_settings",
+        lambda: SimpleNamespace(
+            mineru_enabled=False,
+            max_visuals_per_document=10,
+            max_document_chunks=100,
+            classification_auto_accept_threshold=0.85,
+            classification_review_threshold=0.60,
+        ),
+    )
+    monkeypatch.setattr(
+        main,
+        "extract_document",
+        lambda *_args: SimpleNamespace(
+            text="Invoice INV-42 from Example Vendor for 1250.00",
+            visuals=[],
+            described_visual_count=0,
+            table_count=0,
+        ),
+    )
+    monkeypatch.setattr(main, "chunk_text", lambda _text: ["invoice text"])
+    monkeypatch.setattr(main.model_server, "embed_batches", embed_batches)
+    monkeypatch.setattr(
+        main.model_server,
+        "classify_document",
+        AsyncMock(return_value=("accounts_payable.invoice", 0.93)),
+    )
+    monkeypatch.setattr(
+        main.model_server,
+        "extract_metadata",
+        AsyncMock(return_value={"invoice_number": "INV-42"}),
+    )
+    monkeypatch.setattr(main.vectors, "delete_document", AsyncMock())
+    monkeypatch.setattr(main.vectors, "upsert_document", AsyncMock())
+    monkeypatch.setattr(main, "record", AsyncMock())
+
+    events = [
+        event
+        async for event in main.index_document_events(
+            b"invoice content",
+            "application/pdf",
+            "b" * 64,
+            "unknown.pdf",
+            ["admin"],
+            [],
+            Principal(tenant_id="tenant-a", user_id="user-a", roles=["admin"]),
+            session,
+            document,
+        )
+    ]
+
+    assert document.document_type == "accounts_payable.invoice"
+    assert document.classification_status == "confirmed"
+    assert document.classification_source == "automatic"
+    assert document.classification_confidence == 0.93
+    assert document.extraction_status == "completed"
+    assert document.extracted_metadata == {"invoice_number": "INV-42"}
+    assert [event.get("stage") for event in events if event.get("type") == "progress"][:3] == [
+        "extracting",
+        "classification",
+        "metadata_extraction",
+    ]
 
 
 @pytest.mark.asyncio

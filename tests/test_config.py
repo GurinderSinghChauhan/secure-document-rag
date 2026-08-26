@@ -28,6 +28,8 @@ def test_development_security_defaults() -> None:
     assert settings.password_reset_delivery == "disabled"
     assert settings.vision_model == "qwen/qwen3-vl-4b"
     assert settings.mineru_enabled is True
+    assert settings.classification_auto_accept_threshold == 0.85
+    assert settings.classification_review_threshold == 0.60
 
 
 def test_invitation_delivery_rejects_unknown_mode() -> None:
@@ -38,3 +40,11 @@ def test_invitation_delivery_rejects_unknown_mode() -> None:
 def test_password_reset_delivery_rejects_unknown_mode() -> None:
     with pytest.raises(ValueError, match="PASSWORD_RESET_DELIVERY"):
         Settings(password_reset_delivery="manual-public-link")
+
+
+def test_classification_review_threshold_must_be_lower_than_auto_accept() -> None:
+    with pytest.raises(ValueError, match="CLASSIFICATION_REVIEW_THRESHOLD"):
+        Settings(
+            classification_auto_accept_threshold=0.75,
+            classification_review_threshold=0.75,
+        )

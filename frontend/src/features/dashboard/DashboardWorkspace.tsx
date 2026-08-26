@@ -55,8 +55,8 @@ export function DashboardWorkspace() {
             value={dashboard.data?.extracted_documents}
           />
           <SummaryCard
-            label="Configured verticals"
-            value={dashboard.data?.industries.length}
+            label="Needs type review"
+            value={dashboard.data?.review_required_documents}
           />
         </section>
 
@@ -156,20 +156,45 @@ export function DashboardWorkspace() {
                         {document.document_type_label}
                       </small>
                     </div>
-                    <Badge
-                      variant={
-                        document.extraction_status === "completed"
-                          ? "active"
-                          : "suspended"
-                      }
-                    >
-                      {document.extraction_status === "completed"
-                        ? "Extracted"
-                        : document.extraction_status === "failed"
-                          ? "Extraction failed"
-                          : "Not extracted"}
-                    </Badge>
+                    <div className="document-status-badges">
+                      <Badge
+                        variant={
+                          document.classification_status === "confirmed"
+                            ? "active"
+                            : "suspended"
+                        }
+                      >
+                        {document.classification_status === "review_required"
+                          ? "Review type"
+                          : document.classification_status === "failed"
+                            ? "Detection failed"
+                            : document.classification_status === "unclassified"
+                              ? "Unclassified"
+                              : document.classification_source === "manual"
+                                ? "Manual type"
+                                : "Auto-detected"}
+                      </Badge>
+                      <Badge
+                        variant={
+                          document.extraction_status === "completed"
+                            ? "active"
+                            : "suspended"
+                        }
+                      >
+                        {document.extraction_status === "completed"
+                          ? "Extracted"
+                          : document.extraction_status === "failed"
+                            ? "Extraction failed"
+                            : "Not extracted"}
+                      </Badge>
+                    </div>
                   </header>
+                  {typeof document.classification_confidence === "number" && (
+                    <p className="classification-confidence">
+                      Detection confidence:{" "}
+                      {Math.round(document.classification_confidence * 100)}%
+                    </p>
+                  )}
                   {Object.keys(document.extracted_metadata).length > 0 && (
                     <details className="metadata-disclosure">
                       <summary>View extracted metadata</summary>

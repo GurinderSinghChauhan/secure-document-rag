@@ -25,17 +25,18 @@ The dashboard summarizes only documents the signed-in person may query. It group
 
 Platform super administrators have a separate `/super-admin` console. They can see organizations and users across the deployment, suspend access without deleting data, reactivate users or organizations, change organization roles, and revoke user sessions. A response-quality view also lets them review cross-organization question-and-answer pairs, filter pending or completed reviews, and score correctness, relevance, and clarity from 1 to 5 with optional notes. Evaluations can be revised; the latest reviewer and scores are retained. These actions are audited and protected by final-administrator and self-lockout safeguards.
 
-An administrator selects an optional document type and uploads a PDF, DOCX, PPTX, XLSX, UTF-8 text file, or supported image through `POST /v1/documents`. The browser sends the stable schema key in `X-Document-Type`; omitting it keeps the document unclassified. The service:
+An administrator uploads a PDF, DOCX, PPTX, XLSX, UTF-8 text file, or supported image through `POST /v1/documents`. Automatic type detection is the default for both single files and folders. An administrator can instead select a document type, which sends the stable schema key in `X-Document-Type` as an explicit override for every selected file. The service:
 
 1. Enforces the configured upload size limit.
 2. Rejects invalid document names, unsupported formats, empty documents, unsafe parser archives, and documents that create too many chunks.
 3. Uses self-hosted MinerU to recover reading order, headings, paragraph text, OCR, formulas, tables, captions, and embedded figures from structured documents.
 4. Indexes detailed visual descriptions produced by MinerU directly. Images, charts, diagrams, and forms with missing or weak descriptions are concurrently enriched by a self-hosted vision-language model.
-5. For a classified document, asks the self-hosted model to extract only the versioned fields configured for that type. Extraction is best effort: a model failure is recorded without preventing searchable indexing.
-6. Combines text, table content, and visual descriptions, breaks them into overlapping chunks, and creates embeddings through the self-hosted model service.
-7. Stores chunks with the document name, tenant collection, and access-control metadata in Qdrant.
-8. Registers document metadata, schema version, extraction status, extracted values, and a SHA-256 content fingerprint in PostgreSQL.
-9. Records a metadata-only audit event, including extracted table and visual counts. Document content and user questions are not written to the audit table.
+5. When there is no manual override, asks the self-hosted model to select one registered document type and return a confidence score. High-confidence results are confirmed, medium-confidence results are classified but flagged for review, and low-confidence or failed results remain unclassified.
+6. For a classified document, asks the self-hosted model to extract only the versioned fields configured for that type. Extraction and classification are best effort: a model failure is recorded without preventing searchable indexing.
+7. Combines text, table content, and visual descriptions, breaks them into overlapping chunks, and creates embeddings through the self-hosted model service.
+8. Stores chunks with the document name, tenant collection, and access-control metadata in Qdrant.
+9. Registers document metadata, classification source/status/confidence, schema version, extraction status, extracted values, and a SHA-256 content fingerprint in PostgreSQL.
+10. Records a metadata-only audit event, including extracted table and visual counts. Document content and user questions are not written to the audit table.
 
 When several files are uploaded together, the successfully held files are selected automatically in the compute queue. Administrators can select all waiting files or clear the selection in one action. The console recalculates the selected document count and GPU-minute estimate from file type and size whenever the selection changes. Both values are read-only, and the unnecessary cost input is omitted. Processing closes as soon as the selected batch finishes.
 
