@@ -1121,6 +1121,12 @@ textarea:focus {
   gap: 17px;
 }
 
+.file-source-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
 .file-dropzone {
   display: grid;
   min-height: 170px;
@@ -1184,6 +1190,17 @@ textarea:focus {
   margin-top: 8px;
   color: var(--text-tertiary);
   font-size: 10px;
+}
+
+.folder-dropzone {
+  border-style: solid;
+  background: var(--surface-subtle);
+}
+
+@media (max-width: 640px) {
+  .file-source-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .access-fieldset {

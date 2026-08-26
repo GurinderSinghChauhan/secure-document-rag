@@ -39,6 +39,8 @@ An administrator selects an optional document type and uploads a PDF, DOCX, PPTX
 
 When several files are uploaded together, the successfully held files are selected automatically in the compute queue. Administrators can select all waiting files or clear the selection in one action. The console recalculates the selected document count and GPU-minute estimate from file type and size whenever the selection changes. Both values are read-only, and the unnecessary cost input is omitted. Processing closes as soon as the selected batch finishes.
 
+Administrators can also choose a folder, including its nested folders. Folder selection accepts PDF files only; non-PDF files are ignored in the browser and the interface reports the ignored count before upload. Accepted PDFs continue through the same sequential per-file validation, progress, and failure-isolation workflow as an ordinary multi-file selection.
+
 Visual search is caption-based: raw image pixels are analyzed transiently by the private vision model, but Qdrant stores only the resulting text description and embedding. This allows normal text questions to retrieve information represented in charts and diagrams without introducing a second incompatible image-vector space.
 
 By default, a document inherits the uploader's roles. An administrator can narrow access using:

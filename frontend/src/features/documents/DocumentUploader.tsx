@@ -29,6 +29,29 @@ export function DocumentUploader({ disabled }: { disabled: boolean }) {
     queryKey: schemaKeys.all,
     queryFn: listDocumentSchemas,
   });
+  function selectFiles(selectedFiles: FileList | null) {
+    setFiles(Array.from(selectedFiles ?? []));
+    setProgress(null);
+    setStatus("Select one or more files to begin.");
+  }
+  function selectPdfFolder(selectedFiles: FileList | null) {
+    const folderFiles = Array.from(selectedFiles ?? []);
+    const pdfFiles = folderFiles.filter(
+      (file) =>
+        file.type === "application/pdf" ||
+        (!file.type && file.name.toLowerCase().endsWith(".pdf")),
+    );
+    const ignored = folderFiles.length - pdfFiles.length;
+    setFiles(pdfFiles);
+    setProgress(null);
+    setStatus(
+      `${pdfFiles.length} ${pdfFiles.length === 1 ? "PDF" : "PDFs"} selected.${
+        ignored
+          ? ` ${ignored} non-PDF ${ignored === 1 ? "file was" : "files were"} ignored.`
+          : ""
+      }`,
+    );
+  }
   async function submit(event: FormEvent) {
     event.preventDefault();
     if (!files.length) return;
@@ -93,29 +116,49 @@ export function DocumentUploader({ disabled }: { disabled: boolean }) {
             ))}
           </Select>
         </FormField>
-        <label className="file-dropzone">
-          <Input
-            type="file"
-            accept="text/plain,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.presentationml.presentation,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,image/png,image/jpeg,image/webp"
-            multiple
-            required
-            onChange={(event) => setFiles(Array.from(event.target.files ?? []))}
-          />
-          <span className="upload-icon" aria-hidden="true">
-            ↑
-          </span>
-          <strong>
-            {files.length
-              ? files.length === 1
-                ? files[0]?.name
-                : `${files.length} documents selected`
-              : "Choose documents"}
-          </strong>
-          <span>or drag and drop them here</span>
-          <small>
-            PDF, DOCX, PPTX, XLSX, TXT, PNG, JPEG, or WebP · up to 25 MB each
-          </small>
-        </label>
+        <div className="file-source-grid">
+          <label className="file-dropzone">
+            <Input
+              aria-label="Choose individual documents"
+              type="file"
+              accept="text/plain,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.presentationml.presentation,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,image/png,image/jpeg,image/webp"
+              multiple
+              onChange={(event) => selectFiles(event.target.files)}
+            />
+            <span className="upload-icon" aria-hidden="true">
+              ↑
+            </span>
+            <strong>
+              {files.length
+                ? files.length === 1
+                  ? files[0]?.name
+                  : `${files.length} documents selected`
+                : "Choose documents"}
+            </strong>
+            <span>or drag and drop them here</span>
+            <small>
+              PDF, DOCX, PPTX, XLSX, TXT, PNG, JPEG, or WebP · up to 25 MB each
+            </small>
+          </label>
+          <label className="file-dropzone folder-dropzone">
+            <Input
+              aria-label="Choose a folder of PDF files"
+              type="file"
+              accept="application/pdf,.pdf"
+              multiple
+              ref={(input) => input?.setAttribute("webkitdirectory", "")}
+              onChange={(event) => selectPdfFolder(event.target.files)}
+            />
+            <span className="upload-icon" aria-hidden="true">
+              ▣
+            </span>
+            <strong>Choose a PDF folder</strong>
+            <span>Include nested folders</span>
+            <small>
+              Only PDF files are selected; every other file is ignored
+            </small>
+          </label>
+        </div>
         <details className="access-disclosure">
           <summary>
             Advanced access controls <span>Optional</span>

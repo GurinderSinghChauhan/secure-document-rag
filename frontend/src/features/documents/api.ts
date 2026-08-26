@@ -76,7 +76,13 @@ export function uploadDocument(
     const token = api.getAccessToken();
     if (token) request.setRequestHeader("Authorization", `Bearer ${token}`);
     request.setRequestHeader("X-Document-Name", file.name);
-    request.setRequestHeader("Content-Type", file.type || "text/plain");
+    request.setRequestHeader(
+      "Content-Type",
+      file.type ||
+        (file.name.toLowerCase().endsWith(".pdf")
+          ? "application/pdf"
+          : "text/plain"),
+    );
     if (documentType) request.setRequestHeader("X-Document-Type", documentType);
     if (roles.trim()) request.setRequestHeader("X-Allowed-Roles", roles.trim());
     if (users.trim()) request.setRequestHeader("X-Allowed-Users", users.trim());
