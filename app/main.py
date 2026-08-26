@@ -6,7 +6,7 @@ from pathlib import PurePath
 from time import monotonic
 from uuid import uuid4
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Request, status
+from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request, status
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -24,11 +24,11 @@ from .database import ComputeSessionRecord, DocumentRecord, IngestionJobRecord, 
 from .document_parser import VisualAsset, extract_document
 from .document_schemas import DOCUMENT_SCHEMAS, INDUSTRIES, SCHEMA_VERSION, require_document_schema, schema_catalog
 from .mineru import MinerUClient, supports_mineru
-from .models import ChatDetail, ChatMessage, ChatSummary, ComputeSessionCreate, ComputeSessionRelease, ComputeSessionResponse, DashboardDocumentResponse, DashboardIndustryResponse, DashboardResponse, DeleteResponse, HeldIngestResponse, IndexedDocumentResponse, IndustrySchemaResponse, IngestionJobResponse, Principal, QueryRequest, QueryResponse, ReadinessResponse, VersionResponse
+from .models import ChatDetail, ChatMessage, ChatSummary, ComputeSessionCreate, ComputeSessionRelease, ComputeSessionResponse, DashboardDocumentListResponse, DashboardDocumentResponse, DashboardIndustryResponse, DashboardResponse, DeleteResponse, HeldIngestResponse, IndexedDocumentResponse, IndustrySchemaResponse, IngestionJobResponse, Principal, QueryRequest, QueryResponse, ReadinessResponse, VersionResponse
 from .providers import ModelClient
 from .super_admin import router as super_admin_router
 from .trials import is_pdf, require_active_trial, reserve_pdf_trial_slot, reserve_question_trial_slot
-from .repository import add_chat_message, create_chat, database_is_ready, get_chat, get_document, get_document_by_content_hash, list_authorized_documents, list_chat_messages, list_chats, list_documents, mark_document_deleted
+from .repository import add_chat_message, create_chat, database_is_ready, get_chat, get_document, get_document_by_content_hash, list_authorized_documents, list_chat_messages, list_chats, list_documents, mark_document_deleted, search_authorized_documents
 from .vector_store import VectorStore
 from .version import APP_COMMIT, APP_VERSION
 
@@ -595,6 +595,33 @@ async def list_document_schemas(_: Principal = Depends(require_principal)) -> li
     return schema_catalog()
 
 
+def dashboard_document_response(document: DocumentRecord) -> DashboardDocumentResponse:
+    match = DOCUMENT_SCHEMAS.get(document.document_type or "")
+    if match:
+        industry, document_schema = match
+        document_type_label = document_schema.label
+        industry_key = industry.key
+        industry_label = industry.label
+    else:
+        document_type_label = "Unclassified"
+        industry_key = None
+        industry_label = "Needs classification"
+    return DashboardDocumentResponse(
+        document_id=document.document_id,
+        document_name=document.document_name,
+        document_type=document.document_type,
+        document_type_label=document_type_label,
+        industry_key=industry_key,
+        industry_label=industry_label,
+        classification_status=document.classification_status or "unclassified",
+        classification_source=document.classification_source or "automatic",
+        classification_confidence=document.classification_confidence,
+        extraction_status=document.extraction_status or "not_requested",
+        extracted_metadata=document.extracted_metadata or {},
+        created_at=document.created_at,
+    )
+
+
 @app.get("/v1/dashboard", response_model=DashboardResponse)
 async def dashboard(
     principal: Principal = Depends(require_principal),
@@ -618,41 +645,17 @@ async def dashboard(
     for document in documents:
         match = DOCUMENT_SCHEMAS.get(document.document_type or "")
         if match:
-            industry, document_schema = match
+            industry, _ = match
             industry_counts[industry.key] += 1
             classified_documents += 1
-            document_type_label = document_schema.label
-            industry_key = industry.key
-            industry_label = industry.label
-        else:
-            document_type_label = "Unclassified"
-            industry_key = None
-            industry_label = "Needs classification"
         extraction_status = document.extraction_status or "not_requested"
         classification_status = document.classification_status or "unclassified"
-        classification_source = document.classification_source or "automatic"
         if classification_status == "review_required":
             review_required_documents += 1
-        extracted_metadata = document.extracted_metadata or {}
         if extraction_status == "completed":
             extracted_documents += 1
         if len(recent_documents) < 20:
-            recent_documents.append(
-                DashboardDocumentResponse(
-                    document_id=document.document_id,
-                    document_name=document.document_name,
-                    document_type=document.document_type,
-                    document_type_label=document_type_label,
-                    industry_key=industry_key,
-                    industry_label=industry_label,
-                    classification_status=classification_status,
-                    classification_source=classification_source,
-                    classification_confidence=document.classification_confidence,
-                    extraction_status=extraction_status,
-                    extracted_metadata=extracted_metadata,
-                    created_at=document.created_at,
-                )
-            )
+            recent_documents.append(dashboard_document_response(document))
     return DashboardResponse(
         total_documents=len(documents),
         classified_documents=classified_documents,
@@ -668,6 +671,46 @@ async def dashboard(
             for industry in INDUSTRIES
         ],
         recent_documents=recent_documents,
+    )
+
+
+@app.get("/v1/dashboard/documents", response_model=DashboardDocumentListResponse)
+async def dashboard_documents(
+    principal: Principal = Depends(require_principal),
+    session: AsyncSession = Depends(get_session),
+    query: str = Query(default="", max_length=100),
+    limit: int = Query(default=100, ge=1, le=100),
+) -> DashboardDocumentListResponse:
+    normalized_query = query.strip()
+    lowered_query = normalized_query.lower()
+    matching_type_keys = (
+        [
+            key
+            for key, (industry, document_schema) in DOCUMENT_SCHEMAS.items()
+            if lowered_query in document_schema.label.lower()
+            or lowered_query in industry.label.lower()
+            or lowered_query in key.lower()
+        ]
+        if normalized_query
+        else []
+    )
+    documents, total = await search_authorized_documents(
+        session,
+        principal.tenant_id,
+        principal.roles,
+        principal.user_id,
+        normalized_query,
+        matching_type_keys,
+        limit,
+    )
+    authorized_documents = [
+        document
+        for document in documents
+        if document_is_authorized(document, principal)
+    ]
+    return DashboardDocumentListResponse(
+        total=total,
+        documents=[dashboard_document_response(document) for document in authorized_documents],
     )
 
 

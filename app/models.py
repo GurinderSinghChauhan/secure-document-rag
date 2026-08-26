@@ -157,6 +157,11 @@ class DashboardIndustryResponse(BaseModel):
     document_type_count: int
 
 
+class DashboardDocumentListResponse(BaseModel):
+    total: int
+    documents: list[DashboardDocumentResponse]
+
+
 class DashboardResponse(BaseModel):
     total_documents: int
     classified_documents: int

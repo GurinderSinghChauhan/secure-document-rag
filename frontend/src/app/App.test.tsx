@@ -1,5 +1,6 @@
 import { http, HttpResponse } from "msw";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { server } from "../test/server";
 import { AuthProvider } from "../features/auth";
@@ -63,6 +64,9 @@ test("restores one shared session and exposes role-appropriate navigation", asyn
       }),
     ),
     http.get("/v1/document-schemas", () => HttpResponse.json([])),
+    http.get("/v1/dashboard/documents", () =>
+      HttpResponse.json({ total: 0, documents: [] }),
+    ),
   );
   renderApplication();
   expect(
@@ -82,6 +86,21 @@ test("restores one shared session and exposes role-appropriate navigation", asyn
 });
 
 test("renders authorized document coverage and schema-driven metadata", async () => {
+  const documentSearches: string[] = [];
+  const dashboardDocument = {
+    document_id: "document-1",
+    document_name: "service-invoice.pdf",
+    document_type: "field_service.service_invoice",
+    document_type_label: "Service Invoice",
+    industry_key: "field_service",
+    industry_label: "Field Service",
+    classification_status: "review_required",
+    classification_source: "automatic",
+    classification_confidence: 0.72,
+    extraction_status: "completed",
+    extracted_metadata: { invoice_number: "INV-42" },
+    created_at: "2030-01-01T00:00:00Z",
+  };
   server.use(
     http.post("/v1/auth/refresh", () => HttpResponse.json(adminAuth)),
     http.get("/v1/dashboard", () =>
@@ -98,22 +117,7 @@ test("renders authorized document coverage and schema-driven metadata", async ()
             document_type_count: 1,
           },
         ],
-        recent_documents: [
-          {
-            document_id: "document-1",
-            document_name: "service-invoice.pdf",
-            document_type: "field_service.service_invoice",
-            document_type_label: "Service Invoice",
-            industry_key: "field_service",
-            industry_label: "Field Service",
-            classification_status: "review_required",
-            classification_source: "automatic",
-            classification_confidence: 0.72,
-            extraction_status: "completed",
-            extracted_metadata: { invoice_number: "INV-42" },
-            created_at: "2030-01-01T00:00:00Z",
-          },
-        ],
+        recent_documents: [dashboardDocument],
       }),
     ),
     http.get("/v1/document-schemas", () =>
@@ -132,6 +136,12 @@ test("renders authorized document coverage and schema-driven metadata", async ()
         },
       ]),
     ),
+    http.get("/v1/dashboard/documents", ({ request }) => {
+      documentSearches.push(
+        new URL(request.url).searchParams.get("query") ?? "",
+      );
+      return HttpResponse.json({ total: 1, documents: [dashboardDocument] });
+    }),
   );
 
   renderApplication();
@@ -146,4 +156,14 @@ test("renders authorized document coverage and schema-driven metadata", async ()
   expect(screen.getByText("invoice_number")).toBeInTheDocument();
   expect(screen.getByText("Review type")).toBeVisible();
   expect(screen.getByText("Detection confidence: 72%")).toBeVisible();
+  expect(
+    screen.getByRole("region", { name: "Searchable document list" }),
+  ).toHaveClass("dashboard-document-list");
+
+  const user = userEvent.setup();
+  await user.type(
+    screen.getByRole("searchbox", { name: "Search dashboard documents" }),
+    "invoice",
+  );
+  await waitFor(() => expect(documentSearches).toContain("invoice"));
 });

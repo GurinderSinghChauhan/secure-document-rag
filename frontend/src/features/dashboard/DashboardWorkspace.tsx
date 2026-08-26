@@ -1,9 +1,15 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { AppShell } from "../../components/layout/AppShell";
-import { Badge, Button, EmptyState, StatusMessage } from "../../components/ui";
+import {
+  Badge,
+  Button,
+  EmptyState,
+  Input,
+  StatusMessage,
+} from "../../components/ui";
 import { listDocumentSchemas, schemaKeys } from "../documents/api";
-import { dashboardKeys, getDashboard } from "./api";
+import { dashboardKeys, getDashboard, searchDashboardDocuments } from "./api";
 
 function formatValue(value: unknown) {
   if (Array.isArray(value)) return value.join(", ");
@@ -21,6 +27,19 @@ export function DashboardWorkspace() {
     queryFn: listDocumentSchemas,
   });
   const [selectedIndustry, setSelectedIndustry] = useState<string | null>(null);
+  const [documentQuery, setDocumentQuery] = useState("");
+  const [debouncedDocumentQuery, setDebouncedDocumentQuery] = useState("");
+  useEffect(() => {
+    const timeout = window.setTimeout(
+      () => setDebouncedDocumentQuery(documentQuery.trim()),
+      250,
+    );
+    return () => window.clearTimeout(timeout);
+  }, [documentQuery]);
+  const documents = useQuery({
+    queryKey: dashboardKeys.documents(debouncedDocumentQuery),
+    queryFn: () => searchDashboardDocuments(debouncedDocumentQuery),
+  });
   const activeIndustry =
     schemas.data?.find(
       (industry) => industry.key === (selectedIndustry ?? schemas.data[0]?.key),
@@ -133,17 +152,41 @@ export function DashboardWorkspace() {
           </section>
         )}
 
-        <section aria-labelledby="recent-documents-title">
+        <section aria-labelledby="dashboard-documents-title">
           <div className="dashboard-section-heading">
             <div>
-              <span className="section-kicker">Latest activity</span>
-              <h2 id="recent-documents-title">Recent documents</h2>
+              <span className="section-kicker">Document inventory</span>
+              <h2 id="dashboard-documents-title">Documents</h2>
             </div>
-            <p>Only documents permitted for your role or user are shown.</p>
+            <p>
+              {documents.data
+                ? `${documents.data.total} authorized ${documents.data.total === 1 ? "document" : "documents"}`
+                : "Only documents permitted for your role or user are shown."}
+            </p>
           </div>
-          {dashboard.data?.recent_documents.length ? (
-            <div className="dashboard-document-list">
-              {dashboard.data.recent_documents.map((document) => (
+          <div className="dashboard-document-search">
+            <Input
+              type="search"
+              aria-label="Search dashboard documents"
+              placeholder="Search by filename, document type, or industry"
+              value={documentQuery}
+              onChange={(event) => setDocumentQuery(event.target.value)}
+            />
+          </div>
+          {documents.isPending && (
+            <StatusMessage>Loading authorized documents…</StatusMessage>
+          )}
+          {documents.error instanceof Error && (
+            <StatusMessage>{documents.error.message}</StatusMessage>
+          )}
+          {documents.data?.documents.length ? (
+            <div
+              className="dashboard-document-list"
+              role="region"
+              aria-label="Searchable document list"
+              tabIndex={0}
+            >
+              {documents.data.documents.map((document) => (
                 <article
                   className="dashboard-document-card"
                   key={document.document_id}
@@ -217,10 +260,19 @@ export function DashboardWorkspace() {
               ))}
             </div>
           ) : (
-            !dashboard.isPending && (
+            !documents.isPending &&
+            !documents.error && (
               <EmptyState
-                title="No authorized documents yet"
-                description="Ask an organization administrator to upload and release a document with access for your role."
+                title={
+                  debouncedDocumentQuery
+                    ? "No matching documents"
+                    : "No authorized documents yet"
+                }
+                description={
+                  debouncedDocumentQuery
+                    ? "Try another filename, document type, or industry."
+                    : "Ask an organization administrator to upload and release a document with access for your role."
+                }
               />
             )
           )}

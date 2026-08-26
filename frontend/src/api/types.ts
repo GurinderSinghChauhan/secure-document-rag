@@ -131,6 +131,11 @@ export interface Dashboard {
   recent_documents: DashboardDocument[];
 }
 
+export interface DashboardDocumentList {
+  total: number;
+  documents: DashboardDocument[];
+}
+
 export interface ComputeSession {
   session_id: string;
   status: string;

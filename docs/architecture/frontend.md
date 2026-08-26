@@ -25,7 +25,7 @@ Dependencies point toward stable, lower-level modules. Shared components cannot 
 | Form drafts, dialogs, selections | Closest React component |
 | Streaming and upload progress | Domain-specific service and feature state |
 
-Dashboard data is server-aggregated from tenant-scoped document metadata and filtered through each document's role and explicit-user ACL before it reaches the browser. The client owns only the selected industry and progressive-disclosure state; it never receives unauthorized document summaries.
+Dashboard data is server-aggregated from tenant-scoped document metadata and filtered through each document's role and explicit-user ACL before it reaches the browser. Document inventory search is debounced in the client and executed by a dedicated ACL-scoped API over filenames and registered document types. The client owns only the selected industry, search input, and progressive-disclosure state; it never receives unauthorized document summaries.
 
 The API client performs one coordinated refresh, retries one unauthorized request, and clears the in-memory session when refresh fails. Tokens must never be written to local or session storage.
 

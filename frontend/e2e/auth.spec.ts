@@ -64,6 +64,14 @@ test("an administrator navigates across lazy routes without reloading the sessio
       });
       return;
     }
+    if (path === "/v1/dashboard/documents") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ total: 0, documents: [] }),
+      });
+      return;
+    }
     await route.fulfill({
       status: 200,
       contentType: "application/json",

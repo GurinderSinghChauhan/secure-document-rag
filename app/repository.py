@@ -1,7 +1,7 @@
 from datetime import UTC, datetime
 from uuid import uuid4
 
-from sqlalchemy import cast, or_, select, text
+from sqlalchemy import cast, func, or_, select, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -67,6 +67,41 @@ async def list_authorized_documents(
         .order_by(DocumentRecord.created_at.desc(), DocumentRecord.document_id.desc())
     )
     return list(result)
+
+
+async def search_authorized_documents(
+    session: AsyncSession,
+    tenant_id: str,
+    roles: list[str],
+    user_id: str,
+    query: str,
+    document_type_keys: list[str],
+    limit: int,
+) -> tuple[list[DocumentRecord], int]:
+    access_conditions = [cast(DocumentRecord.allowed_users, JSONB).contains([user_id])]
+    access_conditions.extend(cast(DocumentRecord.allowed_roles, JSONB).contains([role]) for role in roles)
+    filters = [
+        DocumentRecord.tenant_id == tenant_id,
+        DocumentRecord.deleted_at.is_(None),
+        or_(*access_conditions),
+    ]
+    if query:
+        search_conditions = [
+            DocumentRecord.document_name.icontains(query, autoescape=True)
+        ]
+        if document_type_keys:
+            search_conditions.append(DocumentRecord.document_type.in_(document_type_keys))
+        filters.append(or_(*search_conditions))
+    total = await session.scalar(
+        select(func.count()).select_from(DocumentRecord).where(*filters)
+    )
+    result = await session.scalars(
+        select(DocumentRecord)
+        .where(*filters)
+        .order_by(DocumentRecord.created_at.desc(), DocumentRecord.document_id.desc())
+        .limit(limit)
+    )
+    return list(result), int(total or 0)
 
 
 async def mark_document_deleted(session: AsyncSession, record: DocumentRecord) -> None:

@@ -186,6 +186,24 @@
 .dashboard-document-list {
   display: grid;
   gap: 10px;
+  max-height: min(620px, 65vh);
+  padding-right: 5px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+.dashboard-document-list:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 4px;
+}
+
+.dashboard-document-search {
+  margin-bottom: 12px;
+}
+
+.dashboard-document-search input {
+  width: 100%;
 }
 
 .dashboard-document-card {

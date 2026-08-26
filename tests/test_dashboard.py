@@ -6,7 +6,12 @@ from sqlalchemy.dialects import postgresql
 
 from app.database import DocumentRecord
 from app.document_schemas import DOCUMENT_SCHEMAS, INDUSTRIES, require_document_schema
-from app.main import classification_decision, dashboard, validate_document_type
+from app.main import (
+    classification_decision,
+    dashboard,
+    dashboard_documents,
+    validate_document_type,
+)
 from app.models import Principal
 
 
@@ -18,6 +23,12 @@ class DashboardSession:
     async def scalars(self, statement):
         self.statement = statement
         return self.documents
+
+
+class DashboardSearchSession(DashboardSession):
+    async def scalar(self, statement):
+        self.count_statement = statement
+        return 1
 
 
 def document(
@@ -138,3 +149,40 @@ async def test_dashboard_only_aggregates_documents_authorized_for_current_user()
     assert "documents.deleted_at IS NULL" in sql
     assert "CAST(documents.allowed_roles AS JSONB) @>" in sql
     assert "CAST(documents.allowed_users AS JSONB) @>" in sql
+
+
+@pytest.mark.asyncio
+async def test_dashboard_document_search_is_acl_scoped_and_server_filtered():
+    principal = Principal(tenant_id="org-a", user_id="member-a", roles=["member"])
+    session = DashboardSearchSession(
+        [
+            document(
+                "matching-invoice",
+                document_type="accounts_payable.invoice",
+                roles=["member"],
+                users=[],
+            ),
+            document(
+                "secret-invoice",
+                document_type="accounts_payable.invoice",
+                roles=["admin"],
+                users=[],
+            ),
+        ]
+    )
+
+    result = await dashboard_documents(
+        principal,
+        session,
+        query="Invoice",
+        limit=100,
+    )
+
+    assert result.total == 1
+    assert [item.document_name for item in result.documents] == [
+        "matching-invoice.pdf"
+    ]
+    sql = str(session.statement.compile(dialect=postgresql.dialect()))
+    assert "documents.document_name ILIKE" in sql
+    assert "documents.document_type IN" in sql
+    assert "CAST(documents.allowed_roles AS JSONB) @>" in sql

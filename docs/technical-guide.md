@@ -69,6 +69,7 @@ Authorization: Bearer <short-lived-access-jwt>
 | `GET` | `/v1/admin/documents` | Organization admin | List active indexed documents for the authenticated organization |
 | `GET` | `/v1/document-schemas` | Authorized user | List versioned industry and document-type extraction schemas |
 | `GET` | `/v1/dashboard` | Authorized user | Return ACL-filtered document-intelligence summaries and recent documents |
+| `GET` | `/v1/dashboard/documents` | Authorized user | Search up to 100 ACL-filtered dashboard documents by filename, type, or industry |
 | `DELETE` | `/v1/documents/{document_id}` | Organization admin | Remove document vectors and soft-delete organization-scoped metadata |
 | `GET` | `/version` | Public | Report semantic application version and source commit |
 
