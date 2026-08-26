@@ -10,6 +10,7 @@ import type { ChatMessage } from "../../api/types";
 import { chatKeys, getChat, listChats, streamAnswer } from "./api";
 import { useVoiceInput } from "./useVoiceInput";
 import { AppShell } from "../../components/layout/AppShell";
+import { Button, EmptyState, Textarea } from "../../components/ui";
 
 const suggestions = [
   "Summarize the key obligations in the indexed documents.",
@@ -108,7 +109,7 @@ export function ChatWorkspace() {
     <section className="chat-history" aria-labelledby="chat-history-title">
       <div className="chat-history-header">
         <span id="chat-history-title">Recent chats</span>
-        <button
+        <Button
           type="button"
           aria-label="Start a new chat"
           title="New chat"
@@ -119,11 +120,11 @@ export function ChatWorkspace() {
           }}
         >
           +
-        </button>
+        </Button>
       </div>
       <div className="chat-history-list" aria-live="polite">
         {chats.data?.map((chat) => (
-          <button
+          <Button
             className={`chat-history-item ${activeChatId === chat.chat_id ? "active" : ""}`}
             type="button"
             key={chat.chat_id}
@@ -137,7 +138,7 @@ export function ChatWorkspace() {
                 day: "numeric",
               })}
             </time>
-          </button>
+          </Button>
         ))}
       </div>
       {!chats.data?.length && (
@@ -178,21 +179,17 @@ export function ChatWorkspace() {
             aria-relevant="additions"
           >
             {!messages.length && (
-              <div className="empty-state">
-                <span className="empty-state-icon" aria-hidden="true">
-                  ✓
-                </span>
-                <h2>What would you like to know?</h2>
-                <p>
-                  Ask a focused question and the assistant will search only
-                  documents available to your tenant and role.
-                </p>
+              <EmptyState
+                icon="✓"
+                title="What would you like to know?"
+                description="Ask a focused question and the assistant will search only documents available to your tenant and role."
+              >
                 <div
                   className="prompt-suggestions"
                   aria-label="Example questions"
                 >
                   {suggestions.map((prompt) => (
-                    <button
+                    <Button
                       className="prompt-suggestion"
                       type="button"
                       key={prompt}
@@ -200,10 +197,10 @@ export function ChatWorkspace() {
                     >
                       <span>{prompt}</span>
                       <span aria-hidden="true">›</span>
-                    </button>
+                    </Button>
                   ))}
                 </div>
-              </div>
+              </EmptyState>
             )}
             {messages.map((message, index) => (
               <article
@@ -234,7 +231,7 @@ export function ChatWorkspace() {
             <label className="sr-only" htmlFor="question">
               Question
             </label>
-            <textarea
+            <Textarea
               id="question"
               rows={2}
               minLength={3}
@@ -262,7 +259,7 @@ export function ChatWorkspace() {
               </span>
               <div className="composer-actions">
                 {voice.available && (
-                  <button
+                  <Button
                     className={`voice-input-button ${voice.listening ? "listening" : ""}`}
                     type="button"
                     aria-label={
@@ -273,16 +270,16 @@ export function ChatWorkspace() {
                     onClick={voice.toggle}
                   >
                     🎙
-                  </button>
+                  </Button>
                 )}
-                <button
+                <Button
                   className="send-button"
                   type="submit"
                   disabled={busy || question.trim().length < 3}
                 >
                   <span>{busy ? "Searching…" : "Send"}</span>
                   <span aria-hidden="true">➤</span>
-                </button>
+                </Button>
               </div>
             </div>
           </form>

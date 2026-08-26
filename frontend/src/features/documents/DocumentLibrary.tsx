@@ -1,6 +1,14 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { deleteDocument, documentKeys, listDocuments } from "./api";
+import {
+  Button,
+  FormField,
+  Input,
+  Panel,
+  PanelHeader,
+  StatusMessage,
+} from "../../components/ui";
 
 function formatBytes(size: number) {
   if (size < 1024) return `${size} B`;
@@ -32,43 +40,41 @@ export function DocumentLibrary() {
     ),
   );
   return (
-    <section
+    <Panel
       id="indexed-documents"
-      className="admin-card indexed-documents-card"
-      aria-labelledby="indexed-documents-title"
+      className="indexed-documents-card"
+      labelledBy="indexed-documents-title"
     >
-      <div className="compute-heading">
-        <div className="panel-header">
-          <span className="step-number">03</span>
-          <div>
-            <span className="section-kicker">Searchable knowledge</span>
-            <h2 id="indexed-documents-title">Indexed documents</h2>
-          </div>
-        </div>
-        <button
-          className="icon-text-button"
-          type="button"
-          onClick={() => void documents.refetch()}
-        >
-          Refresh
-        </button>
-      </div>
-      <p className="panel-description" role="status">
+      <PanelHeader
+        step="03"
+        kicker="Searchable knowledge"
+        title="Indexed documents"
+        titleId="indexed-documents-title"
+        action={
+          <Button variant="icon-text" onClick={() => void documents.refetch()}>
+            Refresh
+          </Button>
+        }
+      />
+      <StatusMessage className="panel-description">
         {documents.isPending
           ? "Loading indexed documents…"
           : documents.error instanceof Error
             ? documents.error.message
             : `${matches.length} of ${documents.data?.length ?? 0} searchable documents shown.`}
-      </p>
-      <label className="indexed-document-search">
-        <span className="sr-only">Search indexed documents</span>
-        <input
+      </StatusMessage>
+      <FormField
+        className="indexed-document-search"
+        label="Search indexed documents"
+        labelHidden
+      >
+        <Input
           type="search"
           placeholder="Search by filename, type, role, or user"
           value={search}
           onChange={(event) => setSearch(event.target.value)}
         />
-      </label>
+      </FormField>
       <div className="indexed-document-list">
         {matches.map((document) => (
           <article className="indexed-document-row" key={document.document_id}>
@@ -84,8 +90,9 @@ export function DocumentLibrary() {
                 users: {document.allowed_users.join(", ") || "none"}
               </small>
             </div>
-            <button
-              className="text-button danger-action"
+            <Button
+              variant="text"
+              className="danger-action"
               type="button"
               disabled={remove.isPending}
               onClick={() => {
@@ -98,7 +105,7 @@ export function DocumentLibrary() {
               }}
             >
               Delete
-            </button>
+            </Button>
           </article>
         ))}
         {!matches.length && !documents.isPending && (
@@ -109,6 +116,6 @@ export function DocumentLibrary() {
           </p>
         )}
       </div>
-    </section>
+    </Panel>
   );
 }

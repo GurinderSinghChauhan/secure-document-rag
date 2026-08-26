@@ -4,6 +4,14 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../auth";
 import type { ChatResponseReview, Member } from "../../api/types";
 import {
+  Badge,
+  Button,
+  Input,
+  Select,
+  StatusMessage,
+  Textarea,
+} from "../../components/ui";
+import {
   listOrganizations,
   listResponses,
   platformKeys,
@@ -59,8 +67,8 @@ export function PlatformOversight() {
             responses. Platform actions are recorded in the audit log.
           </p>
         </div>
-        <button
-          className="secondary-button"
+        <Button
+          variant="secondary"
           type="button"
           onClick={() =>
             void (tab === "quality"
@@ -69,7 +77,7 @@ export function PlatformOversight() {
           }
         >
           Refresh
-        </button>
+        </Button>
       </header>
       <Tabs.Root value={tab} onValueChange={setTab}>
         <Tabs.List className="platform-tabs" aria-label="Platform tools">
@@ -101,21 +109,21 @@ export function PlatformOversight() {
           <div className="platform-toolbar">
             <label className="platform-search">
               <span className="sr-only">Search organizations and users</span>
-              <input
+              <Input
                 type="search"
                 placeholder="Search organization, person, or email"
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
               />
             </label>
-            <p role="status">
+            <StatusMessage>
               {organizations.isPending
                 ? "Loading organizations…"
                 : organizations.error instanceof Error
                   ? organizations.error.message
                   : message ||
                     `${filtered.length} of ${organizations.data?.length ?? 0} organizations shown.`}
-            </p>
+            </StatusMessage>
           </div>
           <div className="organization-list" aria-live="polite">
             {filtered.map((organization) => (
@@ -126,30 +134,28 @@ export function PlatformOversight() {
                 <header className="organization-header">
                   <div className="organization-title">
                     <div className="organization-meta">
-                      <span
-                        className={`status-pill ${organization.active ? "active" : "suspended"}`}
+                      <Badge
+                        variant={organization.active ? "active" : "suspended"}
                       >
                         {organization.active ? "Active" : "Suspended"}
-                      </span>
-                      <span className="metric-pill">
+                      </Badge>
+                      <Badge variant="metric">
                         {organization.user_count} users
-                      </span>
-                      <span className="metric-pill">
+                      </Badge>
+                      <Badge variant="metric">
                         {organization.document_count} documents
-                      </span>
-                      <span className="metric-pill">
+                      </Badge>
+                      <Badge variant="metric">
                         {organization.held_job_count} held jobs
-                      </span>
+                      </Badge>
                     </div>
                     <h2>{organization.name}</h2>
                     <small>
                       {organization.slug} · {organization.organization_id}
                     </small>
                   </div>
-                  <button
-                    className={
-                      organization.active ? "danger-button" : "secondary-button"
-                    }
+                  <Button
+                    variant={organization.active ? "danger" : "secondary"}
                     type="button"
                     onClick={() => {
                       const active = !organization.active;
@@ -169,7 +175,7 @@ export function PlatformOversight() {
                     {organization.active
                       ? "Suspend organization"
                       : "Reactivate organization"}
-                  </button>
+                  </Button>
                 </header>
                 {organization.users.length ? (
                   <div className="user-table-wrap">
@@ -219,23 +225,23 @@ export function PlatformOversight() {
             </div>
             <label>
               Status{" "}
-              <select
+              <Select
                 value={status}
                 onChange={(event) => setStatus(event.target.value)}
               >
                 <option value="pending">Pending review</option>
                 <option value="evaluated">Evaluated</option>
                 <option value="all">All responses</option>
-              </select>
+              </Select>
             </label>
           </div>
-          <p className="quality-message" role="status">
+          <StatusMessage className="quality-message">
             {responses.isPending
               ? "Loading responses…"
               : responses.error instanceof Error
                 ? responses.error.message
                 : `${responses.data?.length ?? 0} responses shown.`}
-          </p>
+          </StatusMessage>
           <div className="response-list" aria-live="polite">
             {responses.data?.map((item) => (
               <EvaluationCard
@@ -288,7 +294,7 @@ function UserRow({
       </td>
       <td>
         <div className="user-role">
-          <select
+          <Select
             value={member.role}
             aria-label={`Role for ${member.display_name}`}
             onChange={(event) => {
@@ -303,23 +309,20 @@ function UserRow({
           >
             <option value="member">Member</option>
             <option value="admin">Admin</option>
-          </select>
-          {member.is_super_admin && (
-            <span className="super-badge">SUPER ADMIN</span>
-          )}
+          </Select>
+          {member.is_super_admin && <Badge variant="super">SUPER ADMIN</Badge>}
         </div>
       </td>
       <td>
-        <span
-          className={`status-pill ${member.active ? "active" : "suspended"}`}
-        >
+        <Badge variant={member.active ? "active" : "suspended"}>
           {member.active ? "Active" : "Deactivated"}
-        </span>
+        </Badge>
       </td>
       <td>
         <div className="user-actions">
-          <button
-            className="secondary-button compact"
+          <Button
+            variant="secondary"
+            className="compact"
             type="button"
             onClick={() => {
               if (confirm("Revoke every active session for this user?"))
@@ -327,11 +330,10 @@ function UserRow({
             }}
           >
             Revoke sessions
-          </button>
-          <button
-            className={
-              member.active ? "danger-button" : "secondary-button compact"
-            }
+          </Button>
+          <Button
+            variant={member.active ? "danger" : "secondary"}
+            className={member.active ? undefined : "compact"}
             type="button"
             disabled={member.user_id === currentUserId && member.active}
             title={
@@ -350,7 +352,7 @@ function UserRow({
             }}
           >
             {member.active ? "Deactivate" : "Reactivate"}
-          </button>
+          </Button>
         </div>
       </td>
     </tr>
@@ -388,11 +390,11 @@ function EvaluationCard({
     <article className="response-card">
       <header>
         <div>
-          <span className="metric-pill">{item.organization_name}</span>
+          <Badge variant="metric">{item.organization_name}</Badge>
           {item.evaluation ? (
-            <span className="score-pill">{item.evaluation.overall} / 5</span>
+            <Badge variant="score">{item.evaluation.overall} / 5</Badge>
           ) : (
-            <span className="status-pill suspended">Pending</span>
+            <Badge variant="suspended">Pending</Badge>
           )}
           <h3>{item.chat_title}</h3>
           <small>
@@ -419,7 +421,7 @@ function EvaluationCard({
             <label key={name}>
               {name[0]?.toUpperCase()}
               {name.slice(1)}
-              <select
+              <Select
                 name={name}
                 defaultValue={item.evaluation?.[name] ?? 3}
                 required
@@ -429,13 +431,13 @@ function EvaluationCard({
                     {score}
                   </option>
                 ))}
-              </select>
+              </Select>
             </label>
           ))}
         </div>
         <label>
           Reviewer notes
-          <textarea
+          <Textarea
             name="notes"
             maxLength={2000}
             rows={3}
@@ -444,17 +446,14 @@ function EvaluationCard({
           />
         </label>
         {save.error && <p role="alert">{save.error.message}</p>}
-        <button
-          className="primary-button"
+        <Button
+          variant="primary"
           type="submit"
-          disabled={save.isPending}
+          busy={save.isPending}
+          busyLabel="Saving…"
         >
-          {save.isPending
-            ? "Saving…"
-            : item.evaluation
-              ? "Update evaluation"
-              : "Save evaluation"}
-        </button>
+          {item.evaluation ? "Update evaluation" : "Save evaluation"}
+        </Button>
       </form>
     </article>
   );

@@ -1,12 +1,14 @@
 import { useState, type InputHTMLAttributes } from "react";
+import { Button } from "./Button";
+import { Input } from "./FormControls";
 
 export function PasswordField(props: InputHTMLAttributes<HTMLInputElement>) {
   const [visible, setVisible] = useState(false);
   const id = props.id;
   return (
     <span className="password-input">
-      <input {...props} type={visible ? "text" : "password"} />
-      <button
+      <Input {...props} type={visible ? "text" : "password"} />
+      <Button
         type="button"
         aria-controls={id}
         aria-label={visible ? "Hide password" : "Show password"}
@@ -14,7 +16,7 @@ export function PasswordField(props: InputHTMLAttributes<HTMLInputElement>) {
         onClick={() => setVisible((value) => !value)}
       >
         <span aria-hidden="true">{visible ? "◉" : "◎"}</span>
-      </button>
+      </Button>
     </span>
   );
 }

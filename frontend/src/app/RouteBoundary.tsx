@@ -1,4 +1,5 @@
 import { Component, type ErrorInfo, type ReactNode } from "react";
+import { Button } from "../components/ui";
 
 export class RouteBoundary extends Component<
   { children: ReactNode },
@@ -18,12 +19,9 @@ export class RouteBoundary extends Component<
           <section className="empty-state">
             <h1>This section could not be displayed</h1>
             <p>{this.state.error.message}</p>
-            <button
-              className="primary-button"
-              onClick={() => location.reload()}
-            >
+            <Button variant="primary" onClick={() => location.reload()}>
               Reload application
-            </button>
+            </Button>
           </section>
         </main>
       );

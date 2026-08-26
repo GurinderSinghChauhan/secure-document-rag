@@ -6,6 +6,14 @@ import {
   organizationKeys,
   updateMember,
 } from "./api";
+import {
+  Button,
+  Input,
+  Panel,
+  PanelHeader,
+  Select,
+  StatusMessage,
+} from "../../components/ui";
 
 export function OrganizationAccess() {
   const queryClient = useQueryClient();
@@ -59,27 +67,18 @@ export function OrganizationAccess() {
     }
   }
   return (
-    <section
-      id="members"
-      className="admin-card members-card"
-      aria-labelledby="members-title"
-    >
-      <div className="compute-heading">
-        <div className="panel-header">
-          <span className="step-number">04</span>
-          <div>
-            <span className="section-kicker">People and permissions</span>
-            <h2 id="members-title">Organization access</h2>
-          </div>
-        </div>
-        <button
-          className="icon-text-button"
-          type="button"
-          onClick={() => void members.refetch()}
-        >
-          Refresh
-        </button>
-      </div>
+    <Panel id="members" className="members-card" labelledBy="members-title">
+      <PanelHeader
+        step="04"
+        kicker="People and permissions"
+        title="Organization access"
+        titleId="members-title"
+        action={
+          <Button variant="icon-text" onClick={() => void members.refetch()}>
+            Refresh
+          </Button>
+        }
+      />
       <div className="members-layout">
         <div className="invite-pane">
           <h3>Invite a teammate</h3>
@@ -88,41 +87,41 @@ export function OrganizationAccess() {
             className="invite-form"
             onSubmit={(event) => void invite(event)}
           >
-            <input
+            <Input
               name="email"
               type="email"
               placeholder="person@example.com"
               aria-label="Email"
               required
             />
-            <select name="role" aria-label="Role">
+            <Select name="role" aria-label="Role">
               <option value="member">Member</option>
               <option value="admin">Admin</option>
-            </select>
-            <button className="primary-button" type="submit">
+            </Select>
+            <Button variant="primary" type="submit">
               Create invitation
-            </button>
+            </Button>
           </form>
-          <p role="status">
+          <StatusMessage>
             {message ||
               (members.error instanceof Error ? members.error.message : "")}
-          </p>
+          </StatusMessage>
           {inviteLink && (
             <div className="invite-link-panel">
-              <input
+              <Input
                 type="text"
                 value={inviteLink}
                 readOnly
                 aria-label="Invitation link"
                 onFocus={(event) => event.target.select()}
               />
-              <button
-                className="secondary-button"
+              <Button
+                variant="secondary"
                 type="button"
                 onClick={() => void copy()}
               >
                 Copy link
-              </button>
+              </Button>
             </div>
           )}
         </div>
@@ -139,8 +138,8 @@ export function OrganizationAccess() {
                   </small>
                   {member.active && (
                     <span className="member-actions">
-                      <button
-                        className="text-button"
+                      <Button
+                        variant="text"
                         type="button"
                         onClick={() =>
                           update.mutate({
@@ -151,9 +150,9 @@ export function OrganizationAccess() {
                         }
                       >
                         Make {member.role === "admin" ? "member" : "admin"}
-                      </button>
-                      <button
-                        className="text-button"
+                      </Button>
+                      <Button
+                        variant="text"
                         type="button"
                         onClick={() =>
                           update.mutate({
@@ -163,9 +162,10 @@ export function OrganizationAccess() {
                         }
                       >
                         Revoke sessions
-                      </button>
-                      <button
-                        className="text-button danger-action"
+                      </Button>
+                      <Button
+                        variant="text"
+                        className="danger-action"
                         type="button"
                         onClick={() => {
                           if (
@@ -180,7 +180,7 @@ export function OrganizationAccess() {
                         }}
                       >
                         Deactivate
-                      </button>
+                      </Button>
                     </span>
                   )}
                 </span>
@@ -189,6 +189,6 @@ export function OrganizationAccess() {
           </div>
         </div>
       </div>
-    </section>
+    </Panel>
   );
 }

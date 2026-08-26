@@ -1,5 +1,13 @@
 import { useState, type FormEvent } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import {
+  Button,
+  FormField,
+  Input,
+  Panel,
+  PanelHeader,
+  ProgressBar,
+} from "../../components/ui";
 import { uploadDocument, type UploadProgress } from "./api";
 
 export function DocumentUploader({ disabled }: { disabled: boolean }) {
@@ -42,25 +50,20 @@ export function DocumentUploader({ disabled }: { disabled: boolean }) {
     setBusy(false);
   }
   return (
-    <section
-      id="documents"
-      className="admin-card workflow-card"
-      aria-labelledby="upload-title"
-    >
-      <header className="panel-header">
-        <span className="step-number">01</span>
-        <div>
-          <span className="section-kicker">Add knowledge</span>
-          <h2 id="upload-title">Upload documents</h2>
-        </div>
-      </header>
+    <Panel id="documents" className="workflow-card" labelledBy="upload-title">
+      <PanelHeader
+        step="01"
+        kicker="Add knowledge"
+        title="Upload documents"
+        titleId="upload-title"
+      />
       <p className="panel-description">
         Files are encrypted and held safely. Nothing starts compute until you
         explicitly release it.
       </p>
       <form className="upload-form" onSubmit={(event) => void submit(event)}>
         <label className="file-dropzone">
-          <input
+          <Input
             type="file"
             accept="text/plain,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.presentationml.presentation,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,image/png,image/jpeg,image/webp"
             multiple
@@ -89,22 +92,20 @@ export function DocumentUploader({ disabled }: { disabled: boolean }) {
           <fieldset className="access-fieldset">
             <legend className="sr-only">Document access</legend>
             <p>Leave blank to inherit the administrator role.</p>
-            <label>
-              <span>Allowed roles</span>
-              <input
+            <FormField label="Allowed roles">
+              <Input
                 value={roles}
                 onChange={(event) => setRoles(event.target.value)}
                 placeholder="member, admin"
               />
-            </label>
-            <label>
-              <span>Allowed users</span>
-              <input
+            </FormField>
+            <FormField label="Allowed users">
+              <Input
                 value={users}
                 onChange={(event) => setUsers(event.target.value)}
                 placeholder="user-123, user-456"
               />
-            </label>
+            </FormField>
           </fieldset>
         </details>
         <div className="upload-status" role="status">
@@ -112,45 +113,26 @@ export function DocumentUploader({ disabled }: { disabled: boolean }) {
         </div>
         {progress && (
           <div className="upload-progress">
-            <Progress label="Upload" value={progress.upload} />
-            <Progress label="Processing" value={progress.indexing} />
+            <ProgressBar label="Upload" value={progress.upload} showValue />
+            <ProgressBar
+              label="Processing"
+              value={progress.indexing}
+              showValue
+            />
           </div>
         )}
-        <button
-          className="primary-button"
+        <Button
+          variant="primary"
           type="submit"
-          disabled={disabled || busy || !files.length}
+          disabled={disabled || !files.length}
+          busy={busy}
+          busyLabel={<span>Uploading…</span>}
         >
           <span>
-            {busy
-              ? "Uploading…"
-              : `Upload and hold${files.length > 1 ? ` ${files.length}` : ""}`}
+            Upload and hold{files.length > 1 ? ` ${files.length}` : ""}
           </span>
-        </button>
+        </Button>
       </form>
-    </section>
-  );
-}
-
-function Progress({ label, value }: { label: string; value: number }) {
-  const rounded = Math.round(value);
-  return (
-    <div className="upload-progress-row">
-      <span>{label}</span>
-      <div
-        className="upload-progress-track"
-        role="progressbar"
-        aria-label={`${label} progress`}
-        aria-valuemin={0}
-        aria-valuemax={100}
-        aria-valuenow={rounded}
-      >
-        <span
-          className="upload-progress-fill"
-          style={{ width: `${rounded}%` }}
-        />
-      </div>
-      <strong>{rounded}%</strong>
-    </div>
+    </Panel>
   );
 }

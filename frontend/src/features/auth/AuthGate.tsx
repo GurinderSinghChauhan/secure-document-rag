@@ -1,7 +1,13 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { api } from "../../api/client";
 import type { AuthResponse } from "../../api/types";
-import { PasswordField } from "../../components/ui/PasswordField";
+import {
+  Button,
+  FormField,
+  Input,
+  PasswordField,
+  StatusMessage,
+} from "../../components/ui";
 import { useAuth } from "./context";
 
 type Mode = "login" | "register" | "reset" | "invite";
@@ -136,27 +142,24 @@ export function AuthGate() {
                 ? "Accept your invitation"
                 : "Reset your password"}
         </h1>
-        <p role="status">{message}</p>
+        <StatusMessage>{message}</StatusMessage>
         <form className="auth-form" onSubmit={(event) => void submit(event)}>
           {(mode === "register" || mode === "invite") && (
-            <label>
-              <span>Your name</span>
-              <input
+            <FormField label="Your name">
+              <Input
                 name="display_name"
                 autoComplete="name"
                 minLength={2}
                 required
               />
-            </label>
+            </FormField>
           )}
           {(mode === "login" || mode === "register") && (
-            <label>
-              <span>Email</span>
-              <input name="email" type="email" autoComplete="email" required />
-            </label>
+            <FormField label="Email">
+              <Input name="email" type="email" autoComplete="email" required />
+            </FormField>
           )}
-          <label>
-            <span>{mode === "login" ? "Password" : "New password"}</span>
+          <FormField label={mode === "login" ? "Password" : "New password"}>
             <PasswordField
               id="auth-password"
               name="password"
@@ -166,25 +169,27 @@ export function AuthGate() {
               minLength={mode === "login" ? 1 : 12}
               required
             />
-          </label>
+          </FormField>
           {mode === "register" && (
-            <label>
-              <span>Organization name</span>
-              <input name="organization_name" minLength={2} required />
-            </label>
+            <FormField label="Organization name">
+              <Input name="organization_name" minLength={2} required />
+            </FormField>
           )}
-          <button className="primary-button" type="submit" disabled={busy}>
-            {busy
-              ? "Please wait…"
-              : mode === "login"
-                ? "Sign in"
-                : mode === "register"
-                  ? "Create organization"
-                  : "Continue"}
-          </button>
+          <Button
+            variant="primary"
+            type="submit"
+            busy={busy}
+            busyLabel="Please wait…"
+          >
+            {mode === "login"
+              ? "Sign in"
+              : mode === "register"
+                ? "Create organization"
+                : "Continue"}
+          </Button>
           {mode === "login" && (
-            <button
-              className="text-button"
+            <Button
+              variant="text"
               type="button"
               onClick={(event) => {
                 const value = new FormData(
@@ -194,12 +199,12 @@ export function AuthGate() {
               }}
             >
               Forgot password?
-            </button>
+            </Button>
           )}
         </form>
         {(mode === "login" || mode === "register") && (
-          <button
-            className="text-button"
+          <Button
+            variant="text"
             type="button"
             onClick={() =>
               setMode((value) => (value === "login" ? "register" : "login"))
@@ -208,7 +213,7 @@ export function AuthGate() {
             {mode === "login"
               ? "Create an organization account"
               : "Already have an account? Sign in"}
-          </button>
+          </Button>
         )}
       </div>
     </section>

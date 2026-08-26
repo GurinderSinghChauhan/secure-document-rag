@@ -1,6 +1,7 @@
 import { NavLink } from "react-router-dom";
 import type { ReactNode } from "react";
 import { useAuth } from "../../features/auth";
+import { Button } from "../ui";
 
 interface AppShellProps {
   section: "Ask" | "Admin" | "Platform Admin";
@@ -76,13 +77,13 @@ export function AppShell({ section, children, sidebar }: AppShellProps) {
                 {user?.organization.name} · {user?.role}
               </small>
             </div>
-            <button
-              className="secondary-button"
+            <Button
+              variant="secondary"
               type="button"
               onClick={() => void logout()}
             >
               Sign out
-            </button>
+            </Button>
           </div>
         </header>
         {children}

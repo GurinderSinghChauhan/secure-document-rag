@@ -6,6 +6,14 @@ import {
   listHeldJobs,
   releaseJobs,
 } from "./api";
+import {
+  Button,
+  Input,
+  Panel,
+  PanelHeader,
+  ProgressBar,
+  StatusMessage,
+} from "../../components/ui";
 
 function formatBytes(size: number) {
   if (size < 1024) return `${size} B`;
@@ -67,35 +75,29 @@ export function ComputeQueue({ disabled }: { disabled: boolean }) {
     });
   }
   return (
-    <section
-      id="compute"
-      className="admin-card workflow-card"
-      aria-labelledby="compute-title"
-    >
-      <div className="compute-heading">
-        <div className="panel-header">
-          <span className="step-number">02</span>
-          <div>
-            <span className="section-kicker">Controlled processing</span>
-            <h2 id="compute-title">Release to compute</h2>
-          </div>
-        </div>
-        <button
-          className="icon-text-button"
-          type="button"
-          disabled={Boolean(sessionId)}
-          onClick={() => void held.refetch()}
-        >
-          Refresh
-        </button>
-      </div>
-      <p className="panel-description" role="status">
+    <Panel id="compute" className="workflow-card" labelledBy="compute-title">
+      <PanelHeader
+        step="02"
+        kicker="Controlled processing"
+        title="Release to compute"
+        titleId="compute-title"
+        action={
+          <Button
+            variant="icon-text"
+            disabled={Boolean(sessionId)}
+            onClick={() => void held.refetch()}
+          >
+            Refresh
+          </Button>
+        }
+      />
+      <StatusMessage className="panel-description">
         {release.error instanceof Error ? release.error.message : message}
-      </p>
+      </StatusMessage>
       {!sessionId && (
         <div className="compute-selection-toolbar">
           <label>
-            <input
+            <Input
               type="checkbox"
               checked={
                 Boolean(held.data?.length) &&
@@ -117,14 +119,14 @@ export function ComputeQueue({ disabled }: { disabled: boolean }) {
             />{" "}
             Select all waiting
           </label>
-          <button
-            className="text-button"
+          <Button
+            variant="text"
             type="button"
             disabled={!selected.size}
             onClick={() => setSelected(new Set())}
           >
             Clear
-          </button>
+          </Button>
           <strong role="status">{selected.size} selected</strong>
         </div>
       )}
@@ -138,14 +140,16 @@ export function ComputeQueue({ disabled }: { disabled: boolean }) {
                   {job.stage.replaceAll("_", " ")} · {job.progress}% —{" "}
                   {job.message}
                 </small>
-                <span className="job-progress">
-                  <i style={{ width: `${job.progress}%` }} />
-                </span>
+                <ProgressBar
+                  variant="job"
+                  label={`${job.document_name} processing progress`}
+                  value={job.progress}
+                />
               </span>
             </div>
           ) : (
             <label className="held-job" key={job.job_id}>
-              <input
+              <Input
                 type="checkbox"
                 checked={selected.has(job.job_id)}
                 onChange={() => toggle(job.job_id)}
@@ -172,29 +176,30 @@ export function ComputeQueue({ disabled }: { disabled: boolean }) {
           <div className="compute-limits" aria-live="polite">
             <label>
               <span>Selected documents</span>
-              <input type="number" min={0} value={selected.size} readOnly />
+              <Input type="number" min={0} value={selected.size} readOnly />
             </label>
             <label>
               <span>Estimated GPU minutes</span>
-              <input type="number" min={0} value={minutes} readOnly />
+              <Input type="number" min={0} value={minutes} readOnly />
             </label>
           </div>
           <p className="guardrail-note">
             Document count and GPU minutes update automatically with the
             selection. Processing stops earlier when the batch finishes.
           </p>
-          <button
-            className="primary-button full-button"
+          <Button
+            variant="primary"
+            className="full-button"
             type="button"
-            disabled={disabled || !selected.size || release.isPending}
+            disabled={disabled || !selected.size}
+            busy={release.isPending}
+            busyLabel="Opening compute session…"
             onClick={() => release.mutate()}
           >
-            {release.isPending
-              ? "Opening compute session…"
-              : "Start selected batch"}
-          </button>
+            Start selected batch
+          </Button>
         </>
       )}
-    </section>
+    </Panel>
   );
 }
