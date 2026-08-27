@@ -154,11 +154,18 @@ test("renders authorized document coverage and schema-driven metadata", async ()
     screen.getByText("1 classified documents across 1 configured verticals."),
   ).toBeVisible();
   expect(screen.getByText("invoice_number")).toBeInTheDocument();
+  expect(
+    screen.getByRole("region", { name: "Extracted document data table" }),
+  ).toBeVisible();
+  expect(screen.getByRole("table")).toBeVisible();
+  expect(
+    screen.getByRole("columnheader", { name: "Extracted fields" }),
+  ).toBeVisible();
+  expect(
+    screen.getByRole("cell", { name: /invoice number INV-42/i }),
+  ).toBeVisible();
   expect(screen.getByText("Review type")).toBeVisible();
   expect(screen.getByText("Detection confidence: 72%")).toBeVisible();
-  expect(
-    screen.getByRole("region", { name: "Searchable document list" }),
-  ).toHaveClass("dashboard-document-list");
 
   const user = userEvent.setup();
   await user.type(

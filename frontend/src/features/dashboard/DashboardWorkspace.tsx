@@ -13,8 +13,21 @@ import { dashboardKeys, getDashboard, searchDashboardDocuments } from "./api";
 
 function formatValue(value: unknown) {
   if (Array.isArray(value)) return value.join(", ");
-  if (value && typeof value === "object") return JSON.stringify(value);
-  return String(value);
+  if (value && typeof value === "object") return JSON.stringify(value) ?? "—";
+  if (value === null || value === undefined || value === "") return "—";
+  if (typeof value === "string") return value;
+  if (
+    typeof value === "number" ||
+    typeof value === "boolean" ||
+    typeof value === "bigint"
+  ) {
+    return String(value);
+  }
+  return "—";
+}
+
+function formatFieldName(field: string) {
+  return field.replaceAll("_", " ");
 }
 
 export function DashboardWorkspace() {
@@ -155,8 +168,8 @@ export function DashboardWorkspace() {
         <section aria-labelledby="dashboard-documents-title">
           <div className="dashboard-section-heading">
             <div>
-              <span className="section-kicker">Document inventory</span>
-              <h2 id="dashboard-documents-title">Documents</h2>
+              <span className="section-kicker">Extracted data</span>
+              <h2 id="dashboard-documents-title">Document data</h2>
             </div>
             <p>
               {documents.data
@@ -183,81 +196,108 @@ export function DashboardWorkspace() {
             <div
               className="dashboard-document-list"
               role="region"
-              aria-label="Searchable document list"
+              aria-label="Extracted document data table"
               tabIndex={0}
             >
-              {documents.data.documents.map((document) => (
-                <article
-                  className="dashboard-document-card"
-                  key={document.document_id}
-                >
-                  <header>
-                    <div>
-                      <strong>{document.document_name}</strong>
-                      <small>
-                        {document.industry_label} ·{" "}
-                        {document.document_type_label}
-                      </small>
-                    </div>
-                    <div className="document-status-badges">
-                      <Badge
-                        variant={
-                          document.classification_status === "confirmed"
-                            ? "active"
-                            : "suspended"
-                        }
-                      >
-                        {document.classification_status === "review_required"
-                          ? "Review type"
-                          : document.classification_status === "failed"
-                            ? "Detection failed"
-                            : document.classification_status === "unclassified"
-                              ? "Unclassified"
-                              : document.classification_source === "manual"
-                                ? "Manual type"
-                                : "Auto-detected"}
-                      </Badge>
-                      <Badge
-                        variant={
-                          document.extraction_status === "completed"
-                            ? "active"
-                            : "suspended"
-                        }
-                      >
-                        {document.extraction_status === "completed"
-                          ? "Extracted"
-                          : document.extraction_status === "failed"
-                            ? "Extraction failed"
-                            : "Not extracted"}
-                      </Badge>
-                    </div>
-                  </header>
-                  {typeof document.classification_confidence === "number" && (
-                    <p className="classification-confidence">
-                      Detection confidence:{" "}
-                      {Math.round(document.classification_confidence * 100)}%
-                    </p>
-                  )}
-                  {Object.keys(document.extracted_metadata).length > 0 && (
-                    <details className="metadata-disclosure">
-                      <summary>View extracted metadata</summary>
-                      <dl>
-                        {Object.entries(document.extracted_metadata).map(
-                          ([key, value]) => (
-                            <div key={key}>
-                              <dt>{key.replaceAll("_", " ")}</dt>
-                              <dd>{formatValue(value)}</dd>
-                            </div>
-                          ),
-                        )}
-                      </dl>
-                    </details>
-                  )}
-                  <time dateTime={document.created_at}>
-                    Indexed {new Date(document.created_at).toLocaleString()}
-                  </time>
-                </article>
-              ))}
+              <table className="dashboard-document-table">
+                <caption className="sr-only">
+                  Extracted data for authorized documents
+                </caption>
+                <thead>
+                  <tr>
+                    <th scope="col">Document</th>
+                    <th scope="col">Classification</th>
+                    <th scope="col">Extraction</th>
+                    <th scope="col">Extracted fields</th>
+                    <th scope="col">Indexed</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {documents.data.documents.map((document) => {
+                    const extractedFields = Object.entries(
+                      document.extracted_metadata,
+                    );
+                    return (
+                      <tr key={document.document_id}>
+                        <th scope="row" className="document-identity-cell">
+                          <strong>{document.document_name}</strong>
+                          <small>
+                            {document.industry_label} ·{" "}
+                            {document.document_type_label}
+                          </small>
+                        </th>
+                        <td className="document-classification-cell">
+                          <Badge
+                            variant={
+                              document.classification_status === "confirmed"
+                                ? "active"
+                                : "suspended"
+                            }
+                          >
+                            {document.classification_status ===
+                            "review_required"
+                              ? "Review type"
+                              : document.classification_status === "failed"
+                                ? "Detection failed"
+                                : document.classification_status ===
+                                    "unclassified"
+                                  ? "Unclassified"
+                                  : document.classification_source === "manual"
+                                    ? "Manual type"
+                                    : "Auto-detected"}
+                          </Badge>
+                          {typeof document.classification_confidence ===
+                            "number" && (
+                            <small>
+                              Detection confidence:{" "}
+                              {Math.round(
+                                document.classification_confidence * 100,
+                              )}
+                              %
+                            </small>
+                          )}
+                        </td>
+                        <td>
+                          <Badge
+                            variant={
+                              document.extraction_status === "completed"
+                                ? "active"
+                                : "suspended"
+                            }
+                          >
+                            {document.extraction_status === "completed"
+                              ? "Extracted"
+                              : document.extraction_status === "failed"
+                                ? "Extraction failed"
+                                : "Not extracted"}
+                          </Badge>
+                        </td>
+                        <td className="document-extracted-data-cell">
+                          {extractedFields.length > 0 ? (
+                            <dl>
+                              {extractedFields.map(([key, value]) => (
+                                <div key={key}>
+                                  <dt>{formatFieldName(key)}</dt>
+                                  <dd>{formatValue(value)}</dd>
+                                </div>
+                              ))}
+                            </dl>
+                          ) : (
+                            <span className="no-extracted-data">
+                              No extracted data
+                            </span>
+                          )}
+                        </td>
+                        <td className="document-indexed-cell">
+                          <time dateTime={document.created_at}>
+                            {new Date(document.created_at).toLocaleString()}
+                          </time>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
           ) : (
             !documents.isPending &&
