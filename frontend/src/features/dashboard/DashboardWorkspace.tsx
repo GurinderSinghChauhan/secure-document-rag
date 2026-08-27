@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { AppShell } from "../../components/layout/AppShell";
 import {
@@ -53,6 +53,27 @@ export function DashboardWorkspace() {
     queryKey: dashboardKeys.documents(debouncedDocumentQuery),
     queryFn: () => searchDashboardDocuments(debouncedDocumentQuery),
   });
+  const extractedFieldKeys = useMemo(() => {
+    const fieldsByDocumentType = new Map(
+      (schemas.data ?? []).flatMap((industry) =>
+        industry.document_types.map(
+          (document) => [document.key, document.fields] as const,
+        ),
+      ),
+    );
+    return Array.from(
+      new Set(
+        (documents.data?.documents ?? []).flatMap((document) => [
+          ...(document.document_type
+            ? (fieldsByDocumentType.get(document.document_type) ?? [])
+            : []),
+          ...Object.keys(document.extracted_metadata),
+        ]),
+      ),
+    ).sort((left, right) =>
+      formatFieldName(left).localeCompare(formatFieldName(right)),
+    );
+  }, [documents.data?.documents, schemas.data]);
   const activeIndustry =
     schemas.data?.find(
       (industry) => industry.key === (selectedIndustry ?? schemas.data[0]?.key),
@@ -208,15 +229,20 @@ export function DashboardWorkspace() {
                     <th scope="col">Document</th>
                     <th scope="col">Classification</th>
                     <th scope="col">Extraction</th>
-                    <th scope="col">Extracted fields</th>
+                    {extractedFieldKeys.map((field) => (
+                      <th
+                        className="document-extracted-field-column"
+                        scope="col"
+                        key={field}
+                      >
+                        {formatFieldName(field)}
+                      </th>
+                    ))}
                     <th scope="col">Indexed</th>
                   </tr>
                 </thead>
                 <tbody>
                   {documents.data.documents.map((document) => {
-                    const extractedFields = Object.entries(
-                      document.extracted_metadata,
-                    );
                     return (
                       <tr key={document.document_id}>
                         <th scope="row" className="document-identity-cell">
@@ -272,22 +298,14 @@ export function DashboardWorkspace() {
                                 : "Not extracted"}
                           </Badge>
                         </td>
-                        <td className="document-extracted-data-cell">
-                          {extractedFields.length > 0 ? (
-                            <dl>
-                              {extractedFields.map(([key, value]) => (
-                                <div key={key}>
-                                  <dt>{formatFieldName(key)}</dt>
-                                  <dd>{formatValue(value)}</dd>
-                                </div>
-                              ))}
-                            </dl>
-                          ) : (
-                            <span className="no-extracted-data">
-                              No extracted data
-                            </span>
-                          )}
-                        </td>
+                        {extractedFieldKeys.map((field) => (
+                          <td
+                            className="document-extracted-value-cell"
+                            key={field}
+                          >
+                            {formatValue(document.extracted_metadata[field])}
+                          </td>
+                        ))}
                         <td className="document-indexed-cell">
                           <time dateTime={document.created_at}>
                             {new Date(document.created_at).toLocaleString()}

@@ -159,11 +159,13 @@ test("renders authorized document coverage and schema-driven metadata", async ()
   ).toBeVisible();
   expect(screen.getByRole("table")).toBeVisible();
   expect(
-    screen.getByRole("columnheader", { name: "Extracted fields" }),
+    screen.getByRole("columnheader", { name: "invoice number" }),
   ).toBeVisible();
   expect(
-    screen.getByRole("cell", { name: /invoice number INV-42/i }),
+    screen.getByRole("columnheader", { name: "total amount" }),
   ).toBeVisible();
+  expect(screen.getByRole("cell", { name: "INV-42" })).toBeVisible();
+  expect(screen.getByRole("cell", { name: "—" })).toBeVisible();
   expect(screen.getByText("Review type")).toBeVisible();
   expect(screen.getByText("Detection confidence: 72%")).toBeVisible();
 
