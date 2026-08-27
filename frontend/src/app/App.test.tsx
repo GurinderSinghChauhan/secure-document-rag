@@ -98,7 +98,10 @@ test("renders authorized document coverage and schema-driven metadata", async ()
     classification_source: "automatic",
     classification_confidence: 0.72,
     extraction_status: "completed",
-    extracted_metadata: { invoice_number: "INV-42" },
+    extracted_metadata: {
+      invoice_number: "INV-42",
+      problem_description: "First line\nSecond line",
+    },
     created_at: "2030-01-01T00:00:00Z",
   };
   server.use(
@@ -130,7 +133,7 @@ test("renders authorized document coverage and schema-driven metadata", async ()
             {
               key: "field_service.service_invoice",
               label: "Service Invoice",
-              fields: ["invoice_number", "total_amount"],
+              fields: ["invoice_number", "problem_description", "total_amount"],
             },
           ],
         },
@@ -165,6 +168,9 @@ test("renders authorized document coverage and schema-driven metadata", async ()
     screen.getByRole("columnheader", { name: "total amount" }),
   ).toBeVisible();
   expect(screen.getByRole("cell", { name: "INV-42" })).toBeVisible();
+  expect(
+    screen.getByRole("cell", { name: /First line\s+Second line/ }),
+  ).toHaveClass("document-extracted-value-cell");
   expect(screen.getByRole("cell", { name: "—" })).toBeVisible();
   expect(screen.getByText("Review type")).toBeVisible();
   expect(screen.getByText("Detection confidence: 72%")).toBeVisible();

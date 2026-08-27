@@ -207,8 +207,8 @@
 }
 
 .dashboard-document-table {
-  width: max-content;
   min-width: 100%;
+  table-layout: fixed;
   border-collapse: collapse;
 }
 
@@ -240,10 +240,9 @@
   background: var(--surface-subtle);
 }
 
+.document-identity-column,
 .document-identity-cell {
-  width: 230px;
-  min-width: 220px;
-  max-width: 230px;
+  width: 220px;
 }
 
 .document-identity-cell strong,
@@ -265,27 +264,32 @@
   font-size: 11px;
 }
 
+.document-classification-column,
 .document-classification-cell {
-  min-width: 160px;
+  width: 160px;
 }
 
+.document-extraction-column,
 .dashboard-document-table td:nth-child(3) {
-  min-width: 125px;
+  width: 125px;
 }
 
 .document-extracted-field-column,
 .document-extracted-value-cell {
-  min-width: 160px;
-  max-width: 280px;
+  width: 220px;
 }
 
 .document-extracted-value-cell {
   overflow-wrap: anywhere;
   font-size: 12px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
+.document-indexed-column,
 .document-indexed-cell {
-  min-width: 175px;
+  width: 175px;
   white-space: nowrap;
 }
 

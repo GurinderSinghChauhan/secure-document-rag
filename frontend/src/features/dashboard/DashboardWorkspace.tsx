@@ -220,15 +220,24 @@ export function DashboardWorkspace() {
               aria-label="Extracted document data table"
               tabIndex={0}
             >
-              <table className="dashboard-document-table">
+              <table
+                className="dashboard-document-table"
+                style={{ width: `${680 + extractedFieldKeys.length * 220}px` }}
+              >
                 <caption className="sr-only">
                   Extracted data for authorized documents
                 </caption>
                 <thead>
                   <tr>
-                    <th scope="col">Document</th>
-                    <th scope="col">Classification</th>
-                    <th scope="col">Extraction</th>
+                    <th className="document-identity-column" scope="col">
+                      Document
+                    </th>
+                    <th className="document-classification-column" scope="col">
+                      Classification
+                    </th>
+                    <th className="document-extraction-column" scope="col">
+                      Extraction
+                    </th>
                     {extractedFieldKeys.map((field) => (
                       <th
                         className="document-extracted-field-column"
@@ -238,7 +247,9 @@ export function DashboardWorkspace() {
                         {formatFieldName(field)}
                       </th>
                     ))}
-                    <th scope="col">Indexed</th>
+                    <th className="document-indexed-column" scope="col">
+                      Indexed
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
