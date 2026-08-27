@@ -314,7 +314,11 @@ export function DashboardWorkspace() {
                             className="document-extracted-value-cell"
                             key={field}
                           >
-                            {formatValue(document.extracted_metadata[field])}
+                            <ExtractedFieldValue
+                              documentName={document.document_name}
+                              field={field}
+                              value={document.extracted_metadata[field]}
+                            />
                           </td>
                         ))}
                         <td className="document-indexed-cell">
@@ -348,6 +352,39 @@ export function DashboardWorkspace() {
         </section>
       </main>
     </AppShell>
+  );
+}
+
+function ExtractedFieldValue({
+  documentName,
+  field,
+  value,
+}: {
+  documentName: string;
+  field: string;
+  value: unknown;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const formattedValue = formatValue(value);
+  const isLong =
+    formattedValue.length > 80 || formattedValue.split(/\r?\n/).length > 3;
+
+  return (
+    <div className={`document-cell-value ${expanded ? "expanded" : ""}`}>
+      <span className="document-cell-value-text">{formattedValue}</span>
+      {isLong && (
+        <Button
+          variant="text"
+          className="document-cell-toggle"
+          type="button"
+          aria-expanded={expanded}
+          aria-label={`${expanded ? "Collapse" : "Show all"} ${formatFieldName(field)} for ${documentName}`}
+          onClick={() => setExpanded((current) => !current)}
+        >
+          {expanded ? "Show less" : "Show more"}
+        </Button>
+      )}
+    </div>
   );
 }
 

@@ -100,7 +100,8 @@ test("renders authorized document coverage and schema-driven metadata", async ()
     extraction_status: "completed",
     extracted_metadata: {
       invoice_number: "INV-42",
-      problem_description: "First line\nSecond line",
+      problem_description:
+        "First line with enough extracted detail to require a compact preview.\nSecond line continues the document narrative.",
     },
     created_at: "2030-01-01T00:00:00Z",
   };
@@ -168,14 +169,23 @@ test("renders authorized document coverage and schema-driven metadata", async ()
     screen.getByRole("columnheader", { name: "total amount" }),
   ).toBeVisible();
   expect(screen.getByRole("cell", { name: "INV-42" })).toBeVisible();
-  expect(
-    screen.getByRole("cell", { name: /First line\s+Second line/ }),
-  ).toHaveClass("document-extracted-value-cell");
+  const longValue = screen.getByText(/First line with enough extracted detail/);
+  expect(longValue).toHaveClass("document-cell-value-text");
+  const expandValue = screen.getByRole("button", {
+    name: "Show all problem description for service-invoice.pdf",
+  });
+  expect(expandValue).toHaveAttribute("aria-expanded", "false");
   expect(screen.getByRole("cell", { name: "—" })).toBeVisible();
   expect(screen.getByText("Review type")).toBeVisible();
   expect(screen.getByText("Detection confidence: 72%")).toBeVisible();
 
   const user = userEvent.setup();
+  await user.click(expandValue);
+  expect(
+    screen.getByRole("button", {
+      name: "Collapse problem description for service-invoice.pdf",
+    }),
+  ).toHaveAttribute("aria-expanded", "true");
   await user.type(
     screen.getByRole("searchbox", { name: "Search dashboard documents" }),
     "invoice",
