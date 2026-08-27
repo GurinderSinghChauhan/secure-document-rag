@@ -5,7 +5,12 @@ from fastapi import HTTPException
 from sqlalchemy.dialects import postgresql
 
 from app.database import DocumentRecord
-from app.document_schemas import DOCUMENT_SCHEMAS, INDUSTRIES, require_document_schema
+from app.document_schemas import (
+    DOCUMENT_SCHEMAS,
+    INDUSTRIES,
+    SCHEMA_VERSION,
+    require_document_schema,
+)
 from app.main import (
     classification_decision,
     dashboard,
@@ -68,10 +73,32 @@ def document(
 def test_document_schema_registry_is_versioned_unique_and_complete():
     keys = [document.key for industry in INDUSTRIES for document in industry.document_types]
 
-    assert len(INDUSTRIES) == 6
+    assert SCHEMA_VERSION == 2
+    assert len(INDUSTRIES) == 11
+    assert len(keys) == 74
+    assert {
+        industry.key: len(industry.document_types) for industry in INDUSTRIES
+    } == {
+        "field_service": 7,
+        "contract_intelligence": 6,
+        "litigation": 7,
+        "healthcare": 7,
+        "insurance": 7,
+        "accounts_payable": 7,
+        "construction": 7,
+        "manufacturing": 7,
+        "banking_lending": 7,
+        "hr": 6,
+        "property_management": 6,
+    }
     assert len(keys) == len(set(keys)) == len(DOCUMENT_SCHEMAS)
     assert all(document.fields for industry in INDUSTRIES for document in industry.document_types)
     assert require_document_schema("accounts_payable.invoice").label == "Invoice"
+    assert require_document_schema("construction.change_order").label == "Change Order"
+    assert require_document_schema("manufacturing.sop").label == "SOP"
+    assert require_document_schema("banking_lending.loan_application").label == "Loan Application"
+    assert require_document_schema("hr.performance_review").label == "Performance Review"
+    assert require_document_schema("property_management.lease_agreement").label == "Lease Agreement"
     with pytest.raises(ValueError, match="Unsupported document type"):
         require_document_schema("unknown.type")
 

@@ -120,7 +120,7 @@ async def test_reindexing_soft_deleted_content_restores_existing_row(monkeypatch
     assert document.deleted_at is None
     assert document.document_name == "restored.pdf"
     assert document.document_type == "accounts_payable.invoice"
-    assert document.schema_version == 1
+    assert document.schema_version == 2
     assert document.classification_status == "confirmed"
     assert document.classification_source == "manual"
     assert document.classification_confidence is None

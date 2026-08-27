@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 
 @dataclass(frozen=True)
@@ -105,6 +105,74 @@ INDUSTRIES: tuple[IndustrySchema, ...] = (
             _document("accounts_payable.receipt", "Receipt / Goods Received Note", "receipt_number,po_number,vendor,received_date,sku,description,ordered_quantity,received_quantity,damaged_quantity,receiver"),
             _document("accounts_payable.credit_memo", "Credit Memo", "credit_memo_number,vendor,original_invoice,issue_date,reason,credit_amount,tax_adjustment,total_credit"),
             _document("accounts_payable.vendor_statement", "Vendor Statement", "vendor,statement_date,invoice_numbers,opening_balance,charges,payments,credits,closing_balance"),
+        ),
+    ),
+    IndustrySchema(
+        key="construction",
+        label="Construction",
+        description="Projects, contracts, change orders, submittals, payments, inspections, and delays.",
+        document_types=(
+            _document("construction.contract", "Construction Contract", "contract_number,project_name,owner,general_contractor,contractor,start_date,completion_date,contract_value,retainage,payment_terms,scope,liquidated_damages,insurance_requirements"),
+            _document("construction.change_order", "Change Order", "change_order_number,project,contract,request_date,description,reason,original_contract_value,change_amount,revised_contract_value,schedule_impact_days,approval_status"),
+            _document("construction.rfi", "RFI", "rfi_number,project,submitted_date,submitted_by,assigned_to,subject,question,response,response_date,schedule_impact,cost_impact,status"),
+            _document("construction.submittal", "Submittal", "submittal_number,project,specification_section,description,contractor,submitted_date,reviewer,review_date,status,comments"),
+            _document("construction.daily_report", "Daily Report", "project,report_date,superintendent,weather,workers_on_site,work_completed,equipment_used,materials_received,delays,incidents,visitors"),
+            _document("construction.pay_application", "Pay Application", "application_number,project,contractor,period_start,period_end,original_contract,change_orders,completed_to_date,retainage,previous_payments,current_payment_due"),
+            _document("construction.inspection_report", "Inspection Report", "project,inspection_date,inspector,inspection_type,area,findings,deficiencies,corrective_actions,due_date,status"),
+        ),
+    ),
+    IndustrySchema(
+        key="manufacturing",
+        label="Manufacturing",
+        description="Equipment, procedures, maintenance, quality, materials, and production safety.",
+        document_types=(
+            _document("manufacturing.equipment_manual", "Equipment Manual", "manufacturer,equipment_name,model,serial_range,specifications,operating_limits,maintenance_interval,error_codes,troubleshooting,parts,safety_warnings"),
+            _document("manufacturing.sop", "SOP", "sop_number,title,department,version,effective_date,owner,purpose,scope,required_equipment,procedure_steps,safety_requirements,approval"),
+            _document("manufacturing.maintenance_work_order", "Maintenance Work Order", "work_order,machine_id,machine_name,reported_date,failure_type,symptoms,technician,diagnosis,repair,parts_used,downtime,completion_date"),
+            _document("manufacturing.quality_inspection_report", "Quality Inspection Report", "inspection_id,product,batch,inspection_date,inspector,measurement,specification,actual_value,pass_fail,defects,corrective_action"),
+            _document("manufacturing.certificate_of_analysis", "Certificate of Analysis", "certificate_number,product,batch_number,manufacturing_date,test,specification,result,unit,pass_fail,approved_by"),
+            _document("manufacturing.safety_data_sheet", "Safety Data Sheet", "product_name,manufacturer,hazards,signal_word,ppe,first_aid,handling,storage,exposure_limits,spill_procedure,firefighting_measures"),
+            _document("manufacturing.bill_of_materials", "Bill of Materials", "bom_number,product,revision,component_number,component_name,quantity,unit,manufacturer,supplier"),
+        ),
+    ),
+    IndustrySchema(
+        key="banking_lending",
+        label="Banking / Mortgage / Lending",
+        description="Loan files, borrower finances, credit, income verification, and property valuation.",
+        document_types=(
+            _document("banking_lending.loan_application", "Loan Application", "application_id,borrower,co_borrower,loan_amount,loan_type,property_address,purchase_price,down_payment,employment,monthly_income,assets,liabilities"),
+            _document("banking_lending.bank_statement", "Bank Statement", "borrower,bank_name,account_type,account_last4,statement_start,statement_end,opening_balance,closing_balance,total_deposits,total_withdrawals,average_balance,overdrafts"),
+            _document("banking_lending.pay_stub", "Pay Stub", "employee,employer,pay_period_start,pay_period_end,pay_date,gross_pay,net_pay,ytd_gross,taxes,deductions"),
+            _document("banking_lending.w2", "W-2", "tax_year,employee,employer,employer_ein,wages,federal_tax_withheld,social_security_wages,medicare_wages,state_wages"),
+            _document("banking_lending.tax_return", "Tax Return", "tax_year,taxpayer,filing_status,total_income,agi,taxable_income,total_tax,refund_or_amount_owed"),
+            _document("banking_lending.credit_report", "Credit Report", "borrower,report_date,credit_score,accounts,total_debt,monthly_payments,delinquencies,collections,inquiries"),
+            _document("banking_lending.appraisal", "Appraisal", "property_address,appraisal_date,appraiser,property_type,square_feet,bedrooms,bathrooms,comparable_sales,appraised_value"),
+        ),
+    ),
+    IndustrySchema(
+        key="hr",
+        label="HR / Employee Document Intelligence",
+        description="Recruiting, employment, performance, policies, compensation, and benefits.",
+        document_types=(
+            _document("hr.resume", "Resume", "candidate_name,email,phone,location,skills,education,certifications,employers,job_titles,employment_dates,years_experience"),
+            _document("hr.offer_letter", "Offer Letter", "employee,job_title,department,manager,start_date,base_salary,bonus,equity,location,employment_type,benefits,acceptance_date"),
+            _document("hr.employment_agreement", "Employment Agreement", "employee,employer,effective_date,title,compensation,bonus,termination_terms,confidentiality,ip_assignment,non_solicitation"),
+            _document("hr.performance_review", "Performance Review", "employee,manager,review_period,rating,goals,achievements,strengths,improvement_areas,next_period_goals"),
+            _document("hr.employee_handbook", "Employee Handbook", "policy_name,policy_category,effective_date,eligibility,requirements,benefits,exceptions,approval_authority"),
+            _document("hr.benefits_document", "Benefits Document", "plan_name,provider,plan_year,eligibility,employee_cost,employer_cost,deductible,coverage,limitations"),
+        ),
+    ),
+    IndustrySchema(
+        key="property_management",
+        label="Property Management / Real Estate",
+        description="Leases, rent, maintenance, inspections, vendors, and property insurance.",
+        document_types=(
+            _document("property_management.lease_agreement", "Lease Agreement", "property,unit,tenant,lease_start,lease_end,monthly_rent,deposit,late_fee,utilities,parking,pets,renewal_terms,notice_period"),
+            _document("property_management.rent_invoice", "Rent Invoice", "tenant,property,unit,billing_period,rent,utilities,fees,total_due,due_date,paid_amount,balance"),
+            _document("property_management.maintenance_request", "Maintenance Request", "request_id,property,unit,tenant,request_date,category,problem,priority,vendor,scheduled_date,completion_date,cost,status"),
+            _document("property_management.inspection_report", "Inspection Report", "property,unit,inspection_date,inspector,condition,damage,required_repairs,estimated_cost,photos_reference"),
+            _document("property_management.vendor_invoice", "Vendor Invoice", "vendor,property,invoice_number,invoice_date,service,labor,materials,tax,total,payment_status"),
+            _document("property_management.property_insurance", "Property Insurance", "property,insurer,policy_number,effective_date,expiration_date,coverage,deductible,premium"),
         ),
     ),
 )
