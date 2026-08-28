@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import type { DashboardDocument } from "../../api/types";
 import { AppShell } from "../../components/layout/AppShell";
 import {
   Badge,
@@ -53,25 +54,57 @@ export function DashboardWorkspace() {
     queryKey: dashboardKeys.documents(debouncedDocumentQuery),
     queryFn: () => searchDashboardDocuments(debouncedDocumentQuery),
   });
-  const extractedFieldKeys = useMemo(() => {
-    const fieldsByDocumentType = new Map(
+  const documentGroups = useMemo(() => {
+    const schemasByDocumentType = new Map(
       (schemas.data ?? []).flatMap((industry) =>
         industry.document_types.map(
-          (document) => [document.key, document.fields] as const,
+          (document) =>
+            [
+              document.key,
+              {
+                fields: document.fields,
+                industryLabel: industry.label,
+                documentTypeLabel: document.label,
+              },
+            ] as const,
         ),
       ),
     );
-    return Array.from(
-      new Set(
-        (documents.data?.documents ?? []).flatMap((document) => [
-          ...(document.document_type
-            ? (fieldsByDocumentType.get(document.document_type) ?? [])
-            : []),
-          ...Object.keys(document.extracted_metadata),
-        ]),
-      ),
-    ).sort((left, right) =>
-      formatFieldName(left).localeCompare(formatFieldName(right)),
+    const documentsByType = new Map<string, DashboardDocument[]>();
+    for (const document of documents.data?.documents ?? []) {
+      const key = document.document_type ?? "unclassified";
+      const group = documentsByType.get(key) ?? [];
+      group.push(document);
+      documentsByType.set(key, group);
+    }
+
+    return Array.from(documentsByType, ([key, groupedDocuments]) => {
+      const schema = schemasByDocumentType.get(key);
+      const schemaFields = schema?.fields ?? [];
+      const extraFields = Array.from(
+        new Set(
+          groupedDocuments.flatMap((document) =>
+            Object.keys(document.extracted_metadata),
+          ),
+        ),
+      )
+        .filter((field) => !schemaFields.includes(field))
+        .sort((left, right) =>
+          formatFieldName(left).localeCompare(formatFieldName(right)),
+        );
+      const firstDocument = groupedDocuments[0]!;
+      return {
+        key,
+        documents: groupedDocuments,
+        fields: [...schemaFields, ...extraFields],
+        industryLabel: schema?.industryLabel ?? firstDocument.industry_label,
+        documentTypeLabel:
+          schema?.documentTypeLabel ?? firstDocument.document_type_label,
+      };
+    }).sort(
+      (left, right) =>
+        left.industryLabel.localeCompare(right.industryLabel) ||
+        left.documentTypeLabel.localeCompare(right.documentTypeLabel),
     );
   }, [documents.data?.documents, schemas.data]);
   const activeIndustry =
@@ -214,123 +247,10 @@ export function DashboardWorkspace() {
             <StatusMessage>{documents.error.message}</StatusMessage>
           )}
           {documents.data?.documents.length ? (
-            <div
-              className="dashboard-document-list"
-              role="region"
-              aria-label="Extracted document data table"
-              tabIndex={0}
-            >
-              <table
-                className="dashboard-document-table"
-                style={{ width: `${680 + extractedFieldKeys.length * 220}px` }}
-              >
-                <caption className="sr-only">
-                  Extracted data for authorized documents
-                </caption>
-                <thead>
-                  <tr>
-                    <th className="document-identity-column" scope="col">
-                      Document
-                    </th>
-                    <th className="document-classification-column" scope="col">
-                      Classification
-                    </th>
-                    <th className="document-extraction-column" scope="col">
-                      Extraction
-                    </th>
-                    {extractedFieldKeys.map((field) => (
-                      <th
-                        className="document-extracted-field-column"
-                        scope="col"
-                        key={field}
-                      >
-                        {formatFieldName(field)}
-                      </th>
-                    ))}
-                    <th className="document-indexed-column" scope="col">
-                      Indexed
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {documents.data.documents.map((document) => {
-                    return (
-                      <tr key={document.document_id}>
-                        <th scope="row" className="document-identity-cell">
-                          <strong>{document.document_name}</strong>
-                          <small>
-                            {document.industry_label} ·{" "}
-                            {document.document_type_label}
-                          </small>
-                        </th>
-                        <td className="document-classification-cell">
-                          <Badge
-                            variant={
-                              document.classification_status === "confirmed"
-                                ? "active"
-                                : "suspended"
-                            }
-                          >
-                            {document.classification_status ===
-                            "review_required"
-                              ? "Review type"
-                              : document.classification_status === "failed"
-                                ? "Detection failed"
-                                : document.classification_status ===
-                                    "unclassified"
-                                  ? "Unclassified"
-                                  : document.classification_source === "manual"
-                                    ? "Manual type"
-                                    : "Auto-detected"}
-                          </Badge>
-                          {typeof document.classification_confidence ===
-                            "number" && (
-                            <small>
-                              Detection confidence:{" "}
-                              {Math.round(
-                                document.classification_confidence * 100,
-                              )}
-                              %
-                            </small>
-                          )}
-                        </td>
-                        <td>
-                          <Badge
-                            variant={
-                              document.extraction_status === "completed"
-                                ? "active"
-                                : "suspended"
-                            }
-                          >
-                            {document.extraction_status === "completed"
-                              ? "Extracted"
-                              : document.extraction_status === "failed"
-                                ? "Extraction failed"
-                                : "Not extracted"}
-                          </Badge>
-                        </td>
-                        {extractedFieldKeys.map((field) => (
-                          <td
-                            className="document-extracted-value-cell"
-                            key={field}
-                          >
-                            <ExtractedFieldValue
-                              documentName={document.document_name}
-                              field={field}
-                              value={document.extracted_metadata[field]}
-                            />
-                          </td>
-                        ))}
-                        <td className="document-indexed-cell">
-                          <time dateTime={document.created_at}>
-                            {new Date(document.created_at).toLocaleString()}
-                          </time>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+            <div className="dashboard-document-groups">
+              {documentGroups.map(({ key, ...group }) => (
+                <DocumentTypeTable key={key} {...group} />
+              ))}
             </div>
           ) : (
             !documents.isPending &&
@@ -352,6 +272,135 @@ export function DashboardWorkspace() {
         </section>
       </main>
     </AppShell>
+  );
+}
+
+function DocumentTypeTable({
+  documents,
+  fields,
+  industryLabel,
+  documentTypeLabel,
+}: {
+  documents: DashboardDocument[];
+  fields: string[];
+  industryLabel: string;
+  documentTypeLabel: string;
+}) {
+  return (
+    <section className="dashboard-document-group">
+      <header className="dashboard-document-group-header">
+        <div>
+          <span>{industryLabel}</span>
+          <h3>{documentTypeLabel}</h3>
+        </div>
+        <Badge variant="metric">
+          {documents.length} {documents.length === 1 ? "document" : "documents"}
+        </Badge>
+      </header>
+      <div
+        className="dashboard-document-list"
+        role="region"
+        aria-label={`${documentTypeLabel} extracted data table`}
+        tabIndex={0}
+      >
+        <table
+          className="dashboard-document-table"
+          style={{ width: `${680 + fields.length * 220}px` }}
+        >
+          <caption className="sr-only">
+            Extracted data for authorized {documentTypeLabel} documents
+          </caption>
+          <thead>
+            <tr>
+              <th className="document-identity-column" scope="col">
+                Document
+              </th>
+              <th className="document-classification-column" scope="col">
+                Classification
+              </th>
+              <th className="document-extraction-column" scope="col">
+                Extraction
+              </th>
+              {fields.map((field) => (
+                <th
+                  className="document-extracted-field-column"
+                  scope="col"
+                  key={field}
+                >
+                  {formatFieldName(field)}
+                </th>
+              ))}
+              <th className="document-indexed-column" scope="col">
+                Indexed
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {documents.map((document) => (
+              <tr key={document.document_id}>
+                <th scope="row" className="document-identity-cell">
+                  <strong>{document.document_name}</strong>
+                </th>
+                <td className="document-classification-cell">
+                  <Badge
+                    variant={
+                      document.classification_status === "confirmed"
+                        ? "active"
+                        : "suspended"
+                    }
+                  >
+                    {document.classification_status === "review_required"
+                      ? "Review type"
+                      : document.classification_status === "failed"
+                        ? "Detection failed"
+                        : document.classification_status === "unclassified"
+                          ? "Unclassified"
+                          : document.classification_source === "manual"
+                            ? "Manual type"
+                            : "Auto-detected"}
+                  </Badge>
+                  {typeof document.classification_confidence === "number" && (
+                    <small>
+                      Detection confidence:{" "}
+                      {Math.round(document.classification_confidence * 100)}%
+                    </small>
+                  )}
+                </td>
+                <td>
+                  <Badge
+                    variant={
+                      document.extraction_status === "completed"
+                        ? "active"
+                        : "suspended"
+                    }
+                  >
+                    {document.extraction_status === "completed"
+                      ? "Extracted"
+                      : document.extraction_status === "failed"
+                        ? "Extraction failed"
+                        : "Not extracted"}
+                  </Badge>
+                </td>
+                {fields.map((field) => (
+                  <td className="document-extracted-value-cell" key={field}>
+                    <ExtractedFieldValue
+                      documentName={document.document_name}
+                      field={field}
+                      value={document.extracted_metadata[field]}
+                    />
+                  </td>
+                ))}
+                <td className="document-indexed-cell">
+                  <time dateTime={document.created_at}>
+                    {new Date(document.created_at).toLocaleString()}
+                  </time>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
   );
 }
 

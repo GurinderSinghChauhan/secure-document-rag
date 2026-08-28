@@ -1,5 +1,5 @@
 import { http, HttpResponse } from "msw";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { server } from "../test/server";
@@ -105,13 +105,27 @@ test("renders authorized document coverage and schema-driven metadata", async ()
     },
     created_at: "2030-01-01T00:00:00Z",
   };
+  const contractDocument = {
+    document_id: "document-2",
+    document_name: "mutual-nda.pdf",
+    document_type: "contract_intelligence.nda",
+    document_type_label: "NDA",
+    industry_key: "contract_intelligence",
+    industry_label: "Contract Intelligence",
+    classification_status: "confirmed",
+    classification_source: "automatic",
+    classification_confidence: 0.94,
+    extraction_status: "completed",
+    extracted_metadata: { agreement_id: "NDA-7" },
+    created_at: "2030-01-02T00:00:00Z",
+  };
   server.use(
     http.post("/v1/auth/refresh", () => HttpResponse.json(adminAuth)),
     http.get("/v1/dashboard", () =>
       HttpResponse.json({
-        total_documents: 1,
-        classified_documents: 1,
-        extracted_documents: 1,
+        total_documents: 2,
+        classified_documents: 2,
+        extracted_documents: 2,
         review_required_documents: 1,
         industries: [
           {
@@ -120,8 +134,14 @@ test("renders authorized document coverage and schema-driven metadata", async ()
             document_count: 1,
             document_type_count: 1,
           },
+          {
+            key: "contract_intelligence",
+            label: "Contract Intelligence",
+            document_count: 1,
+            document_type_count: 1,
+          },
         ],
-        recent_documents: [dashboardDocument],
+        recent_documents: [contractDocument, dashboardDocument],
       }),
     ),
     http.get("/v1/document-schemas", () =>
@@ -138,13 +158,28 @@ test("renders authorized document coverage and schema-driven metadata", async ()
             },
           ],
         },
+        {
+          key: "contract_intelligence",
+          label: "Contract Intelligence",
+          description: "Agreements and obligations.",
+          document_types: [
+            {
+              key: "contract_intelligence.nda",
+              label: "NDA",
+              fields: ["agreement_id"],
+            },
+          ],
+        },
       ]),
     ),
     http.get("/v1/dashboard/documents", ({ request }) => {
       documentSearches.push(
         new URL(request.url).searchParams.get("query") ?? "",
       );
-      return HttpResponse.json({ total: 1, documents: [dashboardDocument] });
+      return HttpResponse.json({
+        total: 2,
+        documents: [contractDocument, dashboardDocument],
+      });
     }),
   );
 
@@ -155,27 +190,48 @@ test("renders authorized document coverage and schema-driven metadata", async ()
   ).toBeVisible();
   expect(await screen.findByText("service-invoice.pdf")).toBeVisible();
   expect(
-    screen.getByText("1 classified documents across 1 configured verticals."),
+    screen.getByText("2 classified documents across 2 configured verticals."),
   ).toBeVisible();
   expect(screen.getByText("invoice_number")).toBeInTheDocument();
+  const serviceTable = screen.getByRole("region", {
+    name: "Service Invoice extracted data table",
+  });
+  const contractTable = screen.getByRole("region", {
+    name: "NDA extracted data table",
+  });
+  expect(serviceTable).toBeVisible();
+  expect(contractTable).toBeVisible();
+  expect(screen.getAllByRole("table")).toHaveLength(2);
   expect(
-    screen.getByRole("region", { name: "Extracted document data table" }),
-  ).toBeVisible();
-  expect(screen.getByRole("table")).toBeVisible();
-  expect(
-    screen.getByRole("columnheader", { name: "invoice number" }),
+    within(serviceTable).getByRole("columnheader", { name: "invoice number" }),
   ).toBeVisible();
   expect(
-    screen.getByRole("columnheader", { name: "total amount" }),
+    within(serviceTable).getByRole("columnheader", { name: "total amount" }),
   ).toBeVisible();
-  expect(screen.getByRole("cell", { name: "INV-42" })).toBeVisible();
+  expect(
+    within(serviceTable).queryByRole("columnheader", { name: "agreement id" }),
+  ).not.toBeInTheDocument();
+  expect(
+    within(contractTable).getByRole("columnheader", { name: "agreement id" }),
+  ).toBeVisible();
+  expect(
+    within(contractTable).queryByRole("columnheader", {
+      name: "invoice number",
+    }),
+  ).not.toBeInTheDocument();
+  expect(
+    within(serviceTable).getByRole("cell", { name: "INV-42" }),
+  ).toBeVisible();
+  expect(
+    within(contractTable).getByRole("cell", { name: "NDA-7" }),
+  ).toBeVisible();
   const longValue = screen.getByText(/First line with enough extracted detail/);
   expect(longValue).toHaveClass("document-cell-value-text");
   const expandValue = screen.getByRole("button", {
     name: "Show all problem description for service-invoice.pdf",
   });
   expect(expandValue).toHaveAttribute("aria-expanded", "false");
-  expect(screen.getByRole("cell", { name: "—" })).toBeVisible();
+  expect(within(serviceTable).getByRole("cell", { name: "—" })).toBeVisible();
   expect(screen.getByText("Review type")).toBeVisible();
   expect(screen.getByText("Detection confidence: 72%")).toBeVisible();
 
