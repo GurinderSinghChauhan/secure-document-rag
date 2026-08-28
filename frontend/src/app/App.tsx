@@ -5,6 +5,7 @@ import { RouteBoundary } from "./RouteBoundary";
 
 const AskRoute = lazy(() => import("../routes/ask/AskRoute"));
 const DashboardRoute = lazy(() => import("../routes/dashboard/DashboardRoute"));
+const InsightsRoute = lazy(() => import("../routes/insights/InsightsRoute"));
 const AdminRoute = lazy(() => import("../routes/admin/AdminRoute"));
 const PlatformAdminRoute = lazy(
   () => import("../routes/platform-admin/PlatformAdminRoute"),
@@ -57,6 +58,14 @@ export default function App() {
               element={
                 <RequireAuth>
                   <AskRoute />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/insights/:documentType"
+              element={
+                <RequireAuth>
+                  <InsightsRoute />
                 </RequireAuth>
               }
             />

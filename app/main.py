@@ -566,6 +566,12 @@ async def ask_ui() -> FileResponse:
     return FileResponse("app/static/spa/index.html")
 
 
+@app.get("/insights/{document_type}", include_in_schema=False)
+async def insights_ui(document_type: str) -> FileResponse:
+    del document_type
+    return FileResponse("app/static/spa/index.html")
+
+
 @app.get("/admin", include_in_schema=False)
 async def admin_ui() -> FileResponse:
     return FileResponse("app/static/spa/index.html")

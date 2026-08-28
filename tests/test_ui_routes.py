@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from app.main import admin_ui, ask_ui, chat_ui, super_admin_ui
+from app.main import admin_ui, ask_ui, chat_ui, insights_ui, super_admin_ui
 
 
 FRONTEND = Path("frontend")
@@ -10,7 +10,13 @@ FRONTEND = Path("frontend")
 
 @pytest.mark.asyncio
 async def test_all_application_routes_use_the_shared_spa_entrypoint():
-    responses = [await chat_ui(), await ask_ui(), await admin_ui(), await super_admin_ui()]
+    responses = [
+        await chat_ui(),
+        await ask_ui(),
+        await insights_ui("field_service.service_invoice"),
+        await admin_ui(),
+        await super_admin_ui(),
+    ]
 
     assert {Path(response.path) for response in responses} == {Path("app/static/spa/index.html")}
 

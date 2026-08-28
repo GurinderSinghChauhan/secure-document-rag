@@ -291,6 +291,17 @@
   font-size: 12px;
 }
 
+.dashboard-table-dialog-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dashboard-table-dialog-actions a {
+  color: var(--text);
+  text-decoration: none;
+}
+
 .dashboard-table-explorer {
   display: flex;
   min-height: 0;

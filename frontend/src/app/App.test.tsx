@@ -247,6 +247,9 @@ test("renders authorized document coverage and schema-driven metadata", async ()
   });
   expect(serviceDialog).toBeVisible();
   expect(serviceTable).toBeVisible();
+  expect(
+    within(serviceDialog).getByRole("link", { name: "Insights" }),
+  ).toHaveAttribute("href", "/insights/field_service.service_invoice");
   expect(screen.getAllByRole("table")).toHaveLength(1);
   expect(
     within(serviceTable).getByRole("columnheader", { name: /invoice number/ }),
@@ -344,4 +347,118 @@ test("renders authorized document coverage and schema-driven metadata", async ()
     "invoice",
   );
   await waitFor(() => expect(documentSearches).toContain("invoice"));
+});
+
+test("renders adaptive diagrams for an authorized document type", async () => {
+  window.history.pushState({}, "", "/insights/field_service.service_invoice");
+  const insightDocuments = [
+    {
+      document_id: "insight-1",
+      document_name: "invoice-one.pdf",
+      document_type: "field_service.service_invoice",
+      document_type_label: "Service Invoice",
+      industry_key: "field_service",
+      industry_label: "Field Service",
+      classification_status: "confirmed",
+      classification_source: "automatic",
+      classification_confidence: 0.95,
+      extraction_status: "completed",
+      extracted_metadata: {
+        invoice_number: "INV-1",
+        invoice_date: "2030-01-10",
+        customer_name: "Acme",
+        payment_status: "Paid",
+        total_amount: "250.00",
+        due_date: "2030-02-10",
+      },
+      created_at: "2030-01-11T00:00:00Z",
+    },
+    {
+      document_id: "insight-2",
+      document_name: "invoice-two.pdf",
+      document_type: "field_service.service_invoice",
+      document_type_label: "Service Invoice",
+      industry_key: "field_service",
+      industry_label: "Field Service",
+      classification_status: "confirmed",
+      classification_source: "manual",
+      classification_confidence: null,
+      extraction_status: "completed",
+      extracted_metadata: {
+        invoice_number: "INV-2",
+        invoice_date: "2030-02-12",
+        customer_name: "Beta",
+        payment_status: "Due",
+        total_amount: "400.00",
+        due_date: "2030-03-12",
+      },
+      created_at: "2030-02-13T00:00:00Z",
+    },
+  ];
+  server.use(
+    http.post("/v1/auth/refresh", () => HttpResponse.json(adminAuth)),
+    http.get("/v1/document-schemas", () =>
+      HttpResponse.json([
+        {
+          key: "field_service",
+          label: "Field Service",
+          description: "Equipment and service operations.",
+          document_types: [
+            {
+              key: "field_service.service_invoice",
+              label: "Service Invoice",
+              fields: [
+                "invoice_number",
+                "invoice_date",
+                "customer_name",
+                "payment_status",
+                "total_amount",
+                "due_date",
+              ],
+            },
+          ],
+        },
+      ]),
+    ),
+    http.get("/v1/dashboard/documents", ({ request }) => {
+      expect(new URL(request.url).searchParams.get("query")).toBe(
+        "field_service.service_invoice",
+      );
+      return HttpResponse.json({ total: 2, documents: insightDocuments });
+    }),
+  );
+
+  renderApplication();
+
+  expect(
+    await screen.findByRole("heading", { name: "Service Invoice insights" }),
+  ).toBeVisible();
+  expect(
+    screen.getByRole("link", { name: "← Back to document tables" }),
+  ).toHaveAttribute("href", "/");
+  expect(screen.getByRole("region", { name: "Insight summary" })).toBeVisible();
+  expect(
+    screen.getByRole("region", { name: "Insight diagrams" }),
+  ).toBeVisible();
+  expect(
+    screen.getByRole("heading", { name: "invoice date volume over time" }),
+  ).toBeVisible();
+  expect(
+    screen.getByRole("heading", { name: "payment status breakdown" }),
+  ).toBeVisible();
+  expect(
+    screen.getByRole("heading", { name: "total amount by document" }),
+  ).toBeVisible();
+  expect(
+    screen.getByRole("heading", { name: "Top customer name" }),
+  ).toBeVisible();
+  expect(
+    screen.getByRole("heading", { name: "Deadline timeline" }),
+  ).toBeVisible();
+  expect(
+    screen.getByRole("heading", { name: "Extracted-field completeness" }),
+  ).toBeVisible();
+  expect(
+    screen.getByRole("img", { name: "Document volume trend" }),
+  ).toBeVisible();
 });

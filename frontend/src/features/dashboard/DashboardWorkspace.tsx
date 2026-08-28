@@ -7,6 +7,7 @@ import {
   useState,
 } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { Link } from "react-router-dom";
 import type { DashboardDocument } from "../../api/types";
 import { AppShell } from "../../components/layout/AppShell";
 import {
@@ -314,7 +315,11 @@ export function DashboardWorkspace() {
                   </header>
                   <div className="dashboard-document-card-grid">
                     {vertical.documentTypes.map(({ key, ...group }) => (
-                      <DocumentTypeTableCard key={key} {...group} />
+                      <DocumentTypeTableCard
+                        key={key}
+                        documentTypeKey={key}
+                        {...group}
+                      />
                     ))}
                   </div>
                 </section>
@@ -344,11 +349,13 @@ export function DashboardWorkspace() {
 }
 
 function DocumentTypeTableCard({
+  documentTypeKey,
   documents,
   fields,
   industryLabel,
   documentTypeLabel,
 }: {
+  documentTypeKey: string;
   documents: DashboardDocument[];
   fields: string[];
   industryLabel: string;
@@ -376,6 +383,7 @@ function DocumentTypeTableCard({
       </Button>
       {open && (
         <DocumentTableDialog
+          documentTypeKey={documentTypeKey}
           documents={documents}
           fields={fields}
           industryLabel={industryLabel}
@@ -388,12 +396,14 @@ function DocumentTypeTableCard({
 }
 
 function DocumentTableDialog({
+  documentTypeKey,
   documents,
   fields,
   industryLabel,
   documentTypeLabel,
   onClose,
 }: {
+  documentTypeKey: string;
   documents: DashboardDocument[];
   fields: string[];
   industryLabel: string;
@@ -467,14 +477,22 @@ function DocumentTableDialog({
                 : "authorized documents"}
             </p>
           </div>
-          <Button
-            ref={closeButton}
-            variant="secondary"
-            aria-label={`Close ${documentTypeLabel} table`}
-            onClick={onClose}
-          >
-            Close
-          </Button>
+          <div className="dashboard-table-dialog-actions">
+            <Link
+              className="secondary-button"
+              to={`/insights/${encodeURIComponent(documentTypeKey)}`}
+            >
+              Insights
+            </Link>
+            <Button
+              ref={closeButton}
+              variant="secondary"
+              aria-label={`Close ${documentTypeLabel} table`}
+              onClick={onClose}
+            >
+              Close
+            </Button>
+          </div>
         </header>
         <DocumentDataTable
           documents={documents}

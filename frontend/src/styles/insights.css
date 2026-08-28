@@ -1,0 +1,323 @@
+.insights-content {
+  width: min(1240px, 100%);
+  margin: 0 auto;
+  padding: 34px 32px 56px;
+}
+
+.insights-back-link {
+  display: inline-flex;
+  margin-bottom: 20px;
+  color: var(--primary);
+  font-size: 12px;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.insights-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 22px;
+}
+
+.insights-header h1 {
+  margin: 5px 0 7px;
+  font-size: clamp(27px, 3vw, 36px);
+  letter-spacing: -0.04em;
+}
+
+.insights-header p {
+  max-width: 720px;
+  margin: 0;
+  color: var(--text-secondary);
+}
+
+.insights-kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.insight-kpi {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+  padding: 17px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+}
+
+.insight-kpi span {
+  overflow: hidden;
+  color: var(--text-tertiary);
+  font-size: 10px;
+  font-weight: 750;
+  letter-spacing: 0.07em;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.insight-kpi strong {
+  font-size: 25px;
+  letter-spacing: -0.04em;
+}
+
+.insight-kpi.compact strong {
+  font-size: 16px;
+  letter-spacing: -0.02em;
+}
+
+.insights-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.insight-panel {
+  min-width: 0;
+  padding: 19px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--surface);
+}
+
+.insight-panel.wide {
+  grid-column: 1 / -1;
+}
+
+.insight-panel > header {
+  margin-bottom: 18px;
+}
+
+.insight-panel h2 {
+  margin: 0;
+  font-size: 17px;
+  letter-spacing: -0.02em;
+}
+
+.insight-panel header p,
+.insight-no-data {
+  margin: 4px 0 0;
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+
+.insight-bars {
+  display: grid;
+  gap: 11px;
+}
+
+.insight-bar-row {
+  display: grid;
+  grid-template-columns: minmax(90px, 0.8fr) minmax(100px, 1.5fr) auto;
+  align-items: center;
+  gap: 10px;
+  font-size: 11px;
+}
+
+.insight-bar-row > span {
+  overflow: hidden;
+  color: var(--text-secondary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.insight-bar-row > div {
+  height: 9px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--surface-subtle);
+}
+
+.insight-bar-row i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--primary), #6f8df1);
+}
+
+.insight-bar-row strong {
+  min-width: 26px;
+  text-align: right;
+}
+
+.insight-line-chart {
+  overflow: hidden;
+}
+
+.insight-line-chart svg {
+  width: 100%;
+  min-height: 180px;
+  color: var(--border-strong);
+}
+
+.insight-line-chart polyline {
+  stroke: var(--primary);
+  stroke-width: 4;
+}
+
+.insight-line-chart circle {
+  fill: var(--surface);
+  stroke: var(--primary);
+  stroke-width: 4;
+}
+
+.insight-line-chart text {
+  fill: var(--text-secondary);
+  stroke: none;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.insight-line-labels {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--text-tertiary);
+  font-size: 10px;
+}
+
+.insight-line-labels span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.insight-completeness {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 11px 20px;
+}
+
+.insight-completeness > div {
+  display: grid;
+  grid-template-columns: minmax(100px, 1fr) minmax(90px, 1.5fr) 38px;
+  align-items: center;
+  gap: 9px;
+  font-size: 10px;
+}
+
+.insight-completeness span {
+  overflow: hidden;
+  color: var(--text-secondary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.insight-completeness progress {
+  width: 100%;
+  height: 8px;
+  overflow: hidden;
+  border: 0;
+  border-radius: 999px;
+  background: var(--surface-subtle);
+}
+
+.insight-completeness progress::-webkit-progress-bar {
+  border-radius: inherit;
+  background: var(--surface-subtle);
+}
+
+.insight-completeness progress::-webkit-progress-value {
+  border-radius: inherit;
+  background: var(--success);
+}
+
+.insight-completeness progress::-moz-progress-bar {
+  border-radius: inherit;
+  background: var(--success);
+}
+
+.insight-completeness strong {
+  text-align: right;
+}
+
+.insight-timeline {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 18px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.insight-timeline li {
+  position: relative;
+  display: grid;
+  grid-template-columns: 92px 1fr;
+  align-items: start;
+  gap: 12px;
+  padding: 11px 12px 11px 22px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-subtle);
+}
+
+.insight-timeline li::before {
+  position: absolute;
+  top: 16px;
+  left: 10px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--primary);
+  content: "";
+}
+
+.insight-timeline time {
+  color: var(--primary);
+  font-size: 11px;
+  font-weight: 750;
+}
+
+.insight-timeline div {
+  display: grid;
+  min-width: 0;
+}
+
+.insight-timeline strong,
+.insight-timeline span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.insight-timeline strong {
+  font-size: 11px;
+}
+
+.insight-timeline span {
+  color: var(--text-secondary);
+  font-size: 10px;
+}
+
+@media (max-width: 800px) {
+  .insights-grid,
+  .insight-completeness,
+  .insight-timeline {
+    grid-template-columns: 1fr;
+  }
+
+  .insight-panel.wide {
+    grid-column: auto;
+  }
+}
+
+@media (max-width: 640px) {
+  .insights-content {
+    padding: 24px 14px 40px;
+  }
+
+  .insights-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .insight-bar-row {
+    grid-template-columns: minmax(78px, 0.8fr) minmax(80px, 1.2fr) auto;
+  }
+}

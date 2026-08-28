@@ -4,7 +4,7 @@ import { useAuth } from "../../features/auth";
 import { Button } from "../ui";
 
 interface AppShellProps {
-  section: "Dashboard" | "Ask" | "Admin" | "Platform Admin";
+  section: "Dashboard" | "Insights" | "Ask" | "Admin" | "Platform Admin";
   children: ReactNode;
   sidebar?: ReactNode;
 }
@@ -25,11 +25,13 @@ export function AppShell({ section, children, sidebar }: AppShellProps) {
             <small>
               {section === "Ask"
                 ? "Document intelligence"
-                : section === "Dashboard"
-                  ? "Intelligence dashboard"
-                  : section === "Admin"
-                    ? "Admin console"
-                    : "Platform console"}
+                : section === "Insights"
+                  ? "Intelligence insights"
+                  : section === "Dashboard"
+                    ? "Intelligence dashboard"
+                    : section === "Admin"
+                      ? "Admin console"
+                      : "Platform console"}
             </small>
           </span>
         </div>
