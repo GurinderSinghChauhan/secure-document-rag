@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { DashboardDocument } from "../../api/types";
 import { AppShell } from "../../components/layout/AppShell";
@@ -286,120 +286,139 @@ function DocumentTypeTable({
   industryLabel: string;
   documentTypeLabel: string;
 }) {
+  const [expanded, setExpanded] = useState(false);
+  const tableId = useId();
+
   return (
     <section className="dashboard-document-group">
-      <header className="dashboard-document-group-header">
+      <button
+        className="dashboard-document-group-header"
+        type="button"
+        aria-expanded={expanded}
+        aria-controls={tableId}
+        aria-label={`${expanded ? "Collapse" : "Expand"} ${documentTypeLabel} table`}
+        onClick={() => setExpanded((current) => !current)}
+      >
         <div>
           <span>{industryLabel}</span>
           <h3>{documentTypeLabel}</h3>
         </div>
-        <Badge variant="metric">
-          {documents.length} {documents.length === 1 ? "document" : "documents"}
-        </Badge>
-      </header>
-      <div
-        className="dashboard-document-list"
-        role="region"
-        aria-label={`${documentTypeLabel} extracted data table`}
-        tabIndex={0}
-      >
-        <table
-          className="dashboard-document-table"
-          style={{ width: `${680 + fields.length * 220}px` }}
+        <span className="dashboard-document-group-summary">
+          <Badge variant="metric">
+            {documents.length}{" "}
+            {documents.length === 1 ? "document" : "documents"}
+          </Badge>
+          <span className="dashboard-document-group-chevron" aria-hidden="true">
+            ▾
+          </span>
+        </span>
+      </button>
+      {expanded && (
+        <div
+          id={tableId}
+          className="dashboard-document-list"
+          role="region"
+          aria-label={`${documentTypeLabel} extracted data table`}
+          tabIndex={0}
         >
-          <caption className="sr-only">
-            Extracted data for authorized {documentTypeLabel} documents
-          </caption>
-          <thead>
-            <tr>
-              <th className="document-identity-column" scope="col">
-                Document
-              </th>
-              <th className="document-classification-column" scope="col">
-                Classification
-              </th>
-              <th className="document-extraction-column" scope="col">
-                Extraction
-              </th>
-              {fields.map((field) => (
-                <th
-                  className="document-extracted-field-column"
-                  scope="col"
-                  key={field}
-                >
-                  {formatFieldName(field)}
+          <table
+            className="dashboard-document-table"
+            style={{ width: `${680 + fields.length * 220}px` }}
+          >
+            <caption className="sr-only">
+              Extracted data for authorized {documentTypeLabel} documents
+            </caption>
+            <thead>
+              <tr>
+                <th className="document-identity-column" scope="col">
+                  Document
                 </th>
-              ))}
-              <th className="document-indexed-column" scope="col">
-                Indexed
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {documents.map((document) => (
-              <tr key={document.document_id}>
-                <th scope="row" className="document-identity-cell">
-                  <strong>{document.document_name}</strong>
+                <th className="document-classification-column" scope="col">
+                  Classification
                 </th>
-                <td className="document-classification-cell">
-                  <Badge
-                    variant={
-                      document.classification_status === "confirmed"
-                        ? "active"
-                        : "suspended"
-                    }
-                  >
-                    {document.classification_status === "review_required"
-                      ? "Review type"
-                      : document.classification_status === "failed"
-                        ? "Detection failed"
-                        : document.classification_status === "unclassified"
-                          ? "Unclassified"
-                          : document.classification_source === "manual"
-                            ? "Manual type"
-                            : "Auto-detected"}
-                  </Badge>
-                  {typeof document.classification_confidence === "number" && (
-                    <small>
-                      Detection confidence:{" "}
-                      {Math.round(document.classification_confidence * 100)}%
-                    </small>
-                  )}
-                </td>
-                <td>
-                  <Badge
-                    variant={
-                      document.extraction_status === "completed"
-                        ? "active"
-                        : "suspended"
-                    }
-                  >
-                    {document.extraction_status === "completed"
-                      ? "Extracted"
-                      : document.extraction_status === "failed"
-                        ? "Extraction failed"
-                        : "Not extracted"}
-                  </Badge>
-                </td>
+                <th className="document-extraction-column" scope="col">
+                  Extraction
+                </th>
                 {fields.map((field) => (
-                  <td className="document-extracted-value-cell" key={field}>
-                    <ExtractedFieldValue
-                      documentName={document.document_name}
-                      field={field}
-                      value={document.extracted_metadata[field]}
-                    />
-                  </td>
+                  <th
+                    className="document-extracted-field-column"
+                    scope="col"
+                    key={field}
+                  >
+                    {formatFieldName(field)}
+                  </th>
                 ))}
-                <td className="document-indexed-cell">
-                  <time dateTime={document.created_at}>
-                    {new Date(document.created_at).toLocaleString()}
-                  </time>
-                </td>
+                <th className="document-indexed-column" scope="col">
+                  Indexed
+                </th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody>
+              {documents.map((document) => (
+                <tr key={document.document_id}>
+                  <th scope="row" className="document-identity-cell">
+                    <strong>{document.document_name}</strong>
+                  </th>
+                  <td className="document-classification-cell">
+                    <Badge
+                      variant={
+                        document.classification_status === "confirmed"
+                          ? "active"
+                          : "suspended"
+                      }
+                    >
+                      {document.classification_status === "review_required"
+                        ? "Review type"
+                        : document.classification_status === "failed"
+                          ? "Detection failed"
+                          : document.classification_status === "unclassified"
+                            ? "Unclassified"
+                            : document.classification_source === "manual"
+                              ? "Manual type"
+                              : "Auto-detected"}
+                    </Badge>
+                    {typeof document.classification_confidence === "number" && (
+                      <small>
+                        Detection confidence:{" "}
+                        {Math.round(document.classification_confidence * 100)}%
+                      </small>
+                    )}
+                  </td>
+                  <td>
+                    <Badge
+                      variant={
+                        document.extraction_status === "completed"
+                          ? "active"
+                          : "suspended"
+                      }
+                    >
+                      {document.extraction_status === "completed"
+                        ? "Extracted"
+                        : document.extraction_status === "failed"
+                          ? "Extraction failed"
+                          : "Not extracted"}
+                    </Badge>
+                  </td>
+                  {fields.map((field) => (
+                    <td className="document-extracted-value-cell" key={field}>
+                      <ExtractedFieldValue
+                        documentName={document.document_name}
+                        field={field}
+                        value={document.extracted_metadata[field]}
+                      />
+                    </td>
+                  ))}
+                  <td className="document-indexed-cell">
+                    <time dateTime={document.created_at}>
+                      {new Date(document.created_at).toLocaleString()}
+                    </time>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </section>
   );
 }

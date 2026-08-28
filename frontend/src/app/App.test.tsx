@@ -188,11 +188,30 @@ test("renders authorized document coverage and schema-driven metadata", async ()
   expect(
     await screen.findByRole("heading", { name: "Document dashboard" }),
   ).toBeVisible();
-  expect(await screen.findByText("service-invoice.pdf")).toBeVisible();
   expect(
-    screen.getByText("2 classified documents across 2 configured verticals."),
+    await screen.findByText(
+      "2 classified documents across 2 configured verticals.",
+    ),
   ).toBeVisible();
   expect(screen.getByText("invoice_number")).toBeInTheDocument();
+  const expandServiceTable = screen.getByRole("button", {
+    name: "Expand Service Invoice table",
+  });
+  const expandContractTable = screen.getByRole("button", {
+    name: "Expand NDA table",
+  });
+  expect(expandServiceTable).toHaveAttribute("aria-expanded", "false");
+  expect(expandContractTable).toHaveAttribute("aria-expanded", "false");
+  expect(screen.queryAllByRole("table")).toHaveLength(0);
+
+  const user = userEvent.setup();
+  await user.click(expandServiceTable);
+  await user.click(expandContractTable);
+
+  expect(await screen.findByText("service-invoice.pdf")).toBeVisible();
+  expect(
+    screen.getByRole("button", { name: "Collapse Service Invoice table" }),
+  ).toHaveAttribute("aria-expanded", "true");
   const serviceTable = screen.getByRole("region", {
     name: "Service Invoice extracted data table",
   });
@@ -235,7 +254,6 @@ test("renders authorized document coverage and schema-driven metadata", async ()
   expect(screen.getByText("Review type")).toBeVisible();
   expect(screen.getByText("Detection confidence: 72%")).toBeVisible();
 
-  const user = userEvent.setup();
   await user.click(expandValue);
   expect(
     screen.getByRole("button", {
