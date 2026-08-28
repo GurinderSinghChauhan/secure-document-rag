@@ -10,9 +10,9 @@ The service is evidence-first internally: it generates answers only from retriev
 
 Every protected request carries a short-lived JWT access token. The token maps one registered person to one organization and an `admin` or `member` role.
 
-| Role | Can ingest | Can query authorized documents | Can delete |
-| --- | --- | --- | --- |
-| `admin` | Yes | Yes | Yes |
+| Role                  | Can ingest | Can query authorized documents | Can delete |
+| --------------------- | ---------- | ------------------------------ | ---------- |
+| `admin`               | Yes        | Yes                            | Yes        |
 | Other configured role | No         | Yes, when document ACL permits | No         |
 
 Organization scope comes from the verified JWT and cannot be selected through a request header. A mismatch is rejected before document retrieval.
@@ -21,7 +21,7 @@ Organization scope comes from the verified JWT and cannot be selected through a 
 
 Administrators open `/admin` to upload documents, release bounded compute batches, and manage organization members. The main `/` workspace is a document-intelligence dashboard, and `/ask` contains chat. Members are redirected away from the admin console, and the API independently rejects every unauthorized administrative request.
 
-The dashboard summarizes only documents the signed-in person may query. It groups classified documents into field service, contract intelligence, litigation, healthcare, insurance, accounts payable, construction, manufacturing, banking and lending, HR, and property management. Search filters authorized documents by filename, document type, or industry without exposing other document summaries. Each document type represented in the results has its own table, collapsed by default, and only its schema-specific extracted fields become fixed-width columns. Opening a document-type section reveals its independently scrollable table with one row per authorized document, four-line previews for long multiline values, and an em dash where that document has no value. Users can expand an individual value when needed and inspect the configured document types and fields without opening source content.
+The dashboard summarizes only documents the signed-in person may query. It groups classified documents into field service, contract intelligence, litigation, healthcare, insurance, accounts payable, construction, manufacturing, banking and lending, HR, and property management. Search filters authorized documents by filename, document type, or industry without exposing other document summaries. Results are divided into vertical sections with document-type cards arranged two per row on larger screens. Choosing **View table** opens that type's schema-specific extracted fields in a focused, independently scrollable dialog with one row per authorized document, four-line previews for long multiline values, and an em dash where that document has no value. Users can expand an individual value when needed and inspect the configured document types and fields without opening source content.
 
 Platform super administrators have a separate `/super-admin` console. They can see organizations and users across the deployment, suspend access without deleting data, reactivate users or organizations, change organization roles, and revoke user sessions. A response-quality view also lets them review cross-organization question-and-answer pairs, filter pending or completed reviews, and score correctness, relevance, and clarity from 1 to 5 with optional notes. Evaluations can be revised; the latest reviewer and scores are retained. These actions are audited and protected by final-administrator and self-lockout safeguards.
 
@@ -84,6 +84,7 @@ Do not enable this operation for records subject to legal hold, healthcare reten
 - Answers may be incomplete if source documents are incomplete, poorly scanned, inaccessible to the caller, or not retrieved.
 - Users should review source documents before relying on answers for clinical care, legal advice, trading, lending, compliance, or other high-impact decisions.
 - The service is not a substitute for professional review or a compliance certification.
+
 # Free trials
 
 Every newly created organization receives a non-extendable seven-day free trial shared by all its members. During the trial, each user can ask at most five questions per UTC calendar day; one person's questions do not consume another person's allowance. The allowance resets at UTC midnight, and a rejected sixth question is not added to chat history. Administrators can also collectively submit at most two PDFs per UTC calendar day. Inviting another member or administrator does not reset the trial or increase the PDF allowance. Non-PDF uploads do not consume that allowance. Members remain query-only, as defined by their organization role. When the trial expires, people can still sign in and manage account access, but querying, new uploads, and starting or releasing compute are blocked. Held documents remain stored. Platform super administrators are exempt from trial restrictions.

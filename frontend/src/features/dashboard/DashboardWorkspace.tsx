@@ -1,4 +1,11 @@
-import { useEffect, useId, useMemo, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { DashboardDocument } from "../../api/types";
 import { AppShell } from "../../components/layout/AppShell";
@@ -63,6 +70,7 @@ export function DashboardWorkspace() {
               document.key,
               {
                 fields: document.fields,
+                industryKey: industry.key,
                 industryLabel: industry.label,
                 documentTypeLabel: document.label,
               },
@@ -97,6 +105,8 @@ export function DashboardWorkspace() {
         key,
         documents: groupedDocuments,
         fields: [...schemaFields, ...extraFields],
+        industryKey:
+          schema?.industryKey ?? firstDocument.industry_key ?? "unclassified",
         industryLabel: schema?.industryLabel ?? firstDocument.industry_label,
         documentTypeLabel:
           schema?.documentTypeLabel ?? firstDocument.document_type_label,
@@ -107,6 +117,28 @@ export function DashboardWorkspace() {
         left.documentTypeLabel.localeCompare(right.documentTypeLabel),
     );
   }, [documents.data?.documents, schemas.data]);
+  const documentVerticalGroups = useMemo(() => {
+    const verticals = new Map<
+      string,
+      {
+        key: string;
+        label: string;
+        documentTypes: typeof documentGroups;
+      }
+    >();
+    for (const documentGroup of documentGroups) {
+      const vertical = verticals.get(documentGroup.industryKey) ?? {
+        key: documentGroup.industryKey,
+        label: documentGroup.industryLabel,
+        documentTypes: [],
+      };
+      vertical.documentTypes.push(documentGroup);
+      verticals.set(documentGroup.industryKey, vertical);
+    }
+    return Array.from(verticals.values()).sort((left, right) =>
+      left.label.localeCompare(right.label),
+    );
+  }, [documentGroups]);
   const activeIndustry =
     schemas.data?.find(
       (industry) => industry.key === (selectedIndustry ?? schemas.data[0]?.key),
@@ -247,9 +279,29 @@ export function DashboardWorkspace() {
             <StatusMessage>{documents.error.message}</StatusMessage>
           )}
           {documents.data?.documents.length ? (
-            <div className="dashboard-document-groups">
-              {documentGroups.map(({ key, ...group }) => (
-                <DocumentTypeTable key={key} {...group} />
+            <div className="dashboard-document-verticals">
+              {documentVerticalGroups.map((vertical) => (
+                <section
+                  className="dashboard-document-vertical"
+                  aria-label={`${vertical.label} document tables`}
+                  key={vertical.key}
+                >
+                  <header className="dashboard-document-vertical-header">
+                    <div>
+                      <span className="section-kicker">Vertical</span>
+                      <h3>{vertical.label}</h3>
+                    </div>
+                    <Badge variant="metric">
+                      {vertical.documentTypes.length}{" "}
+                      {vertical.documentTypes.length === 1 ? "type" : "types"}
+                    </Badge>
+                  </header>
+                  <div className="dashboard-document-card-grid">
+                    {vertical.documentTypes.map(({ key, ...group }) => (
+                      <DocumentTypeTableCard key={key} {...group} />
+                    ))}
+                  </div>
+                </section>
               ))}
             </div>
           ) : (
@@ -275,7 +327,7 @@ export function DashboardWorkspace() {
   );
 }
 
-function DocumentTypeTable({
+function DocumentTypeTableCard({
   documents,
   fields,
   industryLabel,
@@ -286,140 +338,251 @@ function DocumentTypeTable({
   industryLabel: string;
   documentTypeLabel: string;
 }) {
-  const [expanded, setExpanded] = useState(false);
-  const tableId = useId();
+  const [open, setOpen] = useState(false);
+  const closeDialog = useCallback(() => setOpen(false), []);
 
   return (
-    <section className="dashboard-document-group">
-      <button
-        className="dashboard-document-group-header"
-        type="button"
-        aria-expanded={expanded}
-        aria-controls={tableId}
-        aria-label={`${expanded ? "Collapse" : "Expand"} ${documentTypeLabel} table`}
-        onClick={() => setExpanded((current) => !current)}
+    <article className="dashboard-document-card">
+      <div>
+        <h4>{documentTypeLabel}</h4>
+        <p>
+          {documents.length} {documents.length === 1 ? "document" : "documents"}{" "}
+          · {fields.length} extracted {fields.length === 1 ? "field" : "fields"}
+        </p>
+      </div>
+      <Button
+        variant="secondary"
+        aria-haspopup="dialog"
+        aria-label={`View ${industryLabel} ${documentTypeLabel} table`}
+        onClick={() => setOpen(true)}
       >
-        <div>
-          <span>{industryLabel}</span>
-          <h3>{documentTypeLabel}</h3>
-        </div>
-        <span className="dashboard-document-group-summary">
-          <Badge variant="metric">
-            {documents.length}{" "}
-            {documents.length === 1 ? "document" : "documents"}
-          </Badge>
-          <span className="dashboard-document-group-chevron" aria-hidden="true">
-            ▾
-          </span>
-        </span>
-      </button>
-      {expanded && (
+        View table
+      </Button>
+      {open && (
+        <DocumentTableDialog
+          documents={documents}
+          fields={fields}
+          industryLabel={industryLabel}
+          documentTypeLabel={documentTypeLabel}
+          onClose={closeDialog}
+        />
+      )}
+    </article>
+  );
+}
+
+function DocumentTableDialog({
+  documents,
+  fields,
+  industryLabel,
+  documentTypeLabel,
+  onClose,
+}: {
+  documents: DashboardDocument[];
+  fields: string[];
+  industryLabel: string;
+  documentTypeLabel: string;
+  onClose: () => void;
+}) {
+  const titleId = useId();
+  const dialog = useRef<HTMLElement>(null);
+  const closeButton = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    const previousFocus = document.activeElement as HTMLElement | null;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    closeButton.current?.focus();
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onClose();
+        return;
+      }
+      if (event.key === "Tab") {
+        const focusable = Array.from(
+          dialog.current?.querySelectorAll<HTMLElement>(
+            'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+          ) ?? [],
+        ).filter((element) => !element.hasAttribute("disabled"));
+        const first = focusable[0];
+        const last = focusable.at(-1);
+        if (event.shiftKey && document.activeElement === first) {
+          event.preventDefault();
+          last?.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault();
+          first?.focus();
+        }
+      }
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+      document.body.style.overflow = previousOverflow;
+      previousFocus?.focus();
+    };
+  }, [onClose]);
+
+  return (
+    <div
+      className="dashboard-table-dialog-backdrop"
+      role="presentation"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
+      <section
+        ref={dialog}
+        className="dashboard-table-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+      >
+        <header className="dashboard-table-dialog-header">
+          <div>
+            <span>{industryLabel}</span>
+            <h3 id={titleId}>{documentTypeLabel}</h3>
+            <p>
+              {documents.length}{" "}
+              {documents.length === 1
+                ? "authorized document"
+                : "authorized documents"}
+            </p>
+          </div>
+          <Button
+            ref={closeButton}
+            variant="secondary"
+            aria-label={`Close ${documentTypeLabel} table`}
+            onClick={onClose}
+          >
+            Close
+          </Button>
+        </header>
         <div
-          id={tableId}
           className="dashboard-document-list"
           role="region"
           aria-label={`${documentTypeLabel} extracted data table`}
           tabIndex={0}
         >
-          <table
-            className="dashboard-document-table"
-            style={{ width: `${680 + fields.length * 220}px` }}
-          >
-            <caption className="sr-only">
-              Extracted data for authorized {documentTypeLabel} documents
-            </caption>
-            <thead>
-              <tr>
-                <th className="document-identity-column" scope="col">
-                  Document
-                </th>
-                <th className="document-classification-column" scope="col">
-                  Classification
-                </th>
-                <th className="document-extraction-column" scope="col">
-                  Extraction
-                </th>
-                {fields.map((field) => (
-                  <th
-                    className="document-extracted-field-column"
-                    scope="col"
-                    key={field}
-                  >
-                    {formatFieldName(field)}
-                  </th>
-                ))}
-                <th className="document-indexed-column" scope="col">
-                  Indexed
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {documents.map((document) => (
-                <tr key={document.document_id}>
-                  <th scope="row" className="document-identity-cell">
-                    <strong>{document.document_name}</strong>
-                  </th>
-                  <td className="document-classification-cell">
-                    <Badge
-                      variant={
-                        document.classification_status === "confirmed"
-                          ? "active"
-                          : "suspended"
-                      }
-                    >
-                      {document.classification_status === "review_required"
-                        ? "Review type"
-                        : document.classification_status === "failed"
-                          ? "Detection failed"
-                          : document.classification_status === "unclassified"
-                            ? "Unclassified"
-                            : document.classification_source === "manual"
-                              ? "Manual type"
-                              : "Auto-detected"}
-                    </Badge>
-                    {typeof document.classification_confidence === "number" && (
-                      <small>
-                        Detection confidence:{" "}
-                        {Math.round(document.classification_confidence * 100)}%
-                      </small>
-                    )}
-                  </td>
-                  <td>
-                    <Badge
-                      variant={
-                        document.extraction_status === "completed"
-                          ? "active"
-                          : "suspended"
-                      }
-                    >
-                      {document.extraction_status === "completed"
-                        ? "Extracted"
-                        : document.extraction_status === "failed"
-                          ? "Extraction failed"
-                          : "Not extracted"}
-                    </Badge>
-                  </td>
-                  {fields.map((field) => (
-                    <td className="document-extracted-value-cell" key={field}>
-                      <ExtractedFieldValue
-                        documentName={document.document_name}
-                        field={field}
-                        value={document.extracted_metadata[field]}
-                      />
-                    </td>
-                  ))}
-                  <td className="document-indexed-cell">
-                    <time dateTime={document.created_at}>
-                      {new Date(document.created_at).toLocaleString()}
-                    </time>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <DocumentDataTable
+            documents={documents}
+            fields={fields}
+            documentTypeLabel={documentTypeLabel}
+          />
         </div>
-      )}
-    </section>
+      </section>
+    </div>
+  );
+}
+
+function DocumentDataTable({
+  documents,
+  fields,
+  documentTypeLabel,
+}: {
+  documents: DashboardDocument[];
+  fields: string[];
+  documentTypeLabel: string;
+}) {
+  return (
+    <table
+      className="dashboard-document-table"
+      style={{ width: `${680 + fields.length * 220}px` }}
+    >
+      <caption className="sr-only">
+        Extracted data for authorized {documentTypeLabel} documents
+      </caption>
+      <thead>
+        <tr>
+          <th className="document-identity-column" scope="col">
+            Document
+          </th>
+          <th className="document-classification-column" scope="col">
+            Classification
+          </th>
+          <th className="document-extraction-column" scope="col">
+            Extraction
+          </th>
+          {fields.map((field) => (
+            <th
+              className="document-extracted-field-column"
+              scope="col"
+              key={field}
+            >
+              {formatFieldName(field)}
+            </th>
+          ))}
+          <th className="document-indexed-column" scope="col">
+            Indexed
+          </th>
+        </tr>
+      </thead>
+      <tbody>
+        {documents.map((document) => (
+          <tr key={document.document_id}>
+            <th scope="row" className="document-identity-cell">
+              <strong>{document.document_name}</strong>
+            </th>
+            <td className="document-classification-cell">
+              <Badge
+                variant={
+                  document.classification_status === "confirmed"
+                    ? "active"
+                    : "suspended"
+                }
+              >
+                {document.classification_status === "review_required"
+                  ? "Review type"
+                  : document.classification_status === "failed"
+                    ? "Detection failed"
+                    : document.classification_status === "unclassified"
+                      ? "Unclassified"
+                      : document.classification_source === "manual"
+                        ? "Manual type"
+                        : "Auto-detected"}
+              </Badge>
+              {typeof document.classification_confidence === "number" && (
+                <small>
+                  Detection confidence:{" "}
+                  {Math.round(document.classification_confidence * 100)}%
+                </small>
+              )}
+            </td>
+            <td>
+              <Badge
+                variant={
+                  document.extraction_status === "completed"
+                    ? "active"
+                    : "suspended"
+                }
+              >
+                {document.extraction_status === "completed"
+                  ? "Extracted"
+                  : document.extraction_status === "failed"
+                    ? "Extraction failed"
+                    : "Not extracted"}
+              </Badge>
+            </td>
+            {fields.map((field) => (
+              <td className="document-extracted-value-cell" key={field}>
+                <ExtractedFieldValue
+                  documentName={document.document_name}
+                  field={field}
+                  value={document.extracted_metadata[field]}
+                />
+              </td>
+            ))}
+            <td className="document-indexed-cell">
+              <time dateTime={document.created_at}>
+                {new Date(document.created_at).toLocaleString()}
+              </time>
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
   );
 }
 

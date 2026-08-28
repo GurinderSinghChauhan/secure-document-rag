@@ -194,33 +194,38 @@ test("renders authorized document coverage and schema-driven metadata", async ()
     ),
   ).toBeVisible();
   expect(screen.getByText("invoice_number")).toBeInTheDocument();
-  const expandServiceTable = screen.getByRole("button", {
-    name: "Expand Service Invoice table",
+  expect(
+    screen.getByRole("region", { name: "Field Service document tables" }),
+  ).toBeVisible();
+  expect(
+    screen.getByRole("region", {
+      name: "Contract Intelligence document tables",
+    }),
+  ).toBeVisible();
+  const viewServiceTable = screen.getByRole("button", {
+    name: "View Field Service Service Invoice table",
   });
-  const expandContractTable = screen.getByRole("button", {
-    name: "Expand NDA table",
+  const viewContractTable = screen.getByRole("button", {
+    name: "View Contract Intelligence NDA table",
   });
-  expect(expandServiceTable).toHaveAttribute("aria-expanded", "false");
-  expect(expandContractTable).toHaveAttribute("aria-expanded", "false");
+  expect(viewServiceTable).toHaveAttribute("aria-haspopup", "dialog");
+  expect(viewContractTable).toHaveAttribute("aria-haspopup", "dialog");
+  expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   expect(screen.queryAllByRole("table")).toHaveLength(0);
 
   const user = userEvent.setup();
-  await user.click(expandServiceTable);
-  await user.click(expandContractTable);
+  await user.click(viewServiceTable);
 
   expect(await screen.findByText("service-invoice.pdf")).toBeVisible();
-  expect(
-    screen.getByRole("button", { name: "Collapse Service Invoice table" }),
-  ).toHaveAttribute("aria-expanded", "true");
-  const serviceTable = screen.getByRole("region", {
+  const serviceDialog = screen.getByRole("dialog", {
+    name: "Service Invoice",
+  });
+  const serviceTable = within(serviceDialog).getByRole("region", {
     name: "Service Invoice extracted data table",
   });
-  const contractTable = screen.getByRole("region", {
-    name: "NDA extracted data table",
-  });
+  expect(serviceDialog).toBeVisible();
   expect(serviceTable).toBeVisible();
-  expect(contractTable).toBeVisible();
-  expect(screen.getAllByRole("table")).toHaveLength(2);
+  expect(screen.getAllByRole("table")).toHaveLength(1);
   expect(
     within(serviceTable).getByRole("columnheader", { name: "invoice number" }),
   ).toBeVisible();
@@ -231,18 +236,7 @@ test("renders authorized document coverage and schema-driven metadata", async ()
     within(serviceTable).queryByRole("columnheader", { name: "agreement id" }),
   ).not.toBeInTheDocument();
   expect(
-    within(contractTable).getByRole("columnheader", { name: "agreement id" }),
-  ).toBeVisible();
-  expect(
-    within(contractTable).queryByRole("columnheader", {
-      name: "invoice number",
-    }),
-  ).not.toBeInTheDocument();
-  expect(
     within(serviceTable).getByRole("cell", { name: "INV-42" }),
-  ).toBeVisible();
-  expect(
-    within(contractTable).getByRole("cell", { name: "NDA-7" }),
   ).toBeVisible();
   const longValue = screen.getByText(/First line with enough extracted detail/);
   expect(longValue).toHaveClass("document-cell-value-text");
@@ -260,6 +254,33 @@ test("renders authorized document coverage and schema-driven metadata", async ()
       name: "Collapse problem description for service-invoice.pdf",
     }),
   ).toHaveAttribute("aria-expanded", "true");
+  await user.click(
+    within(serviceDialog).getByRole("button", {
+      name: "Close Service Invoice table",
+    }),
+  );
+  expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  expect(viewServiceTable).toHaveFocus();
+
+  await user.click(viewContractTable);
+  const contractDialog = screen.getByRole("dialog", { name: "NDA" });
+  const contractTable = within(contractDialog).getByRole("region", {
+    name: "NDA extracted data table",
+  });
+  expect(
+    within(contractTable).getByRole("columnheader", { name: "agreement id" }),
+  ).toBeVisible();
+  expect(
+    within(contractTable).queryByRole("columnheader", {
+      name: "invoice number",
+    }),
+  ).not.toBeInTheDocument();
+  expect(
+    within(contractTable).getByRole("cell", { name: "NDA-7" }),
+  ).toBeVisible();
+  await user.keyboard("{Escape}");
+  expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  expect(viewContractTable).toHaveFocus();
   await user.type(
     screen.getByRole("searchbox", { name: "Search dashboard documents" }),
     "invoice",
