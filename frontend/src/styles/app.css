@@ -825,6 +825,16 @@ textarea:focus {
   justify-self: end;
 }
 
+.user-message .message-avatar {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.user-message .message-body {
+  grid-column: 1;
+  grid-row: 1;
+}
+
 .message-avatar {
   display: grid;
   width: 32px;
@@ -892,6 +902,7 @@ textarea:focus {
 
 .message-content p {
   margin: 0;
+  overflow-wrap: anywhere;
   white-space: pre-wrap;
 }
 
