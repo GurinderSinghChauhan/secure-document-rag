@@ -38,6 +38,22 @@ function formatFieldName(field: string) {
   return field.replaceAll("_", " ");
 }
 
+function classificationLabel(document: DashboardDocument) {
+  if (document.classification_status === "review_required")
+    return "Review type";
+  if (document.classification_status === "failed") return "Detection failed";
+  if (document.classification_status === "unclassified") return "Unclassified";
+  return document.classification_source === "manual"
+    ? "Manual type"
+    : "Auto-detected";
+}
+
+function extractionLabel(document: DashboardDocument) {
+  if (document.extraction_status === "completed") return "Extracted";
+  if (document.extraction_status === "failed") return "Extraction failed";
+  return "Not extracted";
+}
+
 export function DashboardWorkspace() {
   const dashboard = useQuery({
     queryKey: dashboardKeys.overview,
@@ -460,18 +476,11 @@ function DocumentTableDialog({
             Close
           </Button>
         </header>
-        <div
-          className="dashboard-document-list"
-          role="region"
-          aria-label={`${documentTypeLabel} extracted data table`}
-          tabIndex={0}
-        >
-          <DocumentDataTable
-            documents={documents}
-            fields={fields}
-            documentTypeLabel={documentTypeLabel}
-          />
-        </div>
+        <DocumentDataTable
+          documents={documents}
+          fields={fields}
+          documentTypeLabel={documentTypeLabel}
+        />
       </section>
     </div>
   );
@@ -486,103 +495,264 @@ function DocumentDataTable({
   fields: string[];
   documentTypeLabel: string;
 }) {
+  const [sort, setSort] = useState<{
+    column: string;
+    direction: "ascending" | "descending";
+  } | null>(null);
+  const [filters, setFilters] = useState<Record<string, string>>({});
+  const collator = useMemo(
+    () => new Intl.Collator(undefined, { numeric: true, sensitivity: "base" }),
+    [],
+  );
+  const columnValue = useCallback(
+    (document: DashboardDocument, column: string) => {
+      if (column === "document") return document.document_name;
+      if (column === "classification") {
+        const confidence =
+          typeof document.classification_confidence === "number"
+            ? `${Math.round(document.classification_confidence * 100)}%`
+            : "";
+        return `${classificationLabel(document)} ${confidence}`;
+      }
+      if (column === "extraction") return extractionLabel(document);
+      if (column === "indexed") return document.created_at;
+      return formatValue(document.extracted_metadata[column.slice(6)]);
+    },
+    [],
+  );
+  const visibleDocuments = useMemo(() => {
+    const filtered = documents.filter((document) =>
+      Object.entries(filters).every(([column, query]) =>
+        columnValue(document, column)
+          .toLocaleLowerCase()
+          .includes(query.toLocaleLowerCase()),
+      ),
+    );
+    if (!sort) return filtered;
+    return [...filtered].sort((left, right) => {
+      const result = collator.compare(
+        columnValue(left, sort.column),
+        columnValue(right, sort.column),
+      );
+      return sort.direction === "ascending" ? result : -result;
+    });
+  }, [collator, columnValue, documents, filters, sort]);
+  const updateFilter = (column: string, value: string) => {
+    setFilters((current) => {
+      const next = { ...current };
+      if (value) next[column] = value;
+      else delete next[column];
+      return next;
+    });
+  };
+  const toggleSort = (column: string) => {
+    setSort((current) => ({
+      column,
+      direction:
+        current?.column === column && current.direction === "ascending"
+          ? "descending"
+          : "ascending",
+    }));
+  };
+
   return (
-    <table
-      className="dashboard-document-table"
-      style={{ width: `${680 + fields.length * 220}px` }}
-    >
-      <caption className="sr-only">
-        Extracted data for authorized {documentTypeLabel} documents
-      </caption>
-      <thead>
-        <tr>
-          <th className="document-identity-column" scope="col">
-            Document
-          </th>
-          <th className="document-classification-column" scope="col">
-            Classification
-          </th>
-          <th className="document-extraction-column" scope="col">
-            Extraction
-          </th>
-          {fields.map((field) => (
-            <th
-              className="document-extracted-field-column"
-              scope="col"
-              key={field}
-            >
-              {formatFieldName(field)}
-            </th>
-          ))}
-          <th className="document-indexed-column" scope="col">
-            Indexed
-          </th>
-        </tr>
-      </thead>
-      <tbody>
-        {documents.map((document) => (
-          <tr key={document.document_id}>
-            <th scope="row" className="document-identity-cell">
-              <strong>{document.document_name}</strong>
-            </th>
-            <td className="document-classification-cell">
-              <Badge
-                variant={
-                  document.classification_status === "confirmed"
-                    ? "active"
-                    : "suspended"
-                }
-              >
-                {document.classification_status === "review_required"
-                  ? "Review type"
-                  : document.classification_status === "failed"
-                    ? "Detection failed"
-                    : document.classification_status === "unclassified"
-                      ? "Unclassified"
-                      : document.classification_source === "manual"
-                        ? "Manual type"
-                        : "Auto-detected"}
-              </Badge>
-              {typeof document.classification_confidence === "number" && (
-                <small>
-                  Detection confidence:{" "}
-                  {Math.round(document.classification_confidence * 100)}%
-                </small>
-              )}
-            </td>
-            <td>
-              <Badge
-                variant={
-                  document.extraction_status === "completed"
-                    ? "active"
-                    : "suspended"
-                }
-              >
-                {document.extraction_status === "completed"
-                  ? "Extracted"
-                  : document.extraction_status === "failed"
-                    ? "Extraction failed"
-                    : "Not extracted"}
-              </Badge>
-            </td>
-            {fields.map((field) => (
-              <td className="document-extracted-value-cell" key={field}>
-                <ExtractedFieldValue
-                  documentName={document.document_name}
-                  field={field}
-                  value={document.extracted_metadata[field]}
+    <div className="dashboard-table-explorer">
+      <div className="dashboard-table-toolbar">
+        <p role="status">
+          Showing {visibleDocuments.length} of {documents.length}{" "}
+          {documents.length === 1 ? "row" : "rows"}
+        </p>
+        <Button
+          variant="text"
+          disabled={!sort && Object.keys(filters).length === 0}
+          onClick={() => {
+            setSort(null);
+            setFilters({});
+          }}
+        >
+          Reset table view
+        </Button>
+      </div>
+      <div
+        className="dashboard-document-list"
+        role="region"
+        aria-label={`${documentTypeLabel} extracted data table`}
+        tabIndex={0}
+      >
+        <table
+          className="dashboard-document-table"
+          style={{ width: `${680 + fields.length * 220}px` }}
+        >
+          <caption className="sr-only">
+            Extracted data for authorized {documentTypeLabel} documents
+          </caption>
+          <thead>
+            <tr>
+              <SortableColumnHeader
+                column="document"
+                label="Document"
+                className="document-identity-column"
+                sort={sort}
+                filter={filters.document ?? ""}
+                onSort={toggleSort}
+                onFilter={updateFilter}
+              />
+              <SortableColumnHeader
+                column="classification"
+                label="Classification"
+                className="document-classification-column"
+                sort={sort}
+                filter={filters.classification ?? ""}
+                onSort={toggleSort}
+                onFilter={updateFilter}
+              />
+              <SortableColumnHeader
+                column="extraction"
+                label="Extraction"
+                className="document-extraction-column"
+                sort={sort}
+                filter={filters.extraction ?? ""}
+                onSort={toggleSort}
+                onFilter={updateFilter}
+              />
+              {fields.map((field) => (
+                <SortableColumnHeader
+                  column={`field:${field}`}
+                  label={formatFieldName(field)}
+                  className="document-extracted-field-column"
+                  sort={sort}
+                  filter={filters[`field:${field}`] ?? ""}
+                  onSort={toggleSort}
+                  onFilter={updateFilter}
+                  key={field}
                 />
-              </td>
-            ))}
-            <td className="document-indexed-cell">
-              <time dateTime={document.created_at}>
-                {new Date(document.created_at).toLocaleString()}
-              </time>
-            </td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
+              ))}
+              <SortableColumnHeader
+                column="indexed"
+                label="Indexed"
+                className="document-indexed-column"
+                sort={sort}
+                filter={filters.indexed ?? ""}
+                onSort={toggleSort}
+                onFilter={updateFilter}
+              />
+            </tr>
+          </thead>
+          <tbody>
+            {visibleDocuments.length ? (
+              visibleDocuments.map((document) => (
+                <tr key={document.document_id}>
+                  <th scope="row" className="document-identity-cell">
+                    <strong>{document.document_name}</strong>
+                  </th>
+                  <td className="document-classification-cell">
+                    <Badge
+                      variant={
+                        document.classification_status === "confirmed"
+                          ? "active"
+                          : "suspended"
+                      }
+                    >
+                      {classificationLabel(document)}
+                    </Badge>
+                    {typeof document.classification_confidence === "number" && (
+                      <small>
+                        Detection confidence:{" "}
+                        {Math.round(document.classification_confidence * 100)}%
+                      </small>
+                    )}
+                  </td>
+                  <td>
+                    <Badge
+                      variant={
+                        document.extraction_status === "completed"
+                          ? "active"
+                          : "suspended"
+                      }
+                    >
+                      {extractionLabel(document)}
+                    </Badge>
+                  </td>
+                  {fields.map((field) => (
+                    <td className="document-extracted-value-cell" key={field}>
+                      <ExtractedFieldValue
+                        documentName={document.document_name}
+                        field={field}
+                        value={document.extracted_metadata[field]}
+                      />
+                    </td>
+                  ))}
+                  <td className="document-indexed-cell">
+                    <time dateTime={document.created_at}>
+                      {new Date(document.created_at).toLocaleString()}
+                    </time>
+                  </td>
+                </tr>
+              ))
+            ) : (
+              <tr>
+                <td
+                  className="dashboard-table-no-results"
+                  colSpan={fields.length + 4}
+                >
+                  No rows match the current column filters.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function SortableColumnHeader({
+  column,
+  label,
+  className,
+  sort,
+  filter,
+  onSort,
+  onFilter,
+}: {
+  column: string;
+  label: string;
+  className: string;
+  sort: { column: string; direction: "ascending" | "descending" } | null;
+  filter: string;
+  onSort: (column: string) => void;
+  onFilter: (column: string, value: string) => void;
+}) {
+  const activeDirection = sort?.column === column ? sort.direction : null;
+  const nextDirection =
+    activeDirection === "ascending" ? "descending" : "ascending";
+
+  return (
+    <th className={className} scope="col" aria-sort={activeDirection ?? "none"}>
+      <Button
+        variant="unstyled"
+        className="dashboard-column-sort"
+        aria-label={`Sort by ${label} ${nextDirection}`}
+        onClick={() => onSort(column)}
+      >
+        <span>{label}</span>
+        <span aria-hidden="true">
+          {activeDirection === "ascending"
+            ? "↑"
+            : activeDirection === "descending"
+              ? "↓"
+              : "↕"}
+        </span>
+      </Button>
+      <input
+        className="dashboard-column-filter"
+        type="search"
+        aria-label={`Filter ${label}`}
+        placeholder="Filter…"
+        value={filter}
+        onChange={(event) => onFilter(column, event.target.value)}
+      />
+    </th>
   );
 }
 

@@ -105,6 +105,24 @@ test("renders authorized document coverage and schema-driven metadata", async ()
     },
     created_at: "2030-01-01T00:00:00Z",
   };
+  const secondServiceDocument = {
+    document_id: "document-3",
+    document_name: "annual-service.pdf",
+    document_type: "field_service.service_invoice",
+    document_type_label: "Service Invoice",
+    industry_key: "field_service",
+    industry_label: "Field Service",
+    classification_status: "confirmed",
+    classification_source: "automatic",
+    classification_confidence: 0.91,
+    extraction_status: "completed",
+    extracted_metadata: {
+      invoice_number: "INV-01",
+      problem_description: "Annual service visit.",
+      total_amount: "100.00",
+    },
+    created_at: "2029-12-31T00:00:00Z",
+  };
   const contractDocument = {
     document_id: "document-2",
     document_name: "mutual-nda.pdf",
@@ -123,15 +141,15 @@ test("renders authorized document coverage and schema-driven metadata", async ()
     http.post("/v1/auth/refresh", () => HttpResponse.json(adminAuth)),
     http.get("/v1/dashboard", () =>
       HttpResponse.json({
-        total_documents: 2,
-        classified_documents: 2,
-        extracted_documents: 2,
+        total_documents: 3,
+        classified_documents: 3,
+        extracted_documents: 3,
         review_required_documents: 1,
         industries: [
           {
             key: "field_service",
             label: "Field Service",
-            document_count: 1,
+            document_count: 2,
             document_type_count: 1,
           },
           {
@@ -141,7 +159,11 @@ test("renders authorized document coverage and schema-driven metadata", async ()
             document_type_count: 1,
           },
         ],
-        recent_documents: [contractDocument, dashboardDocument],
+        recent_documents: [
+          contractDocument,
+          dashboardDocument,
+          secondServiceDocument,
+        ],
       }),
     ),
     http.get("/v1/document-schemas", () =>
@@ -177,8 +199,8 @@ test("renders authorized document coverage and schema-driven metadata", async ()
         new URL(request.url).searchParams.get("query") ?? "",
       );
       return HttpResponse.json({
-        total: 2,
-        documents: [contractDocument, dashboardDocument],
+        total: 3,
+        documents: [contractDocument, dashboardDocument, secondServiceDocument],
       });
     }),
   );
@@ -190,7 +212,7 @@ test("renders authorized document coverage and schema-driven metadata", async ()
   ).toBeVisible();
   expect(
     await screen.findByText(
-      "2 classified documents across 2 configured verticals.",
+      "3 classified documents across 2 configured verticals.",
     ),
   ).toBeVisible();
   expect(screen.getByText("invoice_number")).toBeInTheDocument();
@@ -227,17 +249,53 @@ test("renders authorized document coverage and schema-driven metadata", async ()
   expect(serviceTable).toBeVisible();
   expect(screen.getAllByRole("table")).toHaveLength(1);
   expect(
-    within(serviceTable).getByRole("columnheader", { name: "invoice number" }),
+    within(serviceTable).getByRole("columnheader", { name: /invoice number/ }),
   ).toBeVisible();
   expect(
-    within(serviceTable).getByRole("columnheader", { name: "total amount" }),
+    within(serviceTable).getByRole("columnheader", { name: /total amount/ }),
   ).toBeVisible();
   expect(
-    within(serviceTable).queryByRole("columnheader", { name: "agreement id" }),
+    within(serviceTable).queryByRole("columnheader", { name: /agreement id/ }),
   ).not.toBeInTheDocument();
   expect(
     within(serviceTable).getByRole("cell", { name: "INV-42" }),
   ).toBeVisible();
+  const sortDocuments = within(serviceTable).getByRole("button", {
+    name: "Sort by Document ascending",
+  });
+  await user.click(sortDocuments);
+  expect(
+    within(serviceTable).getByRole("columnheader", { name: /Document/ }),
+  ).toHaveAttribute("aria-sort", "ascending");
+  expect(within(serviceTable).getAllByRole("rowheader")[0]).toHaveTextContent(
+    "annual-service.pdf",
+  );
+  await user.click(
+    within(serviceTable).getByRole("button", {
+      name: "Sort by Document descending",
+    }),
+  );
+  expect(
+    within(serviceTable).getByRole("columnheader", { name: /Document/ }),
+  ).toHaveAttribute("aria-sort", "descending");
+  expect(within(serviceTable).getAllByRole("rowheader")[0]).toHaveTextContent(
+    "service-invoice.pdf",
+  );
+
+  await user.type(
+    within(serviceTable).getByRole("searchbox", {
+      name: "Filter invoice number",
+    }),
+    "INV-42",
+  );
+  expect(
+    within(serviceTable).queryByText("annual-service.pdf"),
+  ).not.toBeInTheDocument();
+  expect(within(serviceDialog).getByText("Showing 1 of 2 rows")).toBeVisible();
+  await user.click(
+    within(serviceDialog).getByRole("button", { name: "Reset table view" }),
+  );
+  expect(within(serviceTable).getByText("annual-service.pdf")).toBeVisible();
   const longValue = screen.getByText(/First line with enough extracted detail/);
   expect(longValue).toHaveClass("document-cell-value-text");
   const expandValue = screen.getByRole("button", {
@@ -268,11 +326,11 @@ test("renders authorized document coverage and schema-driven metadata", async ()
     name: "NDA extracted data table",
   });
   expect(
-    within(contractTable).getByRole("columnheader", { name: "agreement id" }),
+    within(contractTable).getByRole("columnheader", { name: /agreement id/ }),
   ).toBeVisible();
   expect(
     within(contractTable).queryByRole("columnheader", {
-      name: "invoice number",
+      name: /invoice number/,
     }),
   ).not.toBeInTheDocument();
   expect(
