@@ -2,7 +2,7 @@
 
 ## Decision
 
-The three former static pages are one client-side application with route-composed, feature-first modules. `/`, `/admin`, and `/super-admin` resolve to a shared SPA entrypoint. Route guards improve navigation and prevent accidental exposure, while FastAPI remains authoritative for every protected action.
+The former static pages are one client-side application with route-composed, feature-first modules. `/`, `/insights/:documentType`, `/ask`, `/admin`, and `/super-admin` resolve to a shared SPA entrypoint. The homepage composes the document-intelligence dashboard, `/insights/:documentType` derives diagrams from ACL-filtered extracted metadata, and `/ask` owns chat. Route guards improve navigation and prevent accidental exposure, while FastAPI remains authoritative for every protected action.
 
 ## Dependency direction
 
@@ -24,6 +24,8 @@ Dependencies point toward stable, lower-level modules. Shared components cannot 
 | Filters or tabs worth linking to | URL search parameters |
 | Form drafts, dialogs, selections | Closest React component |
 | Streaming and upload progress | Domain-specific service and feature state |
+
+Dashboard data is server-aggregated from tenant-scoped document metadata and filtered through each document's role and explicit-user ACL before it reaches the browser. Document inventory search is debounced in the client and executed by a dedicated ACL-scoped API over filenames and registered document types. The insights route reuses that API, filters the response to the exact registered document-type key, and computes deterministic charts locally over at most 100 authorized results. The client never receives unauthorized document summaries.
 
 The API client performs one coordinated refresh, retries one unauthorized request, and clears the in-memory session when refresh fails. Tokens must never be written to local or session storage.
 

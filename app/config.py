@@ -29,6 +29,8 @@ class Settings(BaseSettings):
     embedding_batch_size: int = Field(default=128, ge=1, le=256)
     max_context_characters: int = 24_000
     min_retrieval_score: float = Field(default=0.25, ge=-1, le=1)
+    classification_auto_accept_threshold: float = Field(default=0.85, ge=0, le=1)
+    classification_review_threshold: float = Field(default=0.60, ge=0, le=1)
     allowed_hosts: str = "localhost,127.0.0.1"
     gpu_dispatch_enabled: bool = False
     compute_provider: str = "local_docker"
@@ -73,6 +75,12 @@ class Settings(BaseSettings):
                 raise ValueError("Production requires COOKIE_SECURE=true")
             if self.email_sender != "resend" or not self.resend_api_key:
                 raise ValueError("Production requires Resend email configuration")
+        return self
+
+    @model_validator(mode="after")
+    def validate_classification_thresholds(self) -> "Settings":
+        if self.classification_review_threshold >= self.classification_auto_accept_threshold:
+            raise ValueError("CLASSIFICATION_REVIEW_THRESHOLD must be lower than CLASSIFICATION_AUTO_ACCEPT_THRESHOLD")
         return self
 
     @field_validator("invitation_delivery")

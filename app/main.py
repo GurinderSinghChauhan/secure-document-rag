@@ -6,7 +6,7 @@ from pathlib import PurePath
 from time import monotonic
 from uuid import uuid4
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Request, status
+from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request, status
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -22,12 +22,13 @@ from .config import get_settings
 from .compute import assert_release_within_limits, recommended_gpu_minutes
 from .database import ComputeSessionRecord, DocumentRecord, IngestionJobRecord, SessionFactory, dispose_database, get_session, initialize_database
 from .document_parser import VisualAsset, extract_document
+from .document_schemas import DOCUMENT_SCHEMAS, INDUSTRIES, SCHEMA_VERSION, require_document_schema, schema_catalog
 from .mineru import MinerUClient, supports_mineru
-from .models import ChatDetail, ChatMessage, ChatSummary, ComputeSessionCreate, ComputeSessionRelease, ComputeSessionResponse, DeleteResponse, HeldIngestResponse, IndexedDocumentResponse, IngestionJobResponse, Principal, QueryRequest, QueryResponse, ReadinessResponse, VersionResponse
+from .models import ChatDetail, ChatMessage, ChatSummary, ComputeSessionCreate, ComputeSessionRelease, ComputeSessionResponse, DashboardDocumentListResponse, DashboardDocumentResponse, DashboardIndustryResponse, DashboardResponse, DeleteResponse, HeldIngestResponse, IndexedDocumentResponse, IndustrySchemaResponse, IngestionJobResponse, Principal, QueryRequest, QueryResponse, ReadinessResponse, VersionResponse
 from .providers import ModelClient
 from .super_admin import router as super_admin_router
 from .trials import is_pdf, require_active_trial, reserve_pdf_trial_slot, reserve_question_trial_slot
-from .repository import add_chat_message, create_chat, database_is_ready, get_chat, get_document, get_document_by_content_hash, list_chat_messages, list_chats, list_documents, mark_document_deleted
+from .repository import add_chat_message, create_chat, database_is_ready, get_chat, get_document, get_document_by_content_hash, list_authorized_documents, list_chat_messages, list_chats, list_documents, mark_document_deleted, search_authorized_documents
 from .vector_store import VectorStore
 from .version import APP_COMMIT, APP_VERSION
 
@@ -93,6 +94,31 @@ def validate_document_name(document_name: str) -> str:
     return document_name
 
 
+def validate_document_type(document_type: str | None) -> str | None:
+    try:
+        schema = require_document_schema(document_type)
+    except ValueError as error:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(error)) from error
+    return schema.key if schema else None
+
+
+def document_is_authorized(document: DocumentRecord, principal: Principal) -> bool:
+    return bool(set(document.allowed_roles).intersection(principal.roles)) or principal.user_id in document.allowed_users
+
+
+def classification_decision(
+    candidate: str,
+    confidence: float,
+    auto_accept_threshold: float,
+    review_threshold: float,
+) -> tuple[str | None, str]:
+    if confidence >= auto_accept_threshold:
+        return candidate, "confirmed"
+    if confidence >= review_threshold:
+        return candidate, "review_required"
+    return None, "unclassified"
+
+
 def encode_event(event: dict[str, object]) -> str:
     return json.dumps(event) + "\n"
 
@@ -116,13 +142,24 @@ def job_response(job: IngestionJobRecord) -> IngestionJobResponse:
     return IngestionJobResponse.model_validate(values)
 
 
+def indexed_document_response(document: DocumentRecord) -> IndexedDocumentResponse:
+    values = {column.name: getattr(document, column.name) for column in DocumentRecord.__table__.columns}
+    values["schema_version"] = values.get("schema_version") or SCHEMA_VERSION
+    values["classification_status"] = values.get("classification_status") or "unclassified"
+    values["classification_source"] = values.get("classification_source") or "automatic"
+    values["extraction_status"] = values.get("extraction_status") or "not_requested"
+    values["extracted_metadata"] = values.get("extracted_metadata") or {}
+    return IndexedDocumentResponse.model_validate(values)
+
+
 async def create_held_job(
     *, session: AsyncSession, principal: Principal, document_name: str, content: bytes,
-    content_type: str, allowed_roles: list[str], allowed_users: list[str],
+    content_type: str, allowed_roles: list[str], allowed_users: list[str], document_type: str | None = None,
 ) -> IngestionJobRecord:
     job = IngestionJobRecord(
         job_id=str(uuid4()), tenant_id=principal.tenant_id, state="held_for_compute", stage="held", progress=0,
         message="GPU processing is off; document saved and waiting.", document_name=document_name,
+        document_type=document_type,
         content_type=content_type, content_sha256=sha256(content).hexdigest(), content=content, size_bytes=len(content),
         allowed_roles=allowed_roles, allowed_users=allowed_users, created_by=principal.user_id,
         retry_limit=get_settings().compute_retry_limit,
@@ -188,6 +225,7 @@ async def index_document_events(
     principal: Principal,
     session: AsyncSession,
     existing_document: DocumentRecord | None = None,
+    document_type: str | None = None,
 ):
     settings = get_settings()
     yield {"type": "progress", "percentage": 5, "stage": "extracting", "message": "Extracting text, tables, and visual content"}
@@ -250,11 +288,62 @@ async def index_document_events(
                 if not visual.description_indexed:
                     visuals_indexed += 1
 
-    chunks = chunk_text("\n\n".join(text_sections))
+    index_text = "\n\n".join(text_sections)
+    chunks = chunk_text(index_text)
     if not chunks:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Document has no indexable text, tables, or visuals")
     if len(chunks) > settings.max_document_chunks:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Document exceeds configured chunk limit")
+
+    resolved_document_type = document_type
+    classification_status = "confirmed" if document_type else "unclassified"
+    classification_source = "manual" if document_type else "automatic"
+    classification_confidence: float | None = None
+    if document_type is None:
+        yield {
+            "type": "progress",
+            "percentage": 25,
+            "stage": "classification",
+            "message": "Detecting document type",
+        }
+        try:
+            candidate, confidence = await model_server.classify_document(
+                tuple(
+                    (key, schema.label)
+                    for key, (_, schema) in DOCUMENT_SCHEMAS.items()
+                ),
+                index_text,
+            )
+            classification_confidence = confidence
+            auto_accept_threshold = getattr(
+                settings,
+                "classification_auto_accept_threshold",
+                0.85,
+            )
+            review_threshold = getattr(
+                settings,
+                "classification_review_threshold",
+                0.60,
+            )
+            resolved_document_type, classification_status = classification_decision(
+                candidate,
+                confidence,
+                auto_accept_threshold,
+                review_threshold,
+            )
+        except HTTPException:
+            classification_status = "failed"
+
+    extracted_metadata: dict[str, object] = {}
+    extraction_status = "not_requested"
+    schema = require_document_schema(resolved_document_type)
+    if schema is not None:
+        yield {"type": "progress", "percentage": 26, "stage": "metadata_extraction", "message": f"Extracting {schema.label} fields"}
+        try:
+            extracted_metadata = await model_server.extract_metadata(schema.label, schema.fields, index_text)
+            extraction_status = "completed"
+        except HTTPException:
+            extraction_status = "failed"
 
     yield {"type": "progress", "percentage": 28, "stage": "chunking", "message": f"Prepared {len(chunks)} searchable chunks"}
     embeddings: list[list[float]] = []
@@ -277,9 +366,16 @@ async def index_document_events(
     yield {"type": "progress", "percentage": 96, "stage": "metadata", "message": "Saving document metadata"}
     try:
         if existing_document is None:
-            session.add(DocumentRecord(document_id=document_id, tenant_id=principal.tenant_id, document_name=document_name, content_type=content_type, content_sha256=content_sha256, size_bytes=len(content), chunk_count=len(chunks), allowed_roles=allowed_roles, allowed_users=allowed_users, created_by=principal.user_id))
+            session.add(DocumentRecord(document_id=document_id, tenant_id=principal.tenant_id, document_name=document_name, document_type=resolved_document_type, schema_version=SCHEMA_VERSION, classification_status=classification_status, classification_source=classification_source, classification_confidence=classification_confidence, extraction_status=extraction_status, extracted_metadata=extracted_metadata, content_type=content_type, content_sha256=content_sha256, size_bytes=len(content), chunk_count=len(chunks), allowed_roles=allowed_roles, allowed_users=allowed_users, created_by=principal.user_id))
         else:
             existing_document.document_name = document_name
+            existing_document.document_type = resolved_document_type
+            existing_document.schema_version = SCHEMA_VERSION
+            existing_document.classification_status = classification_status
+            existing_document.classification_source = classification_source
+            existing_document.classification_confidence = classification_confidence
+            existing_document.extraction_status = extraction_status
+            existing_document.extracted_metadata = extracted_metadata
             existing_document.content_type = content_type
             existing_document.size_bytes = len(content)
             existing_document.chunk_count = len(chunks)
@@ -304,6 +400,10 @@ async def index_document_events(
         chunks=len(chunks),
         tables=parsed.table_count,
         visuals=visuals_indexed,
+        document_type=resolved_document_type,
+        classification_status=classification_status,
+        classification_source=classification_source,
+        classification_confidence=classification_confidence,
     )
     yield {
         "type": "complete",
@@ -345,7 +445,7 @@ async def run_local_compute_session(compute_session_id: str, job_ids: list[str])
             principal = Principal(tenant_id=job.tenant_id, user_id=job.created_by, roles=job.allowed_roles)
             existing = await get_document_by_content_hash(session, job.tenant_id, job.content_sha256, include_deleted=True)
             try:
-                async for event in index_document_events(job.content, job.content_type, job.content_sha256, job.document_name, job.allowed_roles, job.allowed_users, principal, session, existing):
+                async for event in index_document_events(job.content, job.content_type, job.content_sha256, job.document_name, job.allowed_roles, job.allowed_users, principal, session, existing, job.document_type):
                     elapsed = monotonic() - started
                     if compute_session.gpu_seconds + elapsed >= compute_session.max_gpu_minutes * 60:
                         raise TimeoutError("Compute session GPU time limit reached")
@@ -461,6 +561,17 @@ async def chat_ui() -> FileResponse:
     return FileResponse("app/static/spa/index.html")
 
 
+@app.get("/ask", include_in_schema=False)
+async def ask_ui() -> FileResponse:
+    return FileResponse("app/static/spa/index.html")
+
+
+@app.get("/insights/{document_type}", include_in_schema=False)
+async def insights_ui(document_type: str) -> FileResponse:
+    del document_type
+    return FileResponse("app/static/spa/index.html")
+
+
 @app.get("/admin", include_in_schema=False)
 async def admin_ui() -> FileResponse:
     return FileResponse("app/static/spa/index.html")
@@ -485,17 +596,143 @@ async def readyz(session: AsyncSession = Depends(get_session)) -> ReadinessRespo
     return ReadinessResponse(status="ready", components=components)
 
 
+@app.get("/v1/document-schemas", response_model=list[IndustrySchemaResponse])
+async def list_document_schemas(_: Principal = Depends(require_principal)) -> list[dict[str, object]]:
+    return schema_catalog()
+
+
+def dashboard_document_response(document: DocumentRecord) -> DashboardDocumentResponse:
+    match = DOCUMENT_SCHEMAS.get(document.document_type or "")
+    if match:
+        industry, document_schema = match
+        document_type_label = document_schema.label
+        industry_key = industry.key
+        industry_label = industry.label
+    else:
+        document_type_label = "Unclassified"
+        industry_key = None
+        industry_label = "Needs classification"
+    return DashboardDocumentResponse(
+        document_id=document.document_id,
+        document_name=document.document_name,
+        document_type=document.document_type,
+        document_type_label=document_type_label,
+        industry_key=industry_key,
+        industry_label=industry_label,
+        classification_status=document.classification_status or "unclassified",
+        classification_source=document.classification_source or "automatic",
+        classification_confidence=document.classification_confidence,
+        extraction_status=document.extraction_status or "not_requested",
+        extracted_metadata=document.extracted_metadata or {},
+        created_at=document.created_at,
+    )
+
+
+@app.get("/v1/dashboard", response_model=DashboardResponse)
+async def dashboard(
+    principal: Principal = Depends(require_principal),
+    session: AsyncSession = Depends(get_session),
+) -> DashboardResponse:
+    documents = [
+        document
+        for document in await list_authorized_documents(
+            session,
+            principal.tenant_id,
+            principal.roles,
+            principal.user_id,
+        )
+        if document_is_authorized(document, principal)
+    ]
+    industry_counts = {industry.key: 0 for industry in INDUSTRIES}
+    recent_documents: list[DashboardDocumentResponse] = []
+    classified_documents = 0
+    extracted_documents = 0
+    review_required_documents = 0
+    for document in documents:
+        match = DOCUMENT_SCHEMAS.get(document.document_type or "")
+        if match:
+            industry, _ = match
+            industry_counts[industry.key] += 1
+            classified_documents += 1
+        extraction_status = document.extraction_status or "not_requested"
+        classification_status = document.classification_status or "unclassified"
+        if classification_status == "review_required":
+            review_required_documents += 1
+        if extraction_status == "completed":
+            extracted_documents += 1
+        if len(recent_documents) < 20:
+            recent_documents.append(dashboard_document_response(document))
+    return DashboardResponse(
+        total_documents=len(documents),
+        classified_documents=classified_documents,
+        extracted_documents=extracted_documents,
+        review_required_documents=review_required_documents,
+        industries=[
+            DashboardIndustryResponse(
+                key=industry.key,
+                label=industry.label,
+                document_count=industry_counts[industry.key],
+                document_type_count=len(industry.document_types),
+            )
+            for industry in INDUSTRIES
+        ],
+        recent_documents=recent_documents,
+    )
+
+
+@app.get("/v1/dashboard/documents", response_model=DashboardDocumentListResponse)
+async def dashboard_documents(
+    principal: Principal = Depends(require_principal),
+    session: AsyncSession = Depends(get_session),
+    query: str = Query(default="", max_length=100),
+    limit: int = Query(default=100, ge=1, le=100),
+) -> DashboardDocumentListResponse:
+    normalized_query = query.strip()
+    lowered_query = normalized_query.lower()
+    matching_type_keys = (
+        [
+            key
+            for key, (industry, document_schema) in DOCUMENT_SCHEMAS.items()
+            if lowered_query in document_schema.label.lower()
+            or lowered_query in industry.label.lower()
+            or lowered_query in key.lower()
+        ]
+        if normalized_query
+        else []
+    )
+    documents, total = await search_authorized_documents(
+        session,
+        principal.tenant_id,
+        principal.roles,
+        principal.user_id,
+        normalized_query,
+        matching_type_keys,
+        limit,
+    )
+    authorized_documents = [
+        document
+        for document in documents
+        if document_is_authorized(document, principal)
+    ]
+    return DashboardDocumentListResponse(
+        total=total,
+        documents=[dashboard_document_response(document) for document in authorized_documents],
+    )
+
+
 @app.post("/v1/documents", response_model=HeldIngestResponse, status_code=status.HTTP_202_ACCEPTED)
 async def ingest_document(
     request: Request,
     principal: Principal = Depends(require_principal),
     session: AsyncSession = Depends(get_session),
     x_document_name: str = Header(min_length=1, max_length=255),
+    x_document_type: str | None = Header(default=None, max_length=96),
     x_allowed_roles: str | None = Header(default=None),
     x_allowed_users: str | None = Header(default=None),
 ) -> HeldIngestResponse:
     require_admin(principal)
     document_name = validate_document_name(x_document_name)
+    document_type = validate_document_type(x_document_type)
     content = await read_limited_body(request)
     if not content:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Document cannot be empty")
@@ -505,7 +742,7 @@ async def ingest_document(
         await reserve_pdf_trial_slot(session, principal)
     allowed_roles = parse_acl(x_allowed_roles) or principal.roles
     allowed_users = parse_acl(x_allowed_users)
-    job = await create_held_job(session=session, principal=principal, document_name=document_name, content=content, content_type=content_type, allowed_roles=allowed_roles, allowed_users=allowed_users)
+    job = await create_held_job(session=session, principal=principal, document_name=document_name, content=content, content_type=content_type, allowed_roles=allowed_roles, allowed_users=allowed_users, document_type=document_type)
     return HeldIngestResponse(job_id=job.job_id, message=job.message)
 
 
@@ -515,11 +752,13 @@ async def stream_ingest_document(
     principal: Principal = Depends(require_principal),
     session: AsyncSession = Depends(get_session),
     x_document_name: str = Header(min_length=1, max_length=255),
+    x_document_type: str | None = Header(default=None, max_length=96),
     x_allowed_roles: str | None = Header(default=None),
     x_allowed_users: str | None = Header(default=None),
 ) -> StreamingResponse:
     require_admin(principal)
     document_name = validate_document_name(x_document_name)
+    document_type = validate_document_type(x_document_type)
     content = await read_limited_body(request)
     if not content:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Document cannot be empty")
@@ -529,7 +768,7 @@ async def stream_ingest_document(
         await reserve_pdf_trial_slot(session, principal)
     allowed_roles = parse_acl(x_allowed_roles) or principal.roles
     allowed_users = parse_acl(x_allowed_users)
-    job = await create_held_job(session=session, principal=principal, document_name=document_name, content=content, content_type=content_type, allowed_roles=allowed_roles, allowed_users=allowed_users)
+    job = await create_held_job(session=session, principal=principal, document_name=document_name, content=content, content_type=content_type, allowed_roles=allowed_roles, allowed_users=allowed_users, document_type=document_type)
 
     async def events():
         yield encode_event({
@@ -562,7 +801,7 @@ async def list_indexed_documents(
 ) -> list[IndexedDocumentResponse]:
     require_admin(principal)
     documents = await list_documents(session, principal.tenant_id)
-    return [IndexedDocumentResponse.model_validate(document, from_attributes=True) for document in documents]
+    return [indexed_document_response(document) for document in documents]
 
 
 @app.post("/v1/admin/compute-sessions", response_model=ComputeSessionResponse, status_code=status.HTTP_201_CREATED)

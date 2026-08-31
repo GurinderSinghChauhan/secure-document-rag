@@ -10,31 +10,39 @@ The service is evidence-first internally: it generates answers only from retriev
 
 Every protected request carries a short-lived JWT access token. The token maps one registered person to one organization and an `admin` or `member` role.
 
-| Role | Can ingest | Can query authorized documents | Can delete |
-| --- | --- | --- | --- |
-| `admin` | Yes | Yes | Yes |
-| Other configured role | No | Yes, when document ACL permits | No |
+| Role                  | Can ingest | Can query authorized documents | Can delete |
+| --------------------- | ---------- | ------------------------------ | ---------- |
+| `admin`               | Yes        | Yes                            | Yes        |
+| Other configured role | No         | Yes, when document ACL permits | No         |
 
 Organization scope comes from the verified JWT and cannot be selected through a request header. A mismatch is rejected before document retrieval.
 
 ## Document ingestion
 
-Administrators open `/admin` to upload documents, release bounded compute batches, and manage organization members. The main `/` workspace remains focused on chat and does not embed administrative controls. Members are redirected away from the admin console, and the API independently rejects every unauthorized administrative request.
+Administrators open `/admin` to upload documents, release bounded compute batches, and manage organization members. The main `/` workspace is a document-intelligence dashboard, and `/ask` contains chat. Members are redirected away from the admin console, and the API independently rejects every unauthorized administrative request.
+
+The dashboard summarizes only documents the signed-in person may query. It groups classified documents into field service, contract intelligence, litigation, healthcare, insurance, accounts payable, construction, manufacturing, banking and lending, HR, and property management. Search filters authorized documents by filename, document type, or industry without exposing other document summaries. Results are divided into vertical sections with document-type cards arranged two per row on larger screens. Choosing **View table** opens that type's schema-specific extracted fields in a focused, independently scrollable dialog with one row per authorized document, four-line previews for long multiline values, and an em dash where that document has no value. Every column can be filtered and sorted in ascending or descending order, while **Reset table view** clears the active column filters and sort. Users can expand an individual value when needed and inspect the configured document types and fields without opening source content.
+
+Choosing **Insights** beside the table's Close button opens `/insights/{document_type}`. The page calculates deterministic diagrams from the same ACL-filtered result set: document and extraction KPIs, field completeness, volume over time, categorical breakdowns, numeric comparisons, frequently referenced entities, and deadline timelines when the required fields are populated. Unsupported diagrams are omitted rather than inferred from missing data. The page processes extracted metadata in the browser and does not send source content to another service.
 
 Platform super administrators have a separate `/super-admin` console. They can see organizations and users across the deployment, suspend access without deleting data, reactivate users or organizations, change organization roles, and revoke user sessions. A response-quality view also lets them review cross-organization question-and-answer pairs, filter pending or completed reviews, and score correctness, relevance, and clarity from 1 to 5 with optional notes. Evaluations can be revised; the latest reviewer and scores are retained. These actions are audited and protected by final-administrator and self-lockout safeguards.
 
-An administrator uploads a PDF, DOCX, PPTX, XLSX, UTF-8 text file, or supported image through `POST /v1/documents`. The service:
+An administrator uploads a PDF, DOCX, PPTX, XLSX, UTF-8 text file, or supported image through `POST /v1/documents`. Automatic type detection is the default for both single files and folders. An administrator can instead select a document type, which sends the stable schema key in `X-Document-Type` as an explicit override for every selected file. The service:
 
 1. Enforces the configured upload size limit.
 2. Rejects invalid document names, unsupported formats, empty documents, unsafe parser archives, and documents that create too many chunks.
 3. Uses self-hosted MinerU to recover reading order, headings, paragraph text, OCR, formulas, tables, captions, and embedded figures from structured documents.
 4. Indexes detailed visual descriptions produced by MinerU directly. Images, charts, diagrams, and forms with missing or weak descriptions are concurrently enriched by a self-hosted vision-language model.
-5. Combines text, table content, and visual descriptions, breaks them into overlapping chunks, and creates embeddings through the self-hosted model service.
-6. Stores chunks with the document name, tenant collection, and access-control metadata in Qdrant.
-7. Registers document metadata and a SHA-256 content fingerprint in PostgreSQL.
-8. Records a metadata-only audit event, including extracted table and visual counts. Document content and user questions are not written to the audit table.
+5. When there is no manual override, asks the self-hosted model to select one registered document type and return a confidence score. High-confidence results are confirmed, medium-confidence results are classified but flagged for review, and low-confidence or failed results remain unclassified.
+6. For a classified document, asks the self-hosted model to extract only the versioned fields configured for that type. Extraction and classification are best effort: a model failure is recorded without preventing searchable indexing.
+7. Combines text, table content, and visual descriptions, breaks them into overlapping chunks, and creates embeddings through the self-hosted model service.
+8. Stores chunks with the document name, tenant collection, and access-control metadata in Qdrant.
+9. Registers document metadata, classification source/status/confidence, schema version, extraction status, extracted values, and a SHA-256 content fingerprint in PostgreSQL.
+10. Records a metadata-only audit event, including extracted table and visual counts. Document content and user questions are not written to the audit table.
 
 When several files are uploaded together, the successfully held files are selected automatically in the compute queue. Administrators can select all waiting files or clear the selection in one action. The console recalculates the selected document count and GPU-minute estimate from file type and size whenever the selection changes. Both values are read-only, and the unnecessary cost input is omitted. Processing closes as soon as the selected batch finishes.
+
+Administrators can also choose a folder, including its nested folders. Folder selection accepts PDF files only; non-PDF files are ignored in the browser and the interface reports the ignored count before upload. Accepted PDFs continue through the same sequential per-file validation, progress, and failure-isolation workflow as an ordinary multi-file selection.
 
 Visual search is caption-based: raw image pixels are analyzed transiently by the private vision model, but Qdrant stores only the resulting text description and embedding. This allows normal text questions to retrieve information represented in charts and diagrams without introducing a second incompatible image-vector space.
 
@@ -78,6 +86,7 @@ Do not enable this operation for records subject to legal hold, healthcare reten
 - Answers may be incomplete if source documents are incomplete, poorly scanned, inaccessible to the caller, or not retrieved.
 - Users should review source documents before relying on answers for clinical care, legal advice, trading, lending, compliance, or other high-impact decisions.
 - The service is not a substitute for professional review or a compliance certification.
+
 # Free trials
 
 Every newly created organization receives a non-extendable seven-day free trial shared by all its members. During the trial, each user can ask at most five questions per UTC calendar day; one person's questions do not consume another person's allowance. The allowance resets at UTC midnight, and a rejected sixth question is not added to chat history. Administrators can also collectively submit at most two PDFs per UTC calendar day. Inviting another member or administrator does not reset the trial or increase the PDF allowance. Non-PDF uploads do not consume that allowance. Members remain query-only, as defined by their organization role. When the trial expires, people can still sign in and manage account access, but querying, new uploads, and starting or releasing compute are blocked. Held documents remain stored. Platform super administrators are exempt from trial restrictions.

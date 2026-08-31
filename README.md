@@ -125,7 +125,7 @@ For large uploads, the admin console automatically selects the files that were j
 
 ## Chat UI
 
-The API serves one same-origin React application with Ask at `http://127.0.0.1:8080/`, organization administration at `/admin`, and platform administration at `/super-admin`. Client-side navigation shares one memory-only authenticated session; direct navigation to each route is also supported. Members receive the focused chat workspace only. Administrators can upload and index PDF, DOCX, PPTX, XLSX, TXT, PNG, JPEG, and WebP content, release compute, and manage organization access. The browser calls only the secured RAG API; it never connects to MinerU, the model server, or Qdrant directly.
+The API serves one same-origin React application with the document dashboard at `http://127.0.0.1:8080/`, document-type insights at `/insights/:documentType`, Ask at `/ask`, organization administration at `/admin`, and platform administration at `/super-admin`. Client-side navigation shares one memory-only authenticated session; direct navigation to each route is also supported. Members receive the dashboard, insights, and focused chat workspaces. Administrators can upload and index PDF, DOCX, PPTX, XLSX, TXT, PNG, JPEG, and WebP content, release compute, and manage organization access. The browser calls only the secured RAG API; it never connects to MinerU, the model server, or Qdrant directly.
 
 The UI keeps the short-lived access JWT only in memory and restores sessions through a rotating, HTTP-only refresh cookie. Registration creates an organization and its first administrator; additional accounts join by invitation.
 

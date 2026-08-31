@@ -1,7 +1,14 @@
 import { api, errorMessage } from "../../api/client";
-import type { IndexedDocument } from "../../api/types";
+import type { IndexedDocument, IndustrySchema } from "../../api/types";
 
 export const documentKeys = { indexed: ["documents", "indexed"] as const };
+export const schemaKeys = { all: ["document-schemas"] as const };
+export const listDocumentSchemas = () =>
+  api.json<IndustrySchema[]>(
+    "/v1/document-schemas",
+    {},
+    "Unable to load document types.",
+  );
 export const listDocuments = () =>
   api.json<IndexedDocument[]>(
     "/v1/admin/documents",
@@ -28,6 +35,7 @@ export function uploadDocument(
   file: File,
   roles: string,
   users: string,
+  documentType: string,
   onProgress: (progress: UploadProgress) => void,
 ): Promise<UploadResult> {
   return new Promise((resolve, reject) => {
@@ -68,7 +76,14 @@ export function uploadDocument(
     const token = api.getAccessToken();
     if (token) request.setRequestHeader("Authorization", `Bearer ${token}`);
     request.setRequestHeader("X-Document-Name", file.name);
-    request.setRequestHeader("Content-Type", file.type || "text/plain");
+    request.setRequestHeader(
+      "Content-Type",
+      file.type ||
+        (file.name.toLowerCase().endsWith(".pdf")
+          ? "application/pdf"
+          : "text/plain"),
+    );
+    if (documentType) request.setRequestHeader("X-Document-Type", documentType);
     if (roles.trim()) request.setRequestHeader("X-Allowed-Roles", roles.trim());
     if (users.trim()) request.setRequestHeader("X-Allowed-Users", users.trim());
     request.upload.addEventListener("progress", (event) => {

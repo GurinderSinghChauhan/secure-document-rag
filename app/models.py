@@ -56,6 +56,7 @@ class HeldIngestResponse(BaseModel):
 class IngestionJobResponse(BaseModel):
     job_id: str
     document_name: str
+    document_type: str | None = None
     content_type: str
     size_bytes: int
     recommended_gpu_minutes: int
@@ -105,6 +106,13 @@ class DeleteResponse(BaseModel):
 class IndexedDocumentResponse(BaseModel):
     document_id: str
     document_name: str
+    document_type: str | None = None
+    schema_version: int = 1
+    classification_status: str = "unclassified"
+    classification_source: str = "automatic"
+    classification_confidence: float | None = None
+    extraction_status: str = "not_requested"
+    extracted_metadata: dict[str, object] = Field(default_factory=dict)
     content_type: str
     size_bytes: int
     chunk_count: int
@@ -112,6 +120,55 @@ class IndexedDocumentResponse(BaseModel):
     allowed_users: list[str]
     created_by: str
     created_at: datetime
+
+
+class DocumentTypeSchemaResponse(BaseModel):
+    key: str
+    label: str
+    fields: list[str]
+
+
+class IndustrySchemaResponse(BaseModel):
+    key: str
+    label: str
+    description: str
+    document_types: list[DocumentTypeSchemaResponse]
+
+
+class DashboardDocumentResponse(BaseModel):
+    document_id: str
+    document_name: str
+    document_type: str | None
+    document_type_label: str
+    industry_key: str | None
+    industry_label: str
+    classification_status: str
+    classification_source: str
+    classification_confidence: float | None
+    extraction_status: str
+    extracted_metadata: dict[str, object]
+    created_at: datetime
+
+
+class DashboardIndustryResponse(BaseModel):
+    key: str
+    label: str
+    document_count: int
+    document_type_count: int
+
+
+class DashboardDocumentListResponse(BaseModel):
+    total: int
+    documents: list[DashboardDocumentResponse]
+
+
+class DashboardResponse(BaseModel):
+    total_documents: int
+    classified_documents: int
+    extracted_documents: int
+    review_required_documents: int
+    industries: list[DashboardIndustryResponse]
+    recent_documents: list[DashboardDocumentResponse]
 
 
 class ReadinessResponse(BaseModel):
