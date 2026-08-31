@@ -1,6 +1,11 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { deleteDocument, documentKeys, listDocuments } from "./api";
+import {
+  deleteAllDocuments,
+  deleteDocument,
+  documentKeys,
+  listDocuments,
+} from "./api";
 import {
   Button,
   FormField,
@@ -25,6 +30,11 @@ export function DocumentLibrary() {
   });
   const remove = useMutation({
     mutationFn: deleteDocument,
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: documentKeys.indexed }),
+  });
+  const removeAll = useMutation({
+    mutationFn: deleteAllDocuments,
     onSuccess: () =>
       queryClient.invalidateQueries({ queryKey: documentKeys.indexed }),
   });
@@ -75,6 +85,33 @@ export function DocumentLibrary() {
           onChange={(event) => setSearch(event.target.value)}
         />
       </FormField>
+      <div className="indexed-document-toolbar">
+        <span>
+          Delete all removes every indexed document in this organization,
+          including documents outside the current search.
+        </span>
+        <Button
+          variant="text"
+          className="danger-action"
+          type="button"
+          disabled={
+            !documents.data?.length || remove.isPending || removeAll.isPending
+          }
+          busy={removeAll.isPending}
+          busyLabel="Deleting all…"
+          onClick={() => {
+            const count = documents.data?.length ?? 0;
+            if (
+              confirm(
+                `Delete all indexed documents in this organization? At least ${count} ${count === 1 ? "document" : "documents"} will be removed. This cannot be undone.`,
+              )
+            )
+              removeAll.mutate();
+          }}
+        >
+          Delete all documents
+        </Button>
+      </div>
       <div className="indexed-document-list">
         {matches.map((document) => (
           <article className="indexed-document-row" key={document.document_id}>
@@ -94,7 +131,7 @@ export function DocumentLibrary() {
               variant="text"
               className="danger-action"
               type="button"
-              disabled={remove.isPending}
+              disabled={remove.isPending || removeAll.isPending}
               onClick={() => {
                 if (
                   confirm(

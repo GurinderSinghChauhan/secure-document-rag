@@ -72,20 +72,26 @@ test("restores one shared session and exposes role-appropriate navigation", asyn
   expect(
     await screen.findByRole("heading", { name: "Document dashboard" }),
   ).toBeVisible();
-  expect(screen.getByRole("link", { name: "Ask" })).toHaveAttribute(
+  const primaryNavigation = within(screen.getByLabelText("Primary navigation"));
+  expect(primaryNavigation.getByRole("link", { name: "Ask" })).toHaveAttribute(
     "href",
     "/ask",
   );
-  expect(screen.getByRole("link", { name: "Admin" })).toHaveAttribute(
-    "href",
-    "/admin",
-  );
   expect(
-    screen.queryByRole("link", { name: "Platform Admin" }),
+    primaryNavigation.getByRole("link", { name: "Admin" }),
+  ).toHaveAttribute("href", "/admin");
+  expect(
+    primaryNavigation.queryByRole("link", { name: "Platform Admin" }),
   ).not.toBeInTheDocument();
 });
 
 test("renders authorized document coverage and schema-driven metadata", async () => {
+  vi.spyOn(HTMLElement.prototype, "clientHeight", "get").mockReturnValue(40);
+  vi.spyOn(HTMLElement.prototype, "scrollHeight", "get").mockImplementation(
+    function (this: HTMLElement) {
+      return this.textContent?.includes("First line with enough") ? 100 : 40;
+    },
+  );
   const documentSearches: string[] = [];
   const dashboardDocument = {
     document_id: "document-1",
@@ -258,6 +264,14 @@ test("renders authorized document coverage and schema-driven metadata", async ()
     within(serviceTable).getByRole("columnheader", { name: /total amount/ }),
   ).toBeVisible();
   expect(
+    within(serviceTable).queryByRole("columnheader", {
+      name: /Classification/,
+    }),
+  ).not.toBeInTheDocument();
+  expect(
+    within(serviceTable).queryByRole("columnheader", { name: /Extraction/ }),
+  ).not.toBeInTheDocument();
+  expect(
     within(serviceTable).queryByRole("columnheader", { name: /agreement id/ }),
   ).not.toBeInTheDocument();
   expect(
@@ -305,9 +319,12 @@ test("renders authorized document coverage and schema-driven metadata", async ()
     name: "Show all problem description for service-invoice.pdf",
   });
   expect(expandValue).toHaveAttribute("aria-expanded", "false");
+  expect(
+    screen.queryByRole("button", {
+      name: "Show all problem description for annual-service.pdf",
+    }),
+  ).not.toBeInTheDocument();
   expect(within(serviceTable).getByRole("cell", { name: "—" })).toBeVisible();
-  expect(screen.getByText("Review type")).toBeVisible();
-  expect(screen.getByText("Detection confidence: 72%")).toBeVisible();
 
   await user.click(expandValue);
   expect(

@@ -5,12 +5,19 @@ export const computeKeys = {
   held: ["compute", "held-jobs"] as const,
   session: (id: string) => ["compute", "session", id] as const,
 };
-export const listHeldJobs = () =>
-  api.json<IngestionJob[]>(
-    "/v1/admin/ingestion-jobs?state=held_for_compute",
-    {},
-    "Unable to load held documents.",
-  );
+export async function listHeldJobs() {
+  const pageSize = 500;
+  const jobs: IngestionJob[] = [];
+  for (let offset = 0; ; offset += pageSize) {
+    const page = await api.json<IngestionJob[]>(
+      `/v1/admin/ingestion-jobs?state=held_for_compute&limit=${pageSize}&offset=${offset}`,
+      {},
+      "Unable to load held documents.",
+    );
+    jobs.push(...page);
+    if (page.length < pageSize) return jobs;
+  }
+}
 export const getComputeSession = (id: string) =>
   api.json<ComputeSession>(`/v1/admin/compute-sessions/${id}`);
 export async function releaseJobs(jobIds: string[], maxGpuMinutes: number) {

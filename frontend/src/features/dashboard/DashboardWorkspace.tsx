@@ -2,6 +2,7 @@ import {
   useCallback,
   useEffect,
   useId,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -37,22 +38,6 @@ function formatValue(value: unknown) {
 
 function formatFieldName(field: string) {
   return field.replaceAll("_", " ");
-}
-
-function classificationLabel(document: DashboardDocument) {
-  if (document.classification_status === "review_required")
-    return "Review type";
-  if (document.classification_status === "failed") return "Detection failed";
-  if (document.classification_status === "unclassified") return "Unclassified";
-  return document.classification_source === "manual"
-    ? "Manual type"
-    : "Auto-detected";
-}
-
-function extractionLabel(document: DashboardDocument) {
-  if (document.extraction_status === "completed") return "Extracted";
-  if (document.extraction_status === "failed") return "Extraction failed";
-  return "Not extracted";
 }
 
 export function DashboardWorkspace() {
@@ -525,14 +510,6 @@ function DocumentDataTable({
   const columnValue = useCallback(
     (document: DashboardDocument, column: string) => {
       if (column === "document") return document.document_name;
-      if (column === "classification") {
-        const confidence =
-          typeof document.classification_confidence === "number"
-            ? `${Math.round(document.classification_confidence * 100)}%`
-            : "";
-        return `${classificationLabel(document)} ${confidence}`;
-      }
-      if (column === "extraction") return extractionLabel(document);
       if (column === "indexed") return document.created_at;
       return formatValue(document.extracted_metadata[column.slice(6)]);
     },
@@ -599,7 +576,7 @@ function DocumentDataTable({
       >
         <table
           className="dashboard-document-table"
-          style={{ width: `${680 + fields.length * 220}px` }}
+          style={{ width: `${395 + fields.length * 220}px` }}
         >
           <caption className="sr-only">
             Extracted data for authorized {documentTypeLabel} documents
@@ -612,24 +589,6 @@ function DocumentDataTable({
                 className="document-identity-column"
                 sort={sort}
                 filter={filters.document ?? ""}
-                onSort={toggleSort}
-                onFilter={updateFilter}
-              />
-              <SortableColumnHeader
-                column="classification"
-                label="Classification"
-                className="document-classification-column"
-                sort={sort}
-                filter={filters.classification ?? ""}
-                onSort={toggleSort}
-                onFilter={updateFilter}
-              />
-              <SortableColumnHeader
-                column="extraction"
-                label="Extraction"
-                className="document-extraction-column"
-                sort={sort}
-                filter={filters.extraction ?? ""}
                 onSort={toggleSort}
                 onFilter={updateFilter}
               />
@@ -663,34 +622,6 @@ function DocumentDataTable({
                   <th scope="row" className="document-identity-cell">
                     <strong>{document.document_name}</strong>
                   </th>
-                  <td className="document-classification-cell">
-                    <Badge
-                      variant={
-                        document.classification_status === "confirmed"
-                          ? "active"
-                          : "suspended"
-                      }
-                    >
-                      {classificationLabel(document)}
-                    </Badge>
-                    {typeof document.classification_confidence === "number" && (
-                      <small>
-                        Detection confidence:{" "}
-                        {Math.round(document.classification_confidence * 100)}%
-                      </small>
-                    )}
-                  </td>
-                  <td>
-                    <Badge
-                      variant={
-                        document.extraction_status === "completed"
-                          ? "active"
-                          : "suspended"
-                      }
-                    >
-                      {extractionLabel(document)}
-                    </Badge>
-                  </td>
                   {fields.map((field) => (
                     <td className="document-extracted-value-cell" key={field}>
                       <ExtractedFieldValue
@@ -711,7 +642,7 @@ function DocumentDataTable({
               <tr>
                 <td
                   className="dashboard-table-no-results"
-                  colSpan={fields.length + 4}
+                  colSpan={fields.length + 2}
                 >
                   No rows match the current column filters.
                 </td>
@@ -784,14 +715,28 @@ function ExtractedFieldValue({
   value: unknown;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const [overflowing, setOverflowing] = useState(false);
+  const valueRef = useRef<HTMLSpanElement>(null);
   const formattedValue = formatValue(value);
-  const isLong =
-    formattedValue.length > 80 || formattedValue.split(/\r?\n/).length > 3;
+  useLayoutEffect(() => {
+    if (expanded) return;
+    const element = valueRef.current;
+    if (!element) return;
+    const measure = () =>
+      setOverflowing(element.scrollHeight > element.clientHeight + 1);
+    measure();
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [expanded, formattedValue]);
 
   return (
     <div className={`document-cell-value ${expanded ? "expanded" : ""}`}>
-      <span className="document-cell-value-text">{formattedValue}</span>
-      {isLong && (
+      <span ref={valueRef} className="document-cell-value-text">
+        {formattedValue}
+      </span>
+      {overflowing && (
         <Button
           variant="text"
           className="document-cell-toggle"

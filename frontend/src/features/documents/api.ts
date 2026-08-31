@@ -21,6 +21,12 @@ export const deleteDocument = (id: string) =>
     { method: "DELETE" },
     "Unable to delete the document.",
   );
+export const deleteAllDocuments = () =>
+  api.json<{ deleted_count: number; status: string }>(
+    "/v1/admin/documents",
+    { method: "DELETE" },
+    "Unable to delete all documents.",
+  );
 
 export interface UploadProgress {
   upload: number;

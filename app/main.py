@@ -24,11 +24,11 @@ from .database import ComputeSessionRecord, DocumentRecord, IngestionJobRecord, 
 from .document_parser import VisualAsset, extract_document
 from .document_schemas import DOCUMENT_SCHEMAS, INDUSTRIES, SCHEMA_VERSION, require_document_schema, schema_catalog
 from .mineru import MinerUClient, supports_mineru
-from .models import ChatDetail, ChatMessage, ChatSummary, ComputeSessionCreate, ComputeSessionRelease, ComputeSessionResponse, DashboardDocumentListResponse, DashboardDocumentResponse, DashboardIndustryResponse, DashboardResponse, DeleteResponse, HeldIngestResponse, IndexedDocumentResponse, IndustrySchemaResponse, IngestionJobResponse, Principal, QueryRequest, QueryResponse, ReadinessResponse, VersionResponse
+from .models import BulkDeleteResponse, ChatDetail, ChatMessage, ChatSummary, ComputeSessionCreate, ComputeSessionRelease, ComputeSessionResponse, DashboardDocumentListResponse, DashboardDocumentResponse, DashboardIndustryResponse, DashboardResponse, DeleteResponse, HeldIngestResponse, IndexedDocumentResponse, IndustrySchemaResponse, IngestionJobResponse, Principal, QueryRequest, QueryResponse, ReadinessResponse, VersionResponse
 from .providers import ModelClient
 from .super_admin import router as super_admin_router
 from .trials import is_pdf, require_active_trial, reserve_pdf_trial_slot, reserve_question_trial_slot
-from .repository import add_chat_message, create_chat, database_is_ready, get_chat, get_document, get_document_by_content_hash, list_authorized_documents, list_chat_messages, list_chats, list_documents, mark_document_deleted, search_authorized_documents
+from .repository import add_chat_message, create_chat, database_is_ready, get_chat, get_document, get_document_by_content_hash, list_authorized_documents, list_chat_messages, list_chats, list_documents, mark_document_deleted, mark_documents_deleted, search_authorized_documents
 from .vector_store import VectorStore
 from .version import APP_COMMIT, APP_VERSION
 
@@ -783,6 +783,8 @@ async def stream_ingest_document(
 @app.get("/v1/admin/ingestion-jobs", response_model=list[IngestionJobResponse])
 async def list_ingestion_jobs(
     state: str | None = None,
+    limit: int = Query(default=500, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
     principal: Principal = Depends(require_principal),
     session: AsyncSession = Depends(get_session),
 ) -> list[IngestionJobResponse]:
@@ -790,7 +792,16 @@ async def list_ingestion_jobs(
     statement = select(IngestionJobRecord).where(IngestionJobRecord.tenant_id == principal.tenant_id)
     if state:
         statement = statement.where(IngestionJobRecord.state == state)
-    jobs = list(await session.scalars(statement.order_by(IngestionJobRecord.created_at.desc()).limit(500)))
+    jobs = list(
+        await session.scalars(
+            statement.order_by(
+                IngestionJobRecord.created_at.desc(),
+                IngestionJobRecord.job_id.desc(),
+            )
+            .offset(offset)
+            .limit(limit)
+        )
+    )
     return [job_response(job) for job in jobs]
 
 
@@ -931,6 +942,30 @@ async def delete_document(
     await mark_document_deleted(session, document)
     await record(session, "document_deleted", principal.tenant_id, principal.user_id, document_id=document_id)
     return DeleteResponse(document_id=document_id, status="deleted")
+
+
+@app.delete("/v1/admin/documents", response_model=BulkDeleteResponse)
+async def delete_all_documents(
+    principal: Principal = Depends(require_principal),
+    session: AsyncSession = Depends(get_session),
+) -> BulkDeleteResponse:
+    require_admin(principal)
+    documents = await list_documents(session, principal.tenant_id, limit=None)
+    if not documents:
+        return BulkDeleteResponse(deleted_count=0, status="deleted")
+    await vectors.delete_documents(
+        principal.tenant_id,
+        [document.document_id for document in documents],
+    )
+    await mark_documents_deleted(session, documents)
+    await record(
+        session,
+        "documents_bulk_deleted",
+        principal.tenant_id,
+        principal.user_id,
+        deleted_count=len(documents),
+    )
+    return BulkDeleteResponse(deleted_count=len(documents), status="deleted")
 
 
 @app.get("/v1/chats", response_model=list[ChatSummary])

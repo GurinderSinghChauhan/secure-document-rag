@@ -437,6 +437,10 @@ svg {
   display: none;
 }
 
+.mobile-nav {
+  display: none;
+}
+
 .breadcrumb {
   display: flex;
   align-items: center;
@@ -1487,6 +1491,20 @@ textarea:focus {
 
   .mobile-brand {
     display: flex;
+  }
+
+  .mobile-nav {
+    display: flex;
+    gap: 6px;
+    padding: 8px 14px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    overflow-x: auto;
+    scrollbar-width: thin;
+  }
+
+  .mobile-nav .nav-item {
+    min-width: max-content;
   }
 
   .mobile-brand .brand-mark {

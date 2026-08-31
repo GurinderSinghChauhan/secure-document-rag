@@ -93,6 +93,24 @@ export function AppShell({ section, children, sidebar }: AppShellProps) {
             </Button>
           </div>
         </header>
+        <nav className="mobile-nav" aria-label="Mobile navigation">
+          <NavLink className="nav-item" to="/" end>
+            Dashboard
+          </NavLink>
+          <NavLink className="nav-item" to="/ask">
+            Ask
+          </NavLink>
+          {admin && (
+            <NavLink className="nav-item" to="/admin">
+              Admin
+            </NavLink>
+          )}
+          {superAdmin && (
+            <NavLink className="nav-item" to="/super-admin">
+              Platform Admin
+            </NavLink>
+          )}
+        </nav>
         {children}
       </div>
     </div>
