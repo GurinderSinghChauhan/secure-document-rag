@@ -1,3 +1,10 @@
+FROM node:22.22.1-slim AS frontend
+WORKDIR /build/frontend
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm ci
+COPY frontend ./
+RUN npm run build
+
 FROM ghcr.io/astral-sh/uv:0.6.5 AS uv
 FROM python:3.12-slim
 
@@ -9,6 +16,7 @@ COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev --no-install-project
 COPY VERSION ./
 COPY app ./app
+COPY --from=frontend /build/app/static/spa ./app/static/spa
 COPY alembic.ini ./
 COPY migrations ./migrations
 COPY tools ./tools

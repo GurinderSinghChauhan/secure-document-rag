@@ -32,6 +32,25 @@ jobs:
           uv python install 3.12
           uv sync --frozen
 
+      - name: Set up Node.js
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version: "22.22.1"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install and validate frontend
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run check
+
+      - name: Run browser navigation tests
+        working-directory: frontend
+        run: |
+          npx playwright install chromium --with-deps
+          npm run test:e2e
+
       - name: Validate version and lock file
         run: |
           uv run python tools/version.py --check
@@ -40,15 +59,10 @@ jobs:
       - name: Run test suite
         run: |
           uv run pytest -q
-          node --test tests/js/*.test.js
 
       - name: Run static checks
         run: |
           uv run python -m compileall -q app tests tools
-          node --check app/static/auth_session.js
-          node --check app/static/app.js
-          node --check app/static/admin.js
-          node --check app/static/super_admin.js
           git diff --check
 
       - name: Verify migration graph

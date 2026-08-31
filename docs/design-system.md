@@ -16,9 +16,21 @@ The words **must**, **should**, and **may** indicate required, recommended, and 
 
 ## Component foundation
 
-The current application uses semantic HTML and project-owned CSS. New interfaces should reuse the tokens and patterns in this guide rather than introduce page-specific styling.
+The current application uses React, TypeScript, project-owned CSS, and Radix UI for interaction-heavy accessible primitives. Shared application primitives live in `frontend/src/components/ui`; feature components live in `frontend/src/features`; route components compose features into screens without owning business logic.
 
-If the UI later moves to a component framework, use an accessible component foundation such as shadcn/ui or Radix UI and preserve the semantics, tokens, and interaction requirements defined here. A library does not replace accessibility testing.
+New interfaces must use the shared primitives before introducing raw buttons, form controls, panels, badges, progress indicators, or feedback states. Extend a primitive with an explicit variant when a pattern is reused. Keep one-off, feature-specific layout in the owning feature rather than adding it to the shared layer.
+
+The shared layer currently provides:
+
+- `Button` variants for primary, secondary, destructive, text, icon-text, and feature-owned treatments;
+- `FormField`, `Input`, `Select`, `Textarea`, and `PasswordField` with explicit labelling and description relationships;
+- `Panel` and `PanelHeader` for consistently labelled administrative task regions;
+- `StatusMessage`, `EmptyState`, and `ProgressBar` for accessible system feedback;
+- `Badge` variants for status, metric, score, and platform-role labels.
+
+Radix UI should be preferred for new dialogs, menus, popovers, tabs, and other interaction-heavy components where focus management and keyboard behavior are difficult to implement correctly. A library does not replace accessibility or behavior testing.
+
+Shared primitives must remain presentation-focused. API calls, server state, authorization decisions, and feature workflows belong in `features` and must not be moved into `components/ui`.
 
 ## Design tokens
 

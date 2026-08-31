@@ -21,6 +21,7 @@ This is an application foundation, not a compliance certification. HIPAA, GLBA, 
 - [Technical guide](docs/technical-guide.md): architecture, data flow, API contract, configuration, operations, and production gaps.
 - [Cloudflare tunnel laptop migration](docs/cloudflare-tunnel-runbook.md): securely move the stable demo connector to another laptop, verify cutover, and roll back.
 - [Design system](docs/design-system.md): visual tokens, accessible components, regulated workflows, privacy rules, and UI review criteria.
+- [Frontend architecture](docs/architecture/frontend.md): React module boundaries, state ownership, API integration, testing, and production builds.
 - [Changelog](CHANGELOG.md): semantic versions and released capabilities.
 - [PDF test dataset](docs/test-dataset.md): download and batch-index a licensed 500-document healthcare and legal corpus.
 
@@ -124,7 +125,7 @@ For large uploads, the admin console automatically selects the files that were j
 
 ## Chat UI
 
-The API serves a same-origin chat UI at `http://127.0.0.1:8080/` and a separate administrator console at `http://127.0.0.1:8080/admin`. Members receive the focused chat workspace only. Administrators use the console to upload and index PDF, DOCX, PPTX, XLSX, TXT, PNG, JPEG, and WebP content, release compute, and manage organization access. The browser calls only the secured RAG API; it never connects to MinerU, the model server, or Qdrant directly.
+The API serves one same-origin React application with Ask at `http://127.0.0.1:8080/`, organization administration at `/admin`, and platform administration at `/super-admin`. Client-side navigation shares one memory-only authenticated session; direct navigation to each route is also supported. Members receive the focused chat workspace only. Administrators can upload and index PDF, DOCX, PPTX, XLSX, TXT, PNG, JPEG, and WebP content, release compute, and manage organization access. The browser calls only the secured RAG API; it never connects to MinerU, the model server, or Qdrant directly.
 
 The UI keeps the short-lived access JWT only in memory and restores sessions through a rotating, HTTP-only refresh cookie. Registration creates an organization and its first administrator; additional accounts join by invitation.
 
@@ -170,9 +171,11 @@ uv run python tools/version.py 0.4.0
 
 ```bash
 uv sync
+npm ci --prefix frontend
+npm run build --prefix frontend
 uv run uvicorn app.main:app --reload
 ```
 
-Run `uv run pytest` for the local unit tests. The app requires Qdrant, PostgreSQL, MinerU, and an OpenAI-compatible self-hosted model server such as LM Studio for structured ingestion/query operations.
+For frontend hot reload, run `npm run dev --prefix frontend` while FastAPI listens on `127.0.0.1:8080`. Run `npm run check --prefix frontend` and `uv run pytest` before handoff. The app requires Qdrant, PostgreSQL, MinerU, and an OpenAI-compatible self-hosted model server such as LM Studio for structured ingestion/query operations.
 
 Create the default 500-PDF evaluation corpus with `uv run python -m tools.rag_dataset download`. See the [PDF test dataset guide](docs/test-dataset.md) before downloading or indexing the corpus.

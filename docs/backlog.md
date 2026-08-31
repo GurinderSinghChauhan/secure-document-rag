@@ -2,7 +2,7 @@
 
 ## Frontend single-page application migration
 
-**Status:** Deferred
+**Status:** Implemented on `feature/ui-framework-refactor`
 
 Migrate the static multi-page frontend to a React application built with Vite and React Router. Keep FastAPI and the existing API contracts unchanged.
 
@@ -27,4 +27,3 @@ Ask, Admin, and Platform Admin are currently separate HTML pages. Moving between
 - Members, admins, and super-admins see only permitted navigation and routes.
 - Direct route loading and browser back/forward navigation work correctly.
 - Existing backend and browser tests continue to pass, with added SPA navigation coverage.
-
