@@ -86,6 +86,7 @@ async def search_authorized_documents(
     query: str,
     document_type_keys: list[str],
     limit: int,
+    offset: int,
 ) -> tuple[list[DocumentRecord], int]:
     access_conditions = [cast(DocumentRecord.allowed_users, JSONB).contains([user_id])]
     access_conditions.extend(cast(DocumentRecord.allowed_roles, JSONB).contains([role]) for role in roles)
@@ -108,6 +109,7 @@ async def search_authorized_documents(
         select(DocumentRecord)
         .where(*filters)
         .order_by(DocumentRecord.created_at.desc(), DocumentRecord.document_id.desc())
+        .offset(offset)
         .limit(limit)
     )
     return list(result), int(total or 0)

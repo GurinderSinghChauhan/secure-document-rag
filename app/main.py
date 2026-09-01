@@ -686,6 +686,7 @@ async def dashboard_documents(
     session: AsyncSession = Depends(get_session),
     query: str = Query(default="", max_length=100),
     limit: int = Query(default=100, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
 ) -> DashboardDocumentListResponse:
     normalized_query = query.strip()
     lowered_query = normalized_query.lower()
@@ -708,6 +709,7 @@ async def dashboard_documents(
         normalized_query,
         matching_type_keys,
         limit,
+        offset,
     )
     authorized_documents = [
         document
