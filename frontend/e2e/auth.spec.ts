@@ -190,3 +190,107 @@ test("phone layout keeps role-appropriate navigation and admin actions available
     ),
   ).toBe(true);
 });
+
+test("insights remain polished and usable on a phone viewport", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.route("**/v1/**", async (route) => {
+    const path = new URL(route.request().url()).pathname;
+    if (path === "/v1/auth/refresh") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          access_token: "insights-token",
+          token_type: "bearer",
+          expires_in: 300,
+          user: {
+            user_id: "admin-1",
+            email: "admin@example.com",
+            display_name: "Admin User",
+            role: "admin",
+            is_super_admin: false,
+            organization: { organization_id: "org-1", name: "Example Org" },
+          },
+        }),
+      });
+      return;
+    }
+    if (path === "/v1/document-schemas") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify([
+          {
+            key: "field_service",
+            label: "Field Service",
+            description: "Service operations.",
+            document_types: [
+              {
+                key: "field_service.service_invoice",
+                label: "Service Invoice",
+                fields: [
+                  "invoice_date",
+                  "payment_status",
+                  "total_amount",
+                  "due_date",
+                ],
+              },
+            ],
+          },
+        ]),
+      });
+      return;
+    }
+    if (path === "/v1/dashboard/documents") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          total: 1,
+          documents: [
+            {
+              document_id: "invoice-1",
+              document_name: "service-invoice.pdf",
+              document_type: "field_service.service_invoice",
+              document_type_label: "Service Invoice",
+              industry_key: "field_service",
+              industry_label: "Field Service",
+              classification_status: "confirmed",
+              classification_source: "automatic",
+              classification_confidence: 0.96,
+              extraction_status: "completed",
+              extracted_metadata: {
+                invoice_date: "2030-01-10",
+                payment_status: "Paid",
+                total_amount: "250.00",
+                due_date: "2030-02-10",
+              },
+              created_at: "2030-01-11T00:00:00Z",
+            },
+          ],
+        }),
+      });
+      return;
+    }
+    await route.fulfill({ status: 404 });
+  });
+
+  await page.goto("/insights/field_service.service_invoice");
+  await expect(
+    page.getByRole("heading", { name: "Service Invoice insights" }),
+  ).toBeVisible();
+  await expect(page.getByRole("region", { name: "Quick read" })).toBeVisible();
+  await expect(
+    page.getByRole("img", { name: "Value distribution" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("img", { name: "Document volume trend" }),
+  ).toBeVisible();
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth,
+    ),
+  ).toBe(true);
+});

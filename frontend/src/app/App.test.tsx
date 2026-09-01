@@ -454,6 +454,10 @@ test("renders adaptive diagrams for an authorized document type", async () => {
     screen.getByRole("link", { name: "← Back to document tables" }),
   ).toHaveAttribute("href", "/");
   expect(screen.getByRole("region", { name: "Insight summary" })).toBeVisible();
+  expect(screen.getByRole("region", { name: "Quick read" })).toBeVisible();
+  expect(
+    screen.getByRole("region", { name: "Insight coverage" }),
+  ).toHaveTextContent("100%");
   expect(
     screen.getByRole("region", { name: "Insight diagrams" }),
   ).toBeVisible();
@@ -478,4 +482,5 @@ test("renders adaptive diagrams for an authorized document type", async () => {
   expect(
     screen.getByRole("img", { name: "Document volume trend" }),
   ).toBeVisible();
+  expect(screen.getByRole("img", { name: "Value distribution" })).toBeVisible();
 });
