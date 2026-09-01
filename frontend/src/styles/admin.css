@@ -287,7 +287,13 @@
 }
 .compute-queue {
   min-height: 116px;
-  max-height: 320px;
+  max-height: min(320px, 42vh);
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-color: var(--border-strong) transparent;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
   padding: 8px;
   border: 1px solid var(--border);
   border-radius: 11px;
@@ -296,11 +302,21 @@
 
 .compute-queue.active-session {
   min-height: 0;
-  max-height: none;
-  padding: 0;
-  overflow: visible;
+  max-height: min(360px, 46vh);
+  padding: 0 6px 0 0;
   border: 0;
   background: transparent;
+}
+
+.compute-queue::-webkit-scrollbar {
+  width: 8px;
+}
+
+.compute-queue::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: var(--border-strong);
+  background-clip: padding-box;
 }
 
 .compute-job-card {

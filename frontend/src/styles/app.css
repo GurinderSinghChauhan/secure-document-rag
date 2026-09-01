@@ -1165,6 +1165,12 @@ textarea:focus {
   background: #f6f8ff;
 }
 
+.file-dropzone.selected {
+  border-color: var(--primary);
+  background: var(--primary-subtle);
+  box-shadow: 0 0 0 2px rgba(49, 87, 213, 0.08);
+}
+
 .file-dropzone input {
   position: absolute;
   width: 1px;
@@ -1294,6 +1300,16 @@ textarea:focus {
 
 .upload-status.busy svg {
   animation: spin 1s linear infinite;
+}
+
+.upload-status.busy > span {
+  animation: status-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes status-pulse {
+  50% {
+    opacity: 0.45;
+  }
 }
 
 .upload-progress {

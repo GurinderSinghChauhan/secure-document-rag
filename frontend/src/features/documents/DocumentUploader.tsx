@@ -19,6 +19,10 @@ import {
 export function DocumentUploader({ disabled }: { disabled: boolean }) {
   const queryClient = useQueryClient();
   const [files, setFiles] = useState<File[]>([]);
+  const [selectionSource, setSelectionSource] = useState<
+    "documents" | "folder" | null
+  >(null);
+  const [folderName, setFolderName] = useState("");
   const [roles, setRoles] = useState("");
   const [users, setUsers] = useState("");
   const [documentType, setDocumentType] = useState("");
@@ -37,6 +41,8 @@ export function DocumentUploader({ disabled }: { disabled: boolean }) {
   function selectFiles(selectedFiles: FileList | null) {
     const nextFiles = Array.from(selectedFiles ?? []);
     setFiles(nextFiles);
+    setSelectionSource(nextFiles.length ? "documents" : null);
+    setFolderName("");
     setProgress(null);
     setStatusTone("neutral");
     setStatus(
@@ -53,7 +59,10 @@ export function DocumentUploader({ disabled }: { disabled: boolean }) {
         (!file.type && file.name.toLowerCase().endsWith(".pdf")),
     );
     const ignored = folderFiles.length - pdfFiles.length;
+    const selectedFolder = pdfFiles[0]?.webkitRelativePath.split("/")[0] ?? "";
     setFiles(pdfFiles);
+    setSelectionSource(pdfFiles.length ? "folder" : null);
+    setFolderName(selectedFolder);
     setProgress(null);
     setStatusTone(pdfFiles.length ? "neutral" : "error");
     setStatus(
@@ -94,6 +103,10 @@ export function DocumentUploader({ disabled }: { disabled: boolean }) {
     );
     setStatusTone(failed.length ? "error" : "success");
     setFiles(failed);
+    if (!failed.length) {
+      setSelectionSource(null);
+      setFolderName("");
+    }
     setProgress(null);
     await queryClient.invalidateQueries({ queryKey: ["compute", "held-jobs"] });
     setBusy(false);
@@ -133,7 +146,9 @@ export function DocumentUploader({ disabled }: { disabled: boolean }) {
           </Select>
         </FormField>
         <div className="file-source-grid">
-          <label className="file-dropzone">
+          <label
+            className={`file-dropzone ${selectionSource === "documents" ? "selected" : ""}`}
+          >
             <Input
               aria-label="Choose individual documents"
               type="file"
@@ -145,7 +160,7 @@ export function DocumentUploader({ disabled }: { disabled: boolean }) {
               ↑
             </span>
             <strong>
-              {files.length
+              {selectionSource === "documents" && files.length
                 ? files.length === 1
                   ? files[0]?.name
                   : `${files.length} documents selected`
@@ -156,7 +171,9 @@ export function DocumentUploader({ disabled }: { disabled: boolean }) {
               PDF, DOCX, PPTX, XLSX, TXT, PNG, JPEG, or WebP · up to 25 MB each
             </small>
           </label>
-          <label className="file-dropzone folder-dropzone">
+          <label
+            className={`file-dropzone folder-dropzone ${selectionSource === "folder" ? "selected" : ""}`}
+          >
             <Input
               aria-label="Choose a folder of PDF files"
               type="file"
@@ -168,8 +185,17 @@ export function DocumentUploader({ disabled }: { disabled: boolean }) {
             <span className="upload-icon" aria-hidden="true">
               ▣
             </span>
-            <strong>Choose a PDF folder</strong>
-            <span>Include nested folders</span>
+            <strong>
+              {selectionSource === "folder" && files.length
+                ? folderName ||
+                  `${files.length} ${files.length === 1 ? "PDF" : "PDFs"} selected`
+                : "Choose a PDF folder"}
+            </strong>
+            <span>
+              {selectionSource === "folder" && files.length
+                ? `${files.length} ${files.length === 1 ? "PDF" : "PDFs"} ready · nested folders included`
+                : "Include nested folders"}
+            </span>
             <small>
               Only PDF files are selected; every other file is ignored
             </small>
@@ -198,11 +224,14 @@ export function DocumentUploader({ disabled }: { disabled: boolean }) {
             </FormField>
           </fieldset>
         </details>
-        <div className={`upload-status ${statusTone}`} role="status">
+        <div
+          className={`upload-status ${statusTone} ${busy ? "busy" : ""}`}
+          role="status"
+        >
           <span aria-hidden="true">{statusTone === "success" ? "✓" : "ⓘ"}</span>
           {progress?.message ?? status}
         </div>
-        {progress && (
+        {progress?.phase === "uploading" && progress.percentage < 100 && (
           <div className="upload-progress">
             <ProgressBar
               label="Secure upload"
