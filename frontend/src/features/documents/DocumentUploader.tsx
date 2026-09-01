@@ -10,6 +10,7 @@ import {
   Select,
 } from "../../components/ui";
 import {
+  batchUploadPercentage,
   listDocumentSchemas,
   schemaKeys,
   uploadDocument,
@@ -59,7 +60,8 @@ export function DocumentUploader({ disabled }: { disabled: boolean }) {
         (!file.type && file.name.toLowerCase().endsWith(".pdf")),
     );
     const ignored = folderFiles.length - pdfFiles.length;
-    const selectedFolder = pdfFiles[0]?.webkitRelativePath.split("/")[0] ?? "";
+    const relativePath = pdfFiles[0]?.webkitRelativePath ?? "";
+    const selectedFolder = relativePath.split("/")[0] ?? "";
     setFiles(pdfFiles);
     setSelectionSource(pdfFiles.length ? "folder" : null);
     setFolderName(selectedFolder);
@@ -85,6 +87,11 @@ export function DocumentUploader({ disabled }: { disabled: boolean }) {
         await uploadDocument(file, roles, users, documentType, (value) =>
           setProgress({
             ...value,
+            percentage: batchUploadPercentage(
+              index,
+              files.length,
+              value.percentage,
+            ),
             message:
               files.length > 1
                 ? `Document ${index + 1} of ${files.length}: ${value.message}`
@@ -187,13 +194,12 @@ export function DocumentUploader({ disabled }: { disabled: boolean }) {
             </span>
             <strong>
               {selectionSource === "folder" && files.length
-                ? folderName ||
-                  `${files.length} ${files.length === 1 ? "PDF" : "PDFs"} selected`
+                ? folderName || "Selected PDF folder"
                 : "Choose a PDF folder"}
             </strong>
             <span>
               {selectionSource === "folder" && files.length
-                ? `${files.length} ${files.length === 1 ? "PDF" : "PDFs"} ready · nested folders included`
+                ? `${files.length} PDF ${files.length === 1 ? "file" : "files"} contained · ready to upload`
                 : "Include nested folders"}
             </span>
             <small>
@@ -231,15 +237,21 @@ export function DocumentUploader({ disabled }: { disabled: boolean }) {
           <span aria-hidden="true">{statusTone === "success" ? "✓" : "ⓘ"}</span>
           {progress?.message ?? status}
         </div>
-        {progress?.phase === "uploading" && progress.percentage < 100 && (
-          <div className="upload-progress">
-            <ProgressBar
-              label="Secure upload"
-              value={progress.percentage}
-              showValue
-            />
-          </div>
-        )}
+        {progress &&
+          (files.length > 1 ||
+            (progress.phase === "uploading" && progress.percentage < 100)) && (
+            <div className="upload-progress">
+              <ProgressBar
+                label={
+                  selectionSource === "folder"
+                    ? "Folder upload"
+                    : "Batch upload"
+                }
+                value={progress.percentage}
+                showValue
+              />
+            </div>
+          )}
         <Button
           variant="primary"
           type="submit"

@@ -44,6 +44,16 @@ export interface UploadResult {
   job_id: string;
 }
 
+export function batchUploadPercentage(
+  fileIndex: number,
+  fileCount: number,
+  filePercentage: number,
+) {
+  if (fileCount <= 0) return 0;
+  const boundedFilePercentage = Math.min(Math.max(filePercentage, 0), 100);
+  return Math.min(100, (fileIndex * 100 + boundedFilePercentage) / fileCount);
+}
+
 export function uploadDocument(
   file: File,
   roles: string,

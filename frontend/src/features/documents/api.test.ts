@@ -1,7 +1,12 @@
 import { afterEach, expect, test, vi } from "vitest";
 import { api } from "../../api/client";
 import type { IndexedDocument } from "../../api/types";
-import { listDocuments, uploadDocument, type UploadProgress } from "./api";
+import {
+  batchUploadPercentage,
+  listDocuments,
+  uploadDocument,
+  type UploadProgress,
+} from "./api";
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -90,4 +95,11 @@ test("moves a fast upload from byte progress to securing state", async () => {
       message: "Upload complete. Securing invoice.pdf…",
     },
   ]);
+});
+
+test("calculates cumulative progress across folder and multi-file uploads", () => {
+  expect(batchUploadPercentage(0, 10, 50)).toBe(5);
+  expect(batchUploadPercentage(0, 10, 100)).toBe(10);
+  expect(batchUploadPercentage(5, 10, 50)).toBe(55);
+  expect(batchUploadPercentage(9, 10, 100)).toBe(100);
 });
