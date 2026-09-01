@@ -21,11 +21,31 @@ function formatBytes(size: number) {
   return `${(size / 1024 ** 2).toFixed(1)} MB`;
 }
 
+function formatStage(stage: string) {
+  const stages: Record<string, string> = {
+    cold_start: "Preparing worker",
+    extracting: "Extracting content",
+    metadata_extraction: "Extracting fields",
+    chunking: "Preparing search chunks",
+    vector_storage: "Building search index",
+    metadata: "Finalizing document",
+    completion: "Searchable",
+    completed: "Searchable",
+    failed: "Action required",
+    held: "Safely held",
+  };
+  return stages[stage] ?? stage.replaceAll("_", " ");
+}
+
 export function ComputeQueue({ disabled }: { disabled: boolean }) {
   const queryClient = useQueryClient();
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [sessionId, setSessionId] = useState<string | null>(null);
-  const held = useQuery({ queryKey: computeKeys.held, queryFn: listHeldJobs });
+  const held = useQuery({
+    queryKey: computeKeys.held,
+    queryFn: listHeldJobs,
+    refetchInterval: sessionId ? false : 3000,
+  });
   const session = useQuery({
     queryKey: computeKeys.session(sessionId ?? "inactive"),
     queryFn: () => getComputeSession(sessionId!),
@@ -55,7 +75,7 @@ export function ComputeQueue({ disabled }: { disabled: boolean }) {
     ? session.data
       ? session.data.status === "closed"
         ? `Session closed. GPU capacity released after ${(session.data.gpu_seconds / 60).toFixed(1)} recorded GPU minutes. Estimated cost: $${session.data.estimated_cost_usd.toFixed(4)}.`
-        : `Session ${session.data.status}: ${(session.data.gpu_seconds / 60).toFixed(1)} of ${session.data.max_gpu_minutes} GPU minutes used.`
+        : `${session.data.jobs.filter((job) => job.state === "completed").length} of ${session.data.jobs.length} documents complete · ${(session.data.gpu_seconds / 60).toFixed(1)} of ${session.data.max_gpu_minutes} GPU minutes used.`
       : "Opening compute session…"
     : held.isPending
       ? "Loading held documents…"
@@ -64,7 +84,7 @@ export function ComputeQueue({ disabled }: { disabled: boolean }) {
         : chosen.length
           ? `${chosen.length} of ${held.data?.length ?? 0} waiting documents selected. Estimated GPU time: ${minutes} minutes.`
           : held.data?.length
-            ? `${held.data.length} documents safely held. Select individual files or all waiting documents.`
+            ? `${held.data.length} ${held.data.length === 1 ? "document" : "documents"} safely held. Select individual files or all waiting documents.`
             : "Nothing is waiting for compute.";
   function toggle(id: string) {
     setSelected((current) => {
@@ -82,13 +102,9 @@ export function ComputeQueue({ disabled }: { disabled: boolean }) {
         title="Release to compute"
         titleId="compute-title"
         action={
-          <Button
-            variant="icon-text"
-            disabled={Boolean(sessionId)}
-            onClick={() => void held.refetch()}
-          >
-            Refresh
-          </Button>
+          <span className="auto-refresh-badge">
+            <i aria-hidden="true" /> Auto-updating
+          </span>
         }
       />
       <StatusMessage className="panel-description">
@@ -130,23 +146,28 @@ export function ComputeQueue({ disabled }: { disabled: boolean }) {
           <strong role="status">{selected.size} selected</strong>
         </div>
       )}
-      <div className="held-jobs compute-queue">
+      <div
+        className={`held-jobs compute-queue ${sessionId ? "active-session" : ""}`}
+      >
         {jobs.map((job) =>
           sessionId ? (
-            <div className="held-job" key={job.job_id}>
-              <span>
+            <article className="compute-job-card" key={job.job_id}>
+              <header>
                 <strong>{job.document_name}</strong>
-                <small>
-                  {job.stage.replaceAll("_", " ")} · {job.progress}% —{" "}
-                  {job.message}
-                </small>
+                <span>{job.progress}%</span>
+              </header>
+              <div className="compute-job-stage">
+                <span>{formatStage(job.stage)}</span>
+                <small>{job.message}</small>
+              </div>
+              <div className="compute-job-progress">
                 <ProgressBar
                   variant="job"
                   label={`${job.document_name} processing progress`}
                   value={job.progress}
                 />
-              </span>
-            </div>
+              </div>
+            </article>
           ) : (
             <label className="held-job" key={job.job_id}>
               <Input

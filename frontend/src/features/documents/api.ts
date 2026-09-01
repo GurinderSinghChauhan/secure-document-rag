@@ -36,8 +36,7 @@ export const deleteAllDocuments = () =>
   );
 
 export interface UploadProgress {
-  upload: number;
-  indexing: number;
+  percentage: number;
   message: string;
 }
 export interface UploadResult {
@@ -79,9 +78,8 @@ export function uploadDocument(
           complete = { job_id: event.job_id };
         if (event.type === "progress")
           onProgress({
-            upload: 100,
-            indexing: event.percentage ?? 0,
-            message: event.message || `Saving ${file.name}…`,
+            percentage: 100,
+            message: event.message || `Securing ${file.name}…`,
           });
       }
     }
@@ -102,16 +100,14 @@ export function uploadDocument(
     request.upload.addEventListener("progress", (event) => {
       if (event.lengthComputable)
         onProgress({
-          upload: (event.loaded / event.total) * 100,
-          indexing: 0,
+          percentage: (event.loaded / event.total) * 100,
           message: `Uploading ${file.name}…`,
         });
     });
     request.upload.addEventListener("load", () =>
       onProgress({
-        upload: 100,
-        indexing: 0,
-        message: `Upload complete. Saving ${file.name} for compute…`,
+        percentage: 100,
+        message: `Upload complete. Securing ${file.name}…`,
       }),
     );
     request.addEventListener("progress", () => process());

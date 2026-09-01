@@ -23,16 +23,27 @@ export function DocumentUploader({ disabled }: { disabled: boolean }) {
   const [users, setUsers] = useState("");
   const [documentType, setDocumentType] = useState("");
   const [progress, setProgress] = useState<UploadProgress | null>(null);
-  const [status, setStatus] = useState("Select one or more files to begin.");
+  const [status, setStatus] = useState(
+    "Choose documents to upload. They will remain held until you release them.",
+  );
+  const [statusTone, setStatusTone] = useState<"neutral" | "success" | "error">(
+    "neutral",
+  );
   const [busy, setBusy] = useState(false);
   const schemas = useQuery({
     queryKey: schemaKeys.all,
     queryFn: listDocumentSchemas,
   });
   function selectFiles(selectedFiles: FileList | null) {
-    setFiles(Array.from(selectedFiles ?? []));
+    const nextFiles = Array.from(selectedFiles ?? []);
+    setFiles(nextFiles);
     setProgress(null);
-    setStatus("Select one or more files to begin.");
+    setStatusTone("neutral");
+    setStatus(
+      nextFiles.length
+        ? `${nextFiles.length} ${nextFiles.length === 1 ? "document" : "documents"} ready to upload.`
+        : "Choose documents to upload. They will remain held until you release them.",
+    );
   }
   function selectPdfFolder(selectedFiles: FileList | null) {
     const folderFiles = Array.from(selectedFiles ?? []);
@@ -44,6 +55,7 @@ export function DocumentUploader({ disabled }: { disabled: boolean }) {
     const ignored = folderFiles.length - pdfFiles.length;
     setFiles(pdfFiles);
     setProgress(null);
+    setStatusTone(pdfFiles.length ? "neutral" : "error");
     setStatus(
       `${pdfFiles.length} ${pdfFiles.length === 1 ? "PDF" : "PDFs"} selected.${
         ignored
@@ -56,7 +68,8 @@ export function DocumentUploader({ disabled }: { disabled: boolean }) {
     event.preventDefault();
     if (!files.length) return;
     setBusy(true);
-    const failed: string[] = [];
+    setStatusTone("neutral");
+    const failed: File[] = [];
     let queued = 0;
     for (const [index, file] of files.entries()) {
       try {
@@ -71,15 +84,17 @@ export function DocumentUploader({ disabled }: { disabled: boolean }) {
         );
         queued += 1;
       } catch {
-        failed.push(file.name);
+        failed.push(file);
       }
     }
     setStatus(
       failed.length
-        ? `${queued} of ${files.length} saved. Failed: ${failed.join(", ")}.`
+        ? `${queued} of ${files.length} saved. Retry: ${failed.map((file) => file.name).join(", ")}.`
         : `${queued} ${queued === 1 ? "document is" : "documents are"} saved and waiting for release.`,
     );
-    if (!failed.length) setFiles([]);
+    setStatusTone(failed.length ? "error" : "success");
+    setFiles(failed);
+    setProgress(null);
     await queryClient.invalidateQueries({ queryKey: ["compute", "held-jobs"] });
     setBusy(false);
   }
@@ -97,6 +112,7 @@ export function DocumentUploader({ disabled }: { disabled: boolean }) {
       </p>
       <form className="upload-form" onSubmit={(event) => void submit(event)}>
         <FormField
+          className="document-type-field"
           label="Document type"
           hint="Auto-detect classifies each document independently. Select a type only to override detection for every selected file."
         >
@@ -182,15 +198,15 @@ export function DocumentUploader({ disabled }: { disabled: boolean }) {
             </FormField>
           </fieldset>
         </details>
-        <div className="upload-status" role="status">
-          ⓘ {progress?.message ?? status}
+        <div className={`upload-status ${statusTone}`} role="status">
+          <span aria-hidden="true">{statusTone === "success" ? "✓" : "ⓘ"}</span>
+          {progress?.message ?? status}
         </div>
         {progress && (
           <div className="upload-progress">
-            <ProgressBar label="Upload" value={progress.upload} showValue />
             <ProgressBar
-              label="Processing"
-              value={progress.indexing}
+              label="Secure upload"
+              value={progress.percentage}
               showValue
             />
           </div>
@@ -200,10 +216,12 @@ export function DocumentUploader({ disabled }: { disabled: boolean }) {
           type="submit"
           disabled={disabled || !files.length}
           busy={busy}
-          busyLabel={<span>Uploading…</span>}
+          busyLabel={<span>Securing documents…</span>}
         >
           <span>
-            Upload and hold{files.length > 1 ? ` ${files.length}` : ""}
+            {files.length
+              ? `Upload and hold${files.length > 1 ? ` ${files.length}` : ""}`
+              : "Choose documents to upload"}
           </span>
         </Button>
       </form>

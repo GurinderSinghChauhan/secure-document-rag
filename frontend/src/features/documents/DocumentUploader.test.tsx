@@ -20,6 +20,10 @@ test("selecting a folder keeps PDFs and reports ignored non-PDF files", async ()
   renderUploader();
   expect(screen.getByLabelText("Document type")).toHaveValue("");
   expect(
+    screen.getByText(/Auto-detect classifies each document independently/),
+  ).toBeVisible();
+  expect(screen.queryByText("Processing")).not.toBeInTheDocument();
+  expect(
     screen.getByRole("option", { name: "Auto-detect document type" }),
   ).toBeVisible();
   const pdf = new File(["pdf"], "invoice.pdf", {
@@ -51,6 +55,6 @@ test("selecting a folder with no PDFs leaves upload disabled", async () => {
     "0 PDFs selected. 1 non-PDF file was ignored.",
   );
   expect(
-    screen.getByRole("button", { name: "Upload and hold" }),
+    screen.getByRole("button", { name: "Choose documents to upload" }),
   ).toBeDisabled();
 });
