@@ -39,12 +39,19 @@ async def get_document(session: AsyncSession, tenant_id: str, document_id: str) 
     )
 
 
-async def list_documents(session: AsyncSession, tenant_id: str, limit: int | None = 500) -> list[DocumentRecord]:
+async def list_documents(
+    session: AsyncSession,
+    tenant_id: str,
+    limit: int | None = 500,
+    offset: int = 0,
+) -> list[DocumentRecord]:
     statement = (
         select(DocumentRecord)
         .where(DocumentRecord.tenant_id == tenant_id, DocumentRecord.deleted_at.is_(None))
         .order_by(DocumentRecord.created_at.desc(), DocumentRecord.document_id.desc())
     )
+    if offset:
+        statement = statement.offset(offset)
     if limit is not None:
         statement = statement.limit(limit)
     result = await session.scalars(statement)

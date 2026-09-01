@@ -807,11 +807,13 @@ async def list_ingestion_jobs(
 
 @app.get("/v1/admin/documents", response_model=list[IndexedDocumentResponse])
 async def list_indexed_documents(
+    limit: int = Query(default=500, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
     principal: Principal = Depends(require_principal),
     session: AsyncSession = Depends(get_session),
 ) -> list[IndexedDocumentResponse]:
     require_admin(principal)
-    documents = await list_documents(session, principal.tenant_id)
+    documents = await list_documents(session, principal.tenant_id, limit=limit, offset=offset)
     return [indexed_document_response(document) for document in documents]
 
 

@@ -9,12 +9,19 @@ export const listDocumentSchemas = () =>
     {},
     "Unable to load document types.",
   );
-export const listDocuments = () =>
-  api.json<IndexedDocument[]>(
-    "/v1/admin/documents",
-    {},
-    "Unable to load indexed documents.",
-  );
+export async function listDocuments() {
+  const pageSize = 500;
+  const documents: IndexedDocument[] = [];
+  for (let offset = 0; ; offset += pageSize) {
+    const page = await api.json<IndexedDocument[]>(
+      `/v1/admin/documents?limit=${pageSize}&offset=${offset}`,
+      {},
+      "Unable to load indexed documents.",
+    );
+    documents.push(...page);
+    if (page.length < pageSize) return documents;
+  }
+}
 export const deleteDocument = (id: string) =>
   api.json<{ document_id: string; status: string }>(
     `/v1/documents/${id}`,

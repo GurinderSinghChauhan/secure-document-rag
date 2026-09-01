@@ -38,12 +38,19 @@ async def test_admin_document_inventory_is_scoped_to_active_tenant_documents():
     )
     session = DocumentSession([document])
 
-    result = await list_indexed_documents(admin(), session)
+    result = await list_indexed_documents(
+        limit=500,
+        offset=500,
+        principal=admin(),
+        session=session,
+    )
     sql = str(session.statement.compile(compile_kwargs={"literal_binds": True}))
 
     assert result[0].document_name == "policy.pdf"
     assert "documents.tenant_id = 'org-a'" in sql
     assert "documents.deleted_at IS NULL" in sql
+    assert "documents.created_at DESC, documents.document_id DESC" in sql
+    assert "LIMIT 500 OFFSET 500" in sql
 
 
 @pytest.mark.asyncio
