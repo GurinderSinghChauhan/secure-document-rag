@@ -303,6 +303,9 @@ export function DashboardWorkspace() {
                       <DocumentTypeTableCard
                         key={key}
                         documentTypeKey={key}
+                        showClassificationConfidence={
+                          dashboard.data?.show_classification_confidence ?? false
+                        }
                         {...group}
                       />
                     ))}
@@ -339,12 +342,14 @@ function DocumentTypeTableCard({
   fields,
   industryLabel,
   documentTypeLabel,
+  showClassificationConfidence,
 }: {
   documentTypeKey: string;
   documents: DashboardDocument[];
   fields: string[];
   industryLabel: string;
   documentTypeLabel: string;
+  showClassificationConfidence: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const closeDialog = useCallback(() => setOpen(false), []);
@@ -373,6 +378,7 @@ function DocumentTypeTableCard({
           fields={fields}
           industryLabel={industryLabel}
           documentTypeLabel={documentTypeLabel}
+          showClassificationConfidence={showClassificationConfidence}
           onClose={closeDialog}
         />
       )}
@@ -386,6 +392,7 @@ function DocumentTableDialog({
   fields,
   industryLabel,
   documentTypeLabel,
+  showClassificationConfidence,
   onClose,
 }: {
   documentTypeKey: string;
@@ -393,6 +400,7 @@ function DocumentTableDialog({
   fields: string[];
   industryLabel: string;
   documentTypeLabel: string;
+  showClassificationConfidence: boolean;
   onClose: () => void;
 }) {
   const titleId = useId();
@@ -483,6 +491,7 @@ function DocumentTableDialog({
           documents={documents}
           fields={fields}
           documentTypeLabel={documentTypeLabel}
+          showClassificationConfidence={showClassificationConfidence}
         />
       </section>
     </div>
@@ -493,10 +502,12 @@ function DocumentDataTable({
   documents,
   fields,
   documentTypeLabel,
+  showClassificationConfidence,
 }: {
   documents: DashboardDocument[];
   fields: string[];
   documentTypeLabel: string;
+  showClassificationConfidence: boolean;
 }) {
   const [sort, setSort] = useState<{
     column: string;
@@ -510,6 +521,10 @@ function DocumentDataTable({
   const columnValue = useCallback(
     (document: DashboardDocument, column: string) => {
       if (column === "document") return document.document_name;
+      if (column === "classification-confidence")
+        return typeof document.classification_confidence === "number"
+          ? `${Math.round(document.classification_confidence * 100)}%`
+          : "—";
       if (column === "indexed") return document.created_at;
       return formatValue(document.extracted_metadata[column.slice(6)]);
     },
@@ -576,7 +591,9 @@ function DocumentDataTable({
       >
         <table
           className="dashboard-document-table"
-          style={{ width: `${395 + fields.length * 220}px` }}
+          style={{
+            width: `${395 + fields.length * 220 + (showClassificationConfidence ? 220 : 0)}px`,
+          }}
         >
           <caption className="sr-only">
             Extracted data for authorized {documentTypeLabel} documents
@@ -604,6 +621,17 @@ function DocumentDataTable({
                   key={field}
                 />
               ))}
+              {showClassificationConfidence && (
+                <SortableColumnHeader
+                  column="classification-confidence"
+                  label="Classification confidence"
+                  className="document-extracted-field-column"
+                  sort={sort}
+                  filter={filters["classification-confidence"] ?? ""}
+                  onSort={toggleSort}
+                  onFilter={updateFilter}
+                />
+              )}
               <SortableColumnHeader
                 column="indexed"
                 label="Indexed"
@@ -631,6 +659,13 @@ function DocumentDataTable({
                       />
                     </td>
                   ))}
+                  {showClassificationConfidence && (
+                    <td className="document-extracted-value-cell">
+                      {typeof document.classification_confidence === "number"
+                        ? `${Math.round(document.classification_confidence * 100)}%`
+                        : "—"}
+                    </td>
+                  )}
                   <td className="document-indexed-cell">
                     <time dateTime={document.created_at}>
                       {new Date(document.created_at).toLocaleString()}
@@ -642,7 +677,9 @@ function DocumentDataTable({
               <tr>
                 <td
                   className="dashboard-table-no-results"
-                  colSpan={fields.length + 2}
+                  colSpan={
+                    fields.length + 2 + (showClassificationConfidence ? 1 : 0)
+                  }
                 >
                   No rows match the current column filters.
                 </td>

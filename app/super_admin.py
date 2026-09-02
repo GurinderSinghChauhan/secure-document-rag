@@ -16,17 +16,27 @@ from .database import (
     IngestionJobRecord,
     MembershipRecord,
     OrganizationRecord,
+    PlatformSettingsRecord,
     RefreshSessionRecord,
     UserRecord,
     get_session,
 )
 from .models import Principal
+from .platform_settings import PLATFORM_SETTINGS_ID, read_platform_display_settings
 
 router = APIRouter(prefix="/v1/super-admin", tags=["super-admin"])
 
 
 class StatusUpdate(BaseModel):
     active: bool
+
+
+class PlatformDisplaySettingsUpdate(BaseModel):
+    show_classification_confidence: bool
+
+
+class PlatformDisplaySettingsResponse(BaseModel):
+    show_classification_confidence: bool
 
 
 class PlatformRoleUpdate(BaseModel):
@@ -88,6 +98,42 @@ async def organization_members(session: AsyncSession, organization_id: str) -> l
         }
         for user, membership in rows
     ]
+
+
+@router.get("/display-settings", response_model=PlatformDisplaySettingsResponse)
+async def get_display_settings(
+    _: Principal = Depends(super_principal),
+    session: AsyncSession = Depends(get_session),
+) -> PlatformDisplaySettingsResponse:
+    settings = await read_platform_display_settings(session)
+    return PlatformDisplaySettingsResponse(
+        show_classification_confidence=settings.show_classification_confidence,
+    )
+
+
+@router.patch("/display-settings", response_model=PlatformDisplaySettingsResponse)
+async def update_display_settings(
+    payload: PlatformDisplaySettingsUpdate,
+    principal: Principal = Depends(super_principal),
+    session: AsyncSession = Depends(get_session),
+) -> PlatformDisplaySettingsResponse:
+    settings = await session.get(PlatformSettingsRecord, PLATFORM_SETTINGS_ID)
+    if settings is None:
+        settings = PlatformSettingsRecord(settings_id=PLATFORM_SETTINGS_ID)
+        session.add(settings)
+    settings.show_classification_confidence = payload.show_classification_confidence
+    settings.updated_by = principal.user_id
+    await session.commit()
+    await record(
+        session,
+        "platform_display_settings_updated",
+        principal.tenant_id,
+        principal.user_id,
+        show_classification_confidence=payload.show_classification_confidence,
+    )
+    return PlatformDisplaySettingsResponse(
+        show_classification_confidence=settings.show_classification_confidence,
+    )
 
 
 @router.get("/organizations")

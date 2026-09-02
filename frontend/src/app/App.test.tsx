@@ -27,6 +27,17 @@ const adminAuth: AuthResponse = {
   },
 };
 
+const superAdminAuth: AuthResponse = {
+  ...adminAuth,
+  user: {
+    ...adminAuth.user,
+    user_id: "platform-admin",
+    email: "platform@example.com",
+    display_name: "Platform Admin",
+    is_super_admin: true,
+  },
+};
+
 function renderApplication() {
   return render(
     <QueryClientProvider client={queryClient}>
@@ -83,6 +94,45 @@ test("restores one shared session and exposes role-appropriate navigation", asyn
   expect(
     primaryNavigation.queryByRole("link", { name: "Platform Admin" }),
   ).not.toBeInTheDocument();
+});
+
+test("lets a super admin control classification confidence in tables", async () => {
+  window.history.pushState({}, "", "/super-admin");
+  let savedValue: boolean | null = null;
+  server.use(
+    http.post("/v1/auth/refresh", () => HttpResponse.json(superAdminAuth)),
+    http.get("/v1/super-admin/organizations", () => HttpResponse.json([])),
+    http.get("/v1/super-admin/display-settings", () =>
+      HttpResponse.json({ show_classification_confidence: false }),
+    ),
+    http.patch(
+      "/v1/super-admin/display-settings",
+      async ({ request }) => {
+        const body = (await request.json()) as {
+          show_classification_confidence: boolean;
+        };
+        savedValue = body.show_classification_confidence;
+        return HttpResponse.json(body);
+      },
+    ),
+  );
+
+  renderApplication();
+  expect(
+    await screen.findByRole("heading", { name: "Platform oversight" }),
+  ).toBeVisible();
+  const user = userEvent.setup();
+  await user.click(screen.getByRole("tab", { name: "Display settings" }));
+  const visibilitySwitch = await screen.findByRole("switch", {
+    name: "Show classification confidence in document tables",
+  });
+  expect(visibilitySwitch).not.toBeChecked();
+
+  await user.click(visibilitySwitch);
+
+  await waitFor(() => expect(savedValue).toBe(true));
+  expect(visibilitySwitch).toBeChecked();
+  expect(screen.getByText("Display settings updated.")).toBeVisible();
 });
 
 test("renders authorized document coverage and schema-driven metadata", async () => {
@@ -151,6 +201,7 @@ test("renders authorized document coverage and schema-driven metadata", async ()
         classified_documents: 3,
         extracted_documents: 3,
         review_required_documents: 1,
+        show_classification_confidence: true,
         industries: [
           {
             key: "field_service",
@@ -264,10 +315,10 @@ test("renders authorized document coverage and schema-driven metadata", async ()
     within(serviceTable).getByRole("columnheader", { name: /total amount/ }),
   ).toBeVisible();
   expect(
-    within(serviceTable).queryByRole("columnheader", {
-      name: /Classification/,
+    within(serviceTable).getByRole("columnheader", {
+      name: /Classification confidence/,
     }),
-  ).not.toBeInTheDocument();
+  ).toBeVisible();
   expect(
     within(serviceTable).queryByRole("columnheader", { name: /Extraction/ }),
   ).not.toBeInTheDocument();
@@ -277,6 +328,7 @@ test("renders authorized document coverage and schema-driven metadata", async ()
   expect(
     within(serviceTable).getByRole("cell", { name: "INV-42" }),
   ).toBeVisible();
+  expect(within(serviceTable).getByRole("cell", { name: "72%" })).toBeVisible();
   const sortDocuments = within(serviceTable).getByRole("button", {
     name: "Sort by Document ascending",
   });

@@ -23,6 +23,23 @@ class OrganizationRecord(Base):
     created_at: Mapped[object] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
+class PlatformSettingsRecord(Base):
+    __tablename__ = "platform_settings"
+
+    settings_id: Mapped[str] = mapped_column(String(32), primary_key=True)
+    show_classification_confidence: Mapped[bool] = mapped_column(
+        Boolean,
+        default=False,
+        server_default=text("false"),
+    )
+    updated_by: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    updated_at: Mapped[object] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+
 class UserRecord(Base):
     __tablename__ = "users"
 

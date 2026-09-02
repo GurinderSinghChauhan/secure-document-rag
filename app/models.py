@@ -177,6 +177,7 @@ class DashboardResponse(BaseModel):
     classified_documents: int
     extracted_documents: int
     review_required_documents: int
+    show_classification_confidence: bool = False
     industries: list[DashboardIndustryResponse]
     recent_documents: list[DashboardDocumentResponse]
 
