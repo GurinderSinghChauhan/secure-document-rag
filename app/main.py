@@ -25,7 +25,6 @@ from .document_parser import VisualAsset, extract_document
 from .document_schemas import DOCUMENT_SCHEMAS, INDUSTRIES, SCHEMA_VERSION, require_document_schema, schema_catalog
 from .mineru import MinerUClient, supports_mineru
 from .models import BulkDeleteResponse, ChatDetail, ChatMessage, ChatSummary, ClassifyDocumentRequest, ComputeSessionCreate, ComputeSessionRelease, ComputeSessionResponse, DashboardDocumentListResponse, DashboardDocumentResponse, DashboardIndustryResponse, DashboardResponse, DeleteResponse, HeldIngestResponse, IndexedDocumentResponse, IndustrySchemaResponse, IngestionJobResponse, Principal, QueryRequest, QueryResponse, ReadinessResponse, VersionResponse
-from .platform_settings import read_platform_display_settings
 from .providers import ModelClient
 from .super_admin import router as super_admin_router
 from .trials import is_pdf, require_active_trial, reserve_pdf_trial_slot, reserve_question_trial_slot
@@ -643,7 +642,6 @@ async def dashboard(
     principal: Principal = Depends(require_principal),
     session: AsyncSession = Depends(get_session),
 ) -> DashboardResponse:
-    display_settings = await read_platform_display_settings(session)
     documents = [
         document
         for document in await list_authorized_documents(
@@ -678,7 +676,6 @@ async def dashboard(
         classified_documents=classified_documents,
         extracted_documents=extracted_documents,
         review_required_documents=review_required_documents,
-        show_classification_confidence=display_settings.show_classification_confidence,
         industries=[
             DashboardIndustryResponse(
                 key=industry.key,

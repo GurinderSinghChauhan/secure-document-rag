@@ -21,19 +21,9 @@ from app.models import Principal
 
 
 class DashboardSession:
-    def __init__(self, documents, *, show_classification_confidence=False):
+    def __init__(self, documents):
         self.documents = documents
         self.statement = None
-        self.show_classification_confidence = show_classification_confidence
-
-    async def get(self, _model, _identifier):
-        if not self.show_classification_confidence:
-            return None
-        return type(
-            "DisplaySettings",
-            (),
-            {"show_classification_confidence": True},
-        )()
 
     async def scalars(self, statement):
         self.statement = statement
@@ -166,8 +156,7 @@ async def test_dashboard_only_aggregates_documents_authorized_for_current_user()
                 roles=["admin"],
                 users=["member-a"],
             ),
-        ],
-        show_classification_confidence=True,
+        ]
     )
 
     result = await dashboard(principal, session)
@@ -176,7 +165,6 @@ async def test_dashboard_only_aggregates_documents_authorized_for_current_user()
     assert result.classified_documents == 1
     assert result.extracted_documents == 1
     assert result.review_required_documents == 1
-    assert result.show_classification_confidence is True
     accounts_payable = next(item for item in result.industries if item.key == "accounts_payable")
     assert accounts_payable.document_count == 1
     assert {item.document_name for item in result.recent_documents} == {

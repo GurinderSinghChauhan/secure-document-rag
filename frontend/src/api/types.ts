@@ -127,7 +127,6 @@ export interface Dashboard {
   classified_documents: number;
   extracted_documents: number;
   review_required_documents: number;
-  show_classification_confidence: boolean;
   industries: DashboardIndustry[];
   recent_documents: DashboardDocument[];
 }
@@ -169,10 +168,6 @@ export interface PlatformOrganization extends OrganizationRef {
   document_count: number;
   held_job_count: number;
   users: Member[];
-}
-
-export interface PlatformDisplaySettings {
-  show_classification_confidence: boolean;
 }
 
 export interface ResponseEvaluation {

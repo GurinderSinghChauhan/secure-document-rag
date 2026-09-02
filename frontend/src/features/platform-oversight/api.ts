@@ -1,33 +1,10 @@
 import { api } from "../../api/client";
-import type {
-  ChatResponseReview,
-  PlatformDisplaySettings,
-  PlatformOrganization,
-} from "../../api/types";
+import type { ChatResponseReview, PlatformOrganization } from "../../api/types";
 
 export const platformKeys = {
   organizations: ["platform", "organizations"] as const,
-  displaySettings: ["platform", "display-settings"] as const,
   responses: (status: string) => ["platform", "responses", status] as const,
 };
-export const getDisplaySettings = () =>
-  api.json<PlatformDisplaySettings>(
-    "/v1/super-admin/display-settings",
-    {},
-    "Unable to load display settings.",
-  );
-export const setDisplaySettings = (showClassificationConfidence: boolean) =>
-  api.json<PlatformDisplaySettings>(
-    "/v1/super-admin/display-settings",
-    {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        show_classification_confidence: showClassificationConfidence,
-      }),
-    },
-    "Unable to update display settings.",
-  );
 export const listOrganizations = () =>
   api.json<PlatformOrganization[]>(
     "/v1/super-admin/organizations",

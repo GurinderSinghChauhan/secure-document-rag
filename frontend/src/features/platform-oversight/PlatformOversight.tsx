@@ -14,12 +14,10 @@ import {
 import {
   listOrganizations,
   listResponses,
-  getDisplaySettings,
   platformKeys,
   revokeUserSessions,
   saveEvaluation,
   setOrganizationStatus,
-  setDisplaySettings,
   setUserRole,
   setUserStatus,
 } from "./api";
@@ -40,11 +38,6 @@ export function PlatformOversight() {
     queryFn: () => listResponses(status),
     enabled: tab === "quality",
   });
-  const displaySettings = useQuery({
-    queryKey: platformKeys.displaySettings,
-    queryFn: getDisplaySettings,
-    enabled: tab === "display",
-  });
   const change = useMutation({
     mutationFn: async (operation: () => Promise<unknown>) => operation(),
     onSuccess: async () => {
@@ -52,15 +45,6 @@ export function PlatformOversight() {
       await queryClient.invalidateQueries({
         queryKey: platformKeys.organizations,
       });
-    },
-    onError: (error) => setMessage(error.message),
-  });
-  const changeDisplaySettings = useMutation({
-    mutationFn: setDisplaySettings,
-    onSuccess: async (settings) => {
-      queryClient.setQueryData(platformKeys.displaySettings, settings);
-      setMessage("Display settings updated.");
-      await queryClient.invalidateQueries({ queryKey: ["dashboard"] });
     },
     onError: (error) => setMessage(error.message),
   });
@@ -89,9 +73,7 @@ export function PlatformOversight() {
           onClick={() =>
             void (tab === "quality"
               ? responses.refetch()
-              : tab === "display"
-                ? displaySettings.refetch()
-                : organizations.refetch())
+              : organizations.refetch())
           }
         >
           Refresh
@@ -104,9 +86,6 @@ export function PlatformOversight() {
           </Tabs.Trigger>
           <Tabs.Trigger className="platform-tab" value="quality">
             Response quality
-          </Tabs.Trigger>
-          <Tabs.Trigger className="platform-tab" value="display">
-            Display settings
           </Tabs.Trigger>
         </Tabs.List>
         <Tabs.Content value="organizations">
@@ -281,53 +260,6 @@ export function PlatformOversight() {
               </p>
             )}
           </div>
-        </Tabs.Content>
-        <Tabs.Content value="display">
-          <section
-            className="platform-settings-panel"
-            aria-labelledby="platform-display-settings-title"
-          >
-            <header>
-              <div>
-                <span className="section-kicker">Document intelligence</span>
-                <h2 id="platform-display-settings-title">Table display</h2>
-                <p>
-                  Choose which classification details users can see in document
-                  tables across every organization.
-                </p>
-              </div>
-              <Badge variant="metric">Platform-wide</Badge>
-            </header>
-            {displaySettings.isPending ? (
-              <StatusMessage>Loading display settings…</StatusMessage>
-            ) : displaySettings.error instanceof Error ? (
-              <StatusMessage>{displaySettings.error.message}</StatusMessage>
-            ) : (
-              <label className="platform-setting-row">
-                <span>
-                  <strong>Show classification confidence</strong>
-                  <small>
-                    Add a sortable confidence percentage column to every
-                    document data table. Manual classifications without a score
-                    display an em dash.
-                  </small>
-                </span>
-                <Input
-                  type="checkbox"
-                  role="switch"
-                  aria-label="Show classification confidence in document tables"
-                  checked={
-                    displaySettings.data?.show_classification_confidence ?? false
-                  }
-                  disabled={changeDisplaySettings.isPending}
-                  onChange={(event) =>
-                    changeDisplaySettings.mutate(event.target.checked)
-                  }
-                />
-              </label>
-            )}
-            {message && <StatusMessage>{message}</StatusMessage>}
-          </section>
         </Tabs.Content>
       </Tabs.Root>
     </main>

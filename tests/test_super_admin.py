@@ -1,15 +1,8 @@
 import pytest
 
-from app.database import MembershipRecord, PlatformSettingsRecord, UserRecord
+from app.database import MembershipRecord, UserRecord
 from app.models import Principal
-from app.super_admin import (
-    PlatformDisplaySettingsUpdate,
-    ResponseEvaluationUpdate,
-    StatusUpdate,
-    get_display_settings,
-    set_user_status,
-    update_display_settings,
-)
+from app.super_admin import ResponseEvaluationUpdate, StatusUpdate, set_user_status
 
 
 class RowResult:
@@ -31,26 +24,6 @@ class SafetySession:
 
     async def scalar(self, _statement):
         return self.count
-
-
-class SettingsSession:
-    def __init__(self, settings=None):
-        self.settings = settings
-        self.added = []
-        self.commit_count = 0
-
-    async def get(self, model, identifier):
-        assert model is PlatformSettingsRecord
-        assert identifier == "global"
-        return self.settings
-
-    def add(self, value):
-        self.added.append(value)
-        if isinstance(value, PlatformSettingsRecord):
-            self.settings = value
-
-    async def commit(self):
-        self.commit_count += 1
 
 
 def principal(user_id="platform-admin"):
@@ -113,21 +86,3 @@ def test_response_evaluation_enforces_rubric_range_and_normalizes_notes():
 def test_response_evaluation_rejects_oversized_notes():
     with pytest.raises(ValueError, match="2,000 characters"):
         ResponseEvaluationUpdate(correctness=5, relevance=4, clarity=3, notes="x" * 2_001)
-
-
-@pytest.mark.asyncio
-async def test_display_settings_default_off_and_persist_super_admin_update():
-    session = SettingsSession()
-
-    initial = await get_display_settings(principal(), session)
-    updated = await update_display_settings(
-        PlatformDisplaySettingsUpdate(show_classification_confidence=True),
-        principal(),
-        session,
-    )
-
-    assert initial.show_classification_confidence is False
-    assert updated.show_classification_confidence is True
-    assert session.settings.show_classification_confidence is True
-    assert session.settings.updated_by == "platform-admin"
-    assert session.commit_count == 2
