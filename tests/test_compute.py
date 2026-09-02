@@ -7,6 +7,7 @@ from fastapi import HTTPException
 from app.compute import RunpodProvider, assert_release_within_limits, estimated_cost, recommended_gpu_minutes
 from app.config import Settings
 from app.database import IngestionJobRecord
+from app.models import Principal
 from app import main
 
 
@@ -78,6 +79,32 @@ def test_held_job_response_includes_inputs_for_automatic_guardrails():
     assert payload.content_type == "application/pdf"
     assert payload.size_bytes == 1024 * 1024
     assert payload.recommended_gpu_minutes == 6
+
+
+@pytest.mark.asyncio
+async def test_held_job_inventory_supports_stable_pages_beyond_500():
+    class Session:
+        statement = None
+
+        async def scalars(self, statement):
+            self.statement = statement
+            return []
+
+    session = Session()
+    principal = Principal(tenant_id="organization", user_id="admin", roles=["admin"])
+
+    result = await main.list_ingestion_jobs(
+        state="held_for_compute",
+        limit=500,
+        offset=500,
+        principal=principal,
+        session=session,
+    )
+    sql = str(session.statement.compile(compile_kwargs={"literal_binds": True}))
+
+    assert result == []
+    assert "ingestion_jobs.created_at DESC, ingestion_jobs.job_id DESC" in sql
+    assert "LIMIT 500 OFFSET 500" in sql
 
 
 def test_chat_compute_is_available_without_a_document_session(monkeypatch):

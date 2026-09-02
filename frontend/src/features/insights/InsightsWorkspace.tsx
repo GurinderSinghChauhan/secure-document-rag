@@ -3,11 +3,22 @@ import { useQuery } from "@tanstack/react-query";
 import { Link, useParams } from "react-router-dom";
 import type { DashboardDocument } from "../../api/types";
 import { AppShell } from "../../components/layout/AppShell";
-import { Badge, EmptyState, StatusMessage } from "../../components/ui";
+import { EmptyState, StatusMessage } from "../../components/ui";
 import { dashboardKeys, searchDashboardDocuments } from "../dashboard/api";
 import { listDocumentSchemas, schemaKeys } from "../documents/api";
 
 type ChartDatum = { label: string; value: number };
+
+const CHART_COLORS = [
+  "#3157d5",
+  "#16a37a",
+  "#8b5cf6",
+  "#e59b2f",
+  "#e15d74",
+  "#3f8fc7",
+  "#7c8b55",
+  "#a86d3d",
+];
 
 const CATEGORY_FIELDS =
   /(status|category|type|department|priority|severity|provider|manufacturer|payment|pass_fail|modality|condition|rating|cause|frequency)/i;
@@ -280,6 +291,18 @@ export function InsightsWorkspace() {
     ]),
   );
   const insights = buildInsights(authorizedDocuments, fields);
+  const extractedPercentage = Math.round(
+    (authorizedDocuments.filter(
+      (document) => document.extraction_status === "completed",
+    ).length /
+      Math.max(authorizedDocuments.length, 1)) *
+      100,
+  );
+  const leadingCategory = insights.categories[0];
+  const nearestDeadline = insights.deadlines[0];
+  const lowCompletenessFields = insights.completeness.filter(
+    (item) => item.value < 75,
+  ).length;
 
   const pending = schemas.isPending || documents.isPending;
   const error = schemas.error ?? documents.error;
@@ -306,43 +329,117 @@ export function InsightsWorkspace() {
           />
         ) : (
           <>
-            <header className="insights-header">
-              <div>
-                <span className="section-kicker">
+            <header className="insights-hero">
+              <div className="insights-hero-copy">
+                <span className="insights-eyebrow">
+                  <i aria-hidden="true" />
                   {schemaMatch.industry.label}
                 </span>
                 <h1>{schemaMatch.type.label} insights</h1>
                 <p>
-                  Deterministic diagrams calculated from the currently
-                  authorized extracted fields. No source content is sent to
-                  another service.
+                  Turn your authorized document data into a clear view of
+                  volume, value, deadlines, and data quality.
+                </p>
+                <div className="insights-trust-note">
+                  <span aria-hidden="true">&#10003;</span>
+                  Calculated privately from extracted fields—no source content
+                  leaves your environment.
+                </div>
+              </div>
+              <div
+                className="insights-hero-stat"
+                aria-label="Insight coverage"
+                role="region"
+              >
+                <span>Insight coverage</span>
+                <strong>{insights.completenessAverage}%</strong>
+                <div aria-hidden="true">
+                  <i style={{ width: `${insights.completenessAverage}%` }} />
+                </div>
+                <small>across {fields.length} extracted fields</small>
+              </div>
+            </header>
+
+            <section className="insights-signal-strip" aria-label="Quick read">
+              <div>
+                <span
+                  className="insight-signal-icon positive"
+                  aria-hidden="true"
+                >
+                  ↗
+                </span>
+                <p>
+                  <small>Leading signal</small>
+                  <strong>
+                    {leadingCategory
+                      ? `${leadingCategory.label} leads with ${leadingCategory.value}`
+                      : "No category signal yet"}
+                  </strong>
                 </p>
               </div>
-              <Badge variant="metric">Up to 100 authorized results</Badge>
-            </header>
+              <div>
+                <span className="insight-signal-icon" aria-hidden="true">
+                  ◫
+                </span>
+                <p>
+                  <small>Data readiness</small>
+                  <strong>
+                    {lowCompletenessFields
+                      ? `${lowCompletenessFields} fields need attention`
+                      : "All fields are well populated"}
+                  </strong>
+                </p>
+              </div>
+              <div>
+                <span
+                  className="insight-signal-icon warning"
+                  aria-hidden="true"
+                >
+                  ◷
+                </span>
+                <p>
+                  <small>Nearest milestone</small>
+                  <strong>
+                    {nearestDeadline
+                      ? `${nearestDeadline.field} · ${nearestDeadline.date.toLocaleDateString()}`
+                      : "No extracted deadlines"}
+                  </strong>
+                </p>
+              </div>
+            </section>
 
             <section className="insights-kpis" aria-label="Insight summary">
               <InsightKpi
                 label="Documents"
                 value={String(authorizedDocuments.length)}
+                detail="authorized records"
+                tone="blue"
               />
               <InsightKpi
                 label="Extracted"
-                value={`${Math.round((authorizedDocuments.filter((document) => document.extraction_status === "completed").length / authorizedDocuments.length) * 100)}%`}
+                value={`${extractedPercentage}%`}
+                detail="success rate"
+                tone="green"
               />
               <InsightKpi
                 label="Field completeness"
                 value={`${insights.completenessAverage}%`}
+                detail={`${fields.length} fields measured`}
+                tone="violet"
               />
               <InsightKpi
                 label="Indexed range"
                 value={insights.dateRange}
+                detail="authorized window"
                 compact
+                tone="amber"
               />
               {insights.numericField && (
                 <InsightKpi
                   label={`Total ${fieldLabel(insights.numericField)}`}
                   value={compactNumber(insights.numericTotal)}
+                  detail="across visible records"
+                  tone="rose"
                 />
               )}
             </section>
@@ -359,7 +456,7 @@ export function InsightsWorkspace() {
                 title={insights.categoryTitle}
                 subtitle="Most common extracted values"
               >
-                <BarChart data={insights.categories} />
+                <DonutChart data={insights.categories} />
               </InsightPanel>
               <InsightPanel
                 title={insights.numericTitle}
@@ -405,16 +502,22 @@ export function InsightsWorkspace() {
 function InsightKpi({
   label,
   value,
+  detail,
   compact = false,
+  tone = "blue",
 }: {
   label: string;
   value: string;
+  detail: string;
   compact?: boolean;
+  tone?: "blue" | "green" | "violet" | "amber" | "rose";
 }) {
   return (
-    <div className={`insight-kpi ${compact ? "compact" : ""}`}>
+    <div className={`insight-kpi ${tone} ${compact ? "compact" : ""}`}>
+      <i aria-hidden="true" />
       <span>{label}</span>
       <strong>{value}</strong>
+      <small>{detail}</small>
     </div>
   );
 }
@@ -457,17 +560,80 @@ function BarChart({
     );
   return (
     <div className="insight-bars">
-      {data.map((item) => (
+      {data.map((item, index) => (
         <div className="insight-bar-row" key={item.label}>
           <span title={item.label}>{item.label}</span>
           <div aria-hidden="true">
             <i
-              style={{ width: `${Math.max((item.value / maximum) * 100, 3)}%` }}
+              style={{
+                width: `${Math.max((item.value / maximum) * 100, 3)}%`,
+                background: CHART_COLORS[index % CHART_COLORS.length],
+              }}
             />
           </div>
           <strong>{valueFormatter(item.value)}</strong>
         </div>
       ))}
+    </div>
+  );
+}
+
+function DonutChart({ data }: { data: ChartDatum[] }) {
+  if (!data.length)
+    return (
+      <p className="insight-no-data">
+        Not enough populated values for this diagram.
+      </p>
+    );
+  const total = data.reduce((sum, item) => sum + item.value, 0);
+  const radius = 44;
+  const circumference = 2 * Math.PI * radius;
+  return (
+    <div className="insight-donut-layout">
+      <div className="insight-donut">
+        <svg viewBox="0 0 120 120" role="img" aria-label="Value distribution">
+          <circle className="insight-donut-track" cx="60" cy="60" r={radius} />
+          {data.map((item, index) => {
+            const length = (item.value / total) * circumference;
+            const segmentOffset =
+              (data
+                .slice(0, index)
+                .reduce((sum, segment) => sum + segment.value, 0) /
+                total) *
+              circumference;
+            return (
+              <circle
+                className="insight-donut-segment"
+                cx="60"
+                cy="60"
+                r={radius}
+                key={item.label}
+                stroke={CHART_COLORS[index % CHART_COLORS.length]}
+                strokeDasharray={`${Math.max(length - 2, 0)} ${circumference}`}
+                strokeDashoffset={-segmentOffset}
+              >
+                <title>{`${item.label}: ${item.value}`}</title>
+              </circle>
+            );
+          })}
+        </svg>
+        <span>
+          <strong>{compactNumber(total)}</strong>
+          <small>Total</small>
+        </span>
+      </div>
+      <div className="insight-donut-legend">
+        {data.map((item, index) => (
+          <div key={item.label}>
+            <i
+              aria-hidden="true"
+              style={{ background: CHART_COLORS[index % CHART_COLORS.length] }}
+            />
+            <span title={item.label}>{item.label}</span>
+            <strong>{Math.round((item.value / total) * 100)}%</strong>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -494,12 +660,34 @@ function LineChart({ data }: { data: ChartDatum[] }) {
         role="img"
         aria-label="Document volume trend"
       >
+        <defs>
+          <linearGradient id="insight-line-fill" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="currentColor" stopOpacity="0.24" />
+            <stop offset="100%" stopColor="currentColor" stopOpacity="0" />
+          </linearGradient>
+        </defs>
+        {[0.25, 0.5, 0.75].map((position) => (
+          <line
+            className="insight-grid-line"
+            x1={inset}
+            y1={inset + position * (height - inset * 2)}
+            x2={width - inset}
+            y2={inset + position * (height - inset * 2)}
+            key={position}
+          />
+        ))}
         <line
           x1={inset}
           y1={height - inset}
           x2={width - inset}
           y2={height - inset}
         />
+        {points.length > 1 && (
+          <polygon
+            className="insight-line-area"
+            points={`${points.map((point) => `${point.x},${point.y}`).join(" ")} ${points.at(-1)!.x},${height - inset} ${points[0]!.x},${height - inset}`}
+          />
+        )}
         <polyline
           points={points.map((point) => `${point.x},${point.y}`).join(" ")}
         />

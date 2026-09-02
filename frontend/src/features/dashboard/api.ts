@@ -13,12 +13,25 @@ export const getDashboard = () =>
     "Unable to load the document dashboard.",
   );
 
-export const searchDashboardDocuments = (query: string) => {
-  const parameters = new URLSearchParams({ limit: "100" });
-  if (query) parameters.set("query", query);
-  return api.json<DashboardDocumentList>(
-    `/v1/dashboard/documents?${parameters.toString()}`,
-    {},
-    "Unable to load dashboard documents.",
-  );
-};
+export async function searchDashboardDocuments(query: string) {
+  const pageSize = 100;
+  const documents: DashboardDocumentList["documents"] = [];
+  let total = 0;
+  for (let offset = 0; ; offset += pageSize) {
+    const parameters = new URLSearchParams({
+      limit: String(pageSize),
+      offset: String(offset),
+    });
+    if (query) parameters.set("query", query);
+    const page = await api.json<DashboardDocumentList>(
+      `/v1/dashboard/documents?${parameters.toString()}`,
+      {},
+      "Unable to load dashboard documents.",
+    );
+    total = page.total;
+    documents.push(...page.documents);
+    if (documents.length >= total || page.documents.length < pageSize) {
+      return { total, documents };
+    }
+  }
+}

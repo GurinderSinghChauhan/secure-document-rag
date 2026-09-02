@@ -203,6 +203,7 @@ async def test_dashboard_document_search_is_acl_scoped_and_server_filtered():
         session,
         query="Invoice",
         limit=100,
+        offset=100,
     )
 
     assert result.total == 1
@@ -213,3 +214,7 @@ async def test_dashboard_document_search_is_acl_scoped_and_server_filtered():
     assert "documents.document_name ILIKE" in sql
     assert "documents.document_type IN" in sql
     assert "CAST(documents.allowed_roles AS JSONB) @>" in sql
+    assert "documents.created_at DESC, documents.document_id DESC" in sql
+    assert "LIMIT" in sql and "OFFSET" in sql
+    parameters = session.statement.compile(dialect=postgresql.dialect()).params
+    assert list(parameters.values()).count(100) == 2

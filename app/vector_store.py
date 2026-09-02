@@ -37,10 +37,27 @@ class VectorStore:
         return await self.client.search(collection_name=collection, query_vector=embedding, query_filter=access_filter, limit=limit, score_threshold=get_settings().min_retrieval_score, with_payload=True)
 
     async def delete_document(self, tenant_id: str, document_id: str) -> None:
+        await self.delete_documents(tenant_id, [document_id])
+
+    async def delete_documents(self, tenant_id: str, document_ids: list[str]) -> None:
+        if not document_ids:
+            return
         collection = self.collection_name(tenant_id)
         if not await self.client.collection_exists(collection):
             return
-        await self.client.delete(collection_name=collection, points_selector=models.FilterSelector(filter=models.Filter(must=[models.FieldCondition(key="document_id", match=models.MatchValue(value=document_id))])))
+        await self.client.delete(
+            collection_name=collection,
+            points_selector=models.FilterSelector(
+                filter=models.Filter(
+                    must=[
+                        models.FieldCondition(
+                            key="document_id",
+                            match=models.MatchAny(any=document_ids),
+                        )
+                    ]
+                )
+            ),
+        )
 
     async def is_ready(self) -> bool:
         try:

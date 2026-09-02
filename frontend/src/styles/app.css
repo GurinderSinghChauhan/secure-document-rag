@@ -437,6 +437,10 @@ svg {
   display: none;
 }
 
+.mobile-nav {
+  display: none;
+}
+
 .breadcrumb {
   display: flex;
   align-items: center;
@@ -1161,6 +1165,12 @@ textarea:focus {
   background: #f6f8ff;
 }
 
+.file-dropzone.selected {
+  border-color: var(--primary);
+  background: var(--primary-subtle);
+  box-shadow: 0 0 0 2px rgba(49, 87, 213, 0.08);
+}
+
 .file-dropzone input {
   position: absolute;
   width: 1px;
@@ -1199,8 +1209,9 @@ textarea:focus {
 
 .file-dropzone small {
   margin-top: 8px;
-  color: var(--text-tertiary);
-  font-size: 10px;
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 1.45;
 }
 
 .folder-dropzone {
@@ -1252,6 +1263,17 @@ textarea:focus {
   border-radius: 8px;
   color: var(--text-secondary);
   background: var(--surface-subtle);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.upload-status > span {
+  display: grid;
+  width: 17px;
+  height: 17px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 50%;
   font-size: 10px;
 }
 
@@ -1266,6 +1288,11 @@ textarea:focus {
   background: var(--success-subtle);
 }
 
+.upload-status.success > span {
+  color: #fff;
+  background: var(--success);
+}
+
 .upload-status.error {
   color: #9c303b;
   background: var(--danger-subtle);
@@ -1273,6 +1300,16 @@ textarea:focus {
 
 .upload-status.busy svg {
   animation: spin 1s linear infinite;
+}
+
+.upload-status.busy > span {
+  animation: status-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes status-pulse {
+  50% {
+    opacity: 0.45;
+  }
 }
 
 .upload-progress {
@@ -1296,8 +1333,8 @@ textarea:focus {
 }
 
 .upload-progress-row > span {
-  color: var(--text-tertiary);
-  font-size: 10px;
+  color: var(--text-secondary);
+  font-size: 11px;
 }
 
 .upload-progress-track {
@@ -1487,6 +1524,20 @@ textarea:focus {
 
   .mobile-brand {
     display: flex;
+  }
+
+  .mobile-nav {
+    display: flex;
+    gap: 6px;
+    padding: 8px 14px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    overflow-x: auto;
+    scrollbar-width: thin;
+  }
+
+  .mobile-nav .nav-item {
+    min-width: max-content;
   }
 
   .mobile-brand .brand-mark {

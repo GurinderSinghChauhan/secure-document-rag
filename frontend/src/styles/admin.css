@@ -13,7 +13,7 @@
 }
 
 .admin-content {
-  width: min(1240px, 100%);
+  width: min(1320px, 100%);
   margin: 0 auto;
   padding: 34px 32px 48px;
 }
@@ -40,7 +40,7 @@
 
 .admin-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1.12fr) minmax(360px, 0.88fr);
   gap: 18px;
   align-items: start;
 }
@@ -59,7 +59,7 @@
 }
 
 .workflow-card {
-  height: 100%;
+  height: auto;
 }
 
 .admin-overview {
@@ -141,11 +141,33 @@
 }
 
 .panel-description {
-  min-height: 38px;
+  min-height: 0;
   margin: 12px 0 17px;
   color: var(--text-secondary);
   font-size: 13px;
   line-height: 1.55;
+}
+
+.document-type-field {
+  display: grid;
+  gap: 7px;
+}
+
+.document-type-field > span {
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.document-type-field select {
+  width: 100%;
+}
+
+.document-type-field > small {
+  max-width: 680px;
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 1.5;
 }
 
 .access-disclosure {
@@ -194,11 +216,47 @@
 .icon-text-button:hover {
   background: #e8eefc;
 }
+
+.auto-refresh-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 10px;
+  border-radius: 999px;
+  color: #176646;
+  background: var(--success-subtle);
+  font-size: 10px;
+  font-weight: 750;
+}
+
+.auto-refresh-badge i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--success);
+  box-shadow: 0 0 0 3px rgba(22, 132, 91, 0.12);
+}
 .compute-selection-toolbar {
   display: flex;
   align-items: center;
   gap: 10px;
   margin-bottom: 10px;
+}
+.indexed-document-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 10px 0;
+}
+.indexed-document-toolbar span {
+  max-width: 680px;
+  color: var(--text-tertiary);
+  font-size: 11px;
+  line-height: 1.45;
+}
+.indexed-document-toolbar .danger-action {
+  flex: 0 0 auto;
 }
 .compute-selection-toolbar label {
   display: flex;
@@ -228,12 +286,89 @@
   font-size: 11px;
 }
 .compute-queue {
-  min-height: 138px;
-  max-height: 220px;
+  min-height: 116px;
+  max-height: min(320px, 42vh);
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-color: var(--border-strong) transparent;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
   padding: 8px;
   border: 1px solid var(--border);
   border-radius: 11px;
   background: #fafbfc;
+}
+
+.compute-queue.active-session {
+  min-height: 0;
+  max-height: min(360px, 46vh);
+  padding: 0 6px 0 0;
+  border: 0;
+  background: transparent;
+}
+
+.compute-queue::-webkit-scrollbar {
+  width: 8px;
+}
+
+.compute-queue::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: var(--border-strong);
+  background-clip: padding-box;
+}
+
+.compute-job-card {
+  display: grid;
+  gap: 11px;
+  padding: 15px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: linear-gradient(135deg, #fbfcff, #f7f9ff);
+}
+
+.compute-job-card > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.compute-job-card > header strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: 13px;
+}
+
+.compute-job-card > header span {
+  flex: 0 0 auto;
+  color: var(--primary);
+  font-size: 12px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.compute-job-stage {
+  display: grid;
+  gap: 4px;
+}
+
+.compute-job-stage > span {
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 750;
+}
+
+.compute-job-stage small {
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.compute-job-progress .job-progress {
+  height: 7px;
+  margin-top: 0;
 }
 .compute-queue .held-job:has(input:checked) {
   border-color: #b9c8f8;
@@ -440,7 +575,7 @@
   outline-offset: 3px;
 }
 
-@media (max-width: 980px) {
+@media (max-width: 1080px) {
   .admin-grid {
     grid-template-columns: 1fr;
   }
@@ -477,6 +612,22 @@
 
   .indexed-document-row {
     align-items: flex-start;
+  }
+
+  .compute-selection-toolbar,
+  .indexed-document-toolbar {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .compute-selection-toolbar strong {
+    width: 100%;
+    margin-left: 0;
+  }
+
+  .indexed-document-toolbar .danger-action {
+    width: 100%;
+    justify-content: center;
   }
 }
 @media (max-width: 720px) {

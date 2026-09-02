@@ -39,13 +39,22 @@ async def get_document(session: AsyncSession, tenant_id: str, document_id: str) 
     )
 
 
-async def list_documents(session: AsyncSession, tenant_id: str, limit: int = 500) -> list[DocumentRecord]:
-    result = await session.scalars(
+async def list_documents(
+    session: AsyncSession,
+    tenant_id: str,
+    limit: int | None = 500,
+    offset: int = 0,
+) -> list[DocumentRecord]:
+    statement = (
         select(DocumentRecord)
         .where(DocumentRecord.tenant_id == tenant_id, DocumentRecord.deleted_at.is_(None))
         .order_by(DocumentRecord.created_at.desc(), DocumentRecord.document_id.desc())
-        .limit(limit)
     )
+    if offset:
+        statement = statement.offset(offset)
+    if limit is not None:
+        statement = statement.limit(limit)
+    result = await session.scalars(statement)
     return list(result)
 
 
@@ -77,6 +86,7 @@ async def search_authorized_documents(
     query: str,
     document_type_keys: list[str],
     limit: int,
+    offset: int,
 ) -> tuple[list[DocumentRecord], int]:
     access_conditions = [cast(DocumentRecord.allowed_users, JSONB).contains([user_id])]
     access_conditions.extend(cast(DocumentRecord.allowed_roles, JSONB).contains([role]) for role in roles)
@@ -99,6 +109,7 @@ async def search_authorized_documents(
         select(DocumentRecord)
         .where(*filters)
         .order_by(DocumentRecord.created_at.desc(), DocumentRecord.document_id.desc())
+        .offset(offset)
         .limit(limit)
     )
     return list(result), int(total or 0)
@@ -106,6 +117,13 @@ async def search_authorized_documents(
 
 async def mark_document_deleted(session: AsyncSession, record: DocumentRecord) -> None:
     record.deleted_at = datetime.now(UTC)
+    await session.commit()
+
+
+async def mark_documents_deleted(session: AsyncSession, records: list[DocumentRecord]) -> None:
+    deleted_at = datetime.now(UTC)
+    for record in records:
+        record.deleted_at = deleted_at
     await session.commit()
 
 

@@ -10,6 +10,7 @@ import {
   Select,
 } from "../../components/ui";
 import {
+  batchUploadPercentage,
   listDocumentSchemas,
   schemaKeys,
   uploadDocument,
@@ -19,20 +20,37 @@ import {
 export function DocumentUploader({ disabled }: { disabled: boolean }) {
   const queryClient = useQueryClient();
   const [files, setFiles] = useState<File[]>([]);
+  const [selectionSource, setSelectionSource] = useState<
+    "documents" | "folder" | null
+  >(null);
+  const [folderName, setFolderName] = useState("");
   const [roles, setRoles] = useState("");
   const [users, setUsers] = useState("");
   const [documentType, setDocumentType] = useState("");
   const [progress, setProgress] = useState<UploadProgress | null>(null);
-  const [status, setStatus] = useState("Select one or more files to begin.");
+  const [status, setStatus] = useState(
+    "Choose documents to upload. They will remain held until you release them.",
+  );
+  const [statusTone, setStatusTone] = useState<"neutral" | "success" | "error">(
+    "neutral",
+  );
   const [busy, setBusy] = useState(false);
   const schemas = useQuery({
     queryKey: schemaKeys.all,
     queryFn: listDocumentSchemas,
   });
   function selectFiles(selectedFiles: FileList | null) {
-    setFiles(Array.from(selectedFiles ?? []));
+    const nextFiles = Array.from(selectedFiles ?? []);
+    setFiles(nextFiles);
+    setSelectionSource(nextFiles.length ? "documents" : null);
+    setFolderName("");
     setProgress(null);
-    setStatus("Select one or more files to begin.");
+    setStatusTone("neutral");
+    setStatus(
+      nextFiles.length
+        ? `${nextFiles.length} ${nextFiles.length === 1 ? "document" : "documents"} ready to upload.`
+        : "Choose documents to upload. They will remain held until you release them.",
+    );
   }
   function selectPdfFolder(selectedFiles: FileList | null) {
     const folderFiles = Array.from(selectedFiles ?? []);
@@ -42,8 +60,13 @@ export function DocumentUploader({ disabled }: { disabled: boolean }) {
         (!file.type && file.name.toLowerCase().endsWith(".pdf")),
     );
     const ignored = folderFiles.length - pdfFiles.length;
+    const relativePath = pdfFiles[0]?.webkitRelativePath ?? "";
+    const selectedFolder = relativePath.split("/")[0] ?? "";
     setFiles(pdfFiles);
+    setSelectionSource(pdfFiles.length ? "folder" : null);
+    setFolderName(selectedFolder);
     setProgress(null);
+    setStatusTone(pdfFiles.length ? "neutral" : "error");
     setStatus(
       `${pdfFiles.length} ${pdfFiles.length === 1 ? "PDF" : "PDFs"} selected.${
         ignored
@@ -56,13 +79,19 @@ export function DocumentUploader({ disabled }: { disabled: boolean }) {
     event.preventDefault();
     if (!files.length) return;
     setBusy(true);
-    const failed: string[] = [];
+    setStatusTone("neutral");
+    const failed: File[] = [];
     let queued = 0;
     for (const [index, file] of files.entries()) {
       try {
         await uploadDocument(file, roles, users, documentType, (value) =>
           setProgress({
             ...value,
+            percentage: batchUploadPercentage(
+              index,
+              files.length,
+              value.percentage,
+            ),
             message:
               files.length > 1
                 ? `Document ${index + 1} of ${files.length}: ${value.message}`
@@ -71,15 +100,21 @@ export function DocumentUploader({ disabled }: { disabled: boolean }) {
         );
         queued += 1;
       } catch {
-        failed.push(file.name);
+        failed.push(file);
       }
     }
     setStatus(
       failed.length
-        ? `${queued} of ${files.length} saved. Failed: ${failed.join(", ")}.`
+        ? `${queued} of ${files.length} saved. Retry: ${failed.map((file) => file.name).join(", ")}.`
         : `${queued} ${queued === 1 ? "document is" : "documents are"} saved and waiting for release.`,
     );
-    if (!failed.length) setFiles([]);
+    setStatusTone(failed.length ? "error" : "success");
+    setFiles(failed);
+    if (!failed.length) {
+      setSelectionSource(null);
+      setFolderName("");
+    }
+    setProgress(null);
     await queryClient.invalidateQueries({ queryKey: ["compute", "held-jobs"] });
     setBusy(false);
   }
@@ -97,6 +132,7 @@ export function DocumentUploader({ disabled }: { disabled: boolean }) {
       </p>
       <form className="upload-form" onSubmit={(event) => void submit(event)}>
         <FormField
+          className="document-type-field"
           label="Document type"
           hint="Auto-detect classifies each document independently. Select a type only to override detection for every selected file."
         >
@@ -117,7 +153,9 @@ export function DocumentUploader({ disabled }: { disabled: boolean }) {
           </Select>
         </FormField>
         <div className="file-source-grid">
-          <label className="file-dropzone">
+          <label
+            className={`file-dropzone ${selectionSource === "documents" ? "selected" : ""}`}
+          >
             <Input
               aria-label="Choose individual documents"
               type="file"
@@ -129,7 +167,7 @@ export function DocumentUploader({ disabled }: { disabled: boolean }) {
               ↑
             </span>
             <strong>
-              {files.length
+              {selectionSource === "documents" && files.length
                 ? files.length === 1
                   ? files[0]?.name
                   : `${files.length} documents selected`
@@ -140,7 +178,9 @@ export function DocumentUploader({ disabled }: { disabled: boolean }) {
               PDF, DOCX, PPTX, XLSX, TXT, PNG, JPEG, or WebP · up to 25 MB each
             </small>
           </label>
-          <label className="file-dropzone folder-dropzone">
+          <label
+            className={`file-dropzone folder-dropzone ${selectionSource === "folder" ? "selected" : ""}`}
+          >
             <Input
               aria-label="Choose a folder of PDF files"
               type="file"
@@ -152,8 +192,16 @@ export function DocumentUploader({ disabled }: { disabled: boolean }) {
             <span className="upload-icon" aria-hidden="true">
               ▣
             </span>
-            <strong>Choose a PDF folder</strong>
-            <span>Include nested folders</span>
+            <strong>
+              {selectionSource === "folder" && files.length
+                ? folderName || "Selected PDF folder"
+                : "Choose a PDF folder"}
+            </strong>
+            <span>
+              {selectionSource === "folder" && files.length
+                ? `${files.length} PDF ${files.length === 1 ? "file" : "files"} contained · ready to upload`
+                : "Include nested folders"}
+            </span>
             <small>
               Only PDF files are selected; every other file is ignored
             </small>
@@ -182,28 +230,39 @@ export function DocumentUploader({ disabled }: { disabled: boolean }) {
             </FormField>
           </fieldset>
         </details>
-        <div className="upload-status" role="status">
-          ⓘ {progress?.message ?? status}
+        <div
+          className={`upload-status ${statusTone} ${busy ? "busy" : ""}`}
+          role="status"
+        >
+          <span aria-hidden="true">{statusTone === "success" ? "✓" : "ⓘ"}</span>
+          {progress?.message ?? status}
         </div>
-        {progress && (
-          <div className="upload-progress">
-            <ProgressBar label="Upload" value={progress.upload} showValue />
-            <ProgressBar
-              label="Processing"
-              value={progress.indexing}
-              showValue
-            />
-          </div>
-        )}
+        {progress &&
+          (files.length > 1 ||
+            (progress.phase === "uploading" && progress.percentage < 100)) && (
+            <div className="upload-progress">
+              <ProgressBar
+                label={
+                  selectionSource === "folder"
+                    ? "Folder upload"
+                    : "Batch upload"
+                }
+                value={progress.percentage}
+                showValue
+              />
+            </div>
+          )}
         <Button
           variant="primary"
           type="submit"
           disabled={disabled || !files.length}
           busy={busy}
-          busyLabel={<span>Uploading…</span>}
+          busyLabel={<span>Securing documents…</span>}
         >
           <span>
-            Upload and hold{files.length > 1 ? ` ${files.length}` : ""}
+            {files.length
+              ? `Upload and hold${files.length > 1 ? ` ${files.length}` : ""}`
+              : "Choose documents to upload"}
           </span>
         </Button>
       </form>

@@ -103,6 +103,11 @@ class DeleteResponse(BaseModel):
     status: str
 
 
+class BulkDeleteResponse(BaseModel):
+    deleted_count: int
+    status: str
+
+
 class IndexedDocumentResponse(BaseModel):
     document_id: str
     document_name: str

@@ -9,26 +9,49 @@ export const listDocumentSchemas = () =>
     {},
     "Unable to load document types.",
   );
-export const listDocuments = () =>
-  api.json<IndexedDocument[]>(
-    "/v1/admin/documents",
-    {},
-    "Unable to load indexed documents.",
-  );
+export async function listDocuments() {
+  const pageSize = 500;
+  const documents: IndexedDocument[] = [];
+  for (let offset = 0; ; offset += pageSize) {
+    const page = await api.json<IndexedDocument[]>(
+      `/v1/admin/documents?limit=${pageSize}&offset=${offset}`,
+      {},
+      "Unable to load indexed documents.",
+    );
+    documents.push(...page);
+    if (page.length < pageSize) return documents;
+  }
+}
 export const deleteDocument = (id: string) =>
   api.json<{ document_id: string; status: string }>(
     `/v1/documents/${id}`,
     { method: "DELETE" },
     "Unable to delete the document.",
   );
+export const deleteAllDocuments = () =>
+  api.json<{ deleted_count: number; status: string }>(
+    "/v1/admin/documents",
+    { method: "DELETE" },
+    "Unable to delete all documents.",
+  );
 
 export interface UploadProgress {
-  upload: number;
-  indexing: number;
+  phase: "uploading" | "securing";
+  percentage: number;
   message: string;
 }
 export interface UploadResult {
   job_id: string;
+}
+
+export function batchUploadPercentage(
+  fileIndex: number,
+  fileCount: number,
+  filePercentage: number,
+) {
+  if (fileCount <= 0) return 0;
+  const boundedFilePercentage = Math.min(Math.max(filePercentage, 0), 100);
+  return Math.min(100, (fileIndex * 100 + boundedFilePercentage) / fileCount);
 }
 
 export function uploadDocument(
@@ -66,9 +89,9 @@ export function uploadDocument(
           complete = { job_id: event.job_id };
         if (event.type === "progress")
           onProgress({
-            upload: 100,
-            indexing: event.percentage ?? 0,
-            message: event.message || `Saving ${file.name}…`,
+            phase: "securing",
+            percentage: 100,
+            message: event.message || `Securing ${file.name}…`,
           });
       }
     }
@@ -89,16 +112,16 @@ export function uploadDocument(
     request.upload.addEventListener("progress", (event) => {
       if (event.lengthComputable)
         onProgress({
-          upload: (event.loaded / event.total) * 100,
-          indexing: 0,
+          phase: "uploading",
+          percentage: (event.loaded / event.total) * 100,
           message: `Uploading ${file.name}…`,
         });
     });
     request.upload.addEventListener("load", () =>
       onProgress({
-        upload: 100,
-        indexing: 0,
-        message: `Upload complete. Saving ${file.name} for compute…`,
+        phase: "securing",
+        percentage: 100,
+        message: `Upload complete. Securing ${file.name}…`,
       }),
     );
     request.addEventListener("progress", () => process());
