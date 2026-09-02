@@ -1,7 +1,7 @@
 from datetime import UTC, datetime
 from uuid import uuid4
 
-from sqlalchemy import cast, func, or_, select, text
+from sqlalchemy import cast, delete, func, or_, select, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -141,6 +141,17 @@ async def mark_documents_deleted(session: AsyncSession, records: list[DocumentRe
     deleted_at = datetime.now(UTC)
     for record in records:
         record.deleted_at = deleted_at
+    await session.commit()
+
+
+async def delete_document_record(session: AsyncSession, record: DocumentRecord) -> None:
+    await session.execute(
+        delete(IngestionJobRecord).where(
+            IngestionJobRecord.tenant_id == record.tenant_id,
+            IngestionJobRecord.result_document_id == record.document_id,
+        )
+    )
+    await session.delete(record)
     await session.commit()
 
 

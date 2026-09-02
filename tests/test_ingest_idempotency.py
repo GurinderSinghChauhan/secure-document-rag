@@ -1,6 +1,6 @@
 from datetime import UTC, datetime
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -59,7 +59,7 @@ async def test_content_hash_lookup_can_include_soft_deleted_documents() -> None:
 
 
 @pytest.mark.asyncio
-async def test_delete_then_reupload_restores_and_reclassifies_document(monkeypatch) -> None:
+async def test_deleted_duplicate_is_purged_before_reupload_and_reclassifies(monkeypatch) -> None:
     deleted_at = datetime.now(UTC)
     document = DocumentRecord(
         document_id="00000000-0000-0000-0000-000000000001",
@@ -75,6 +75,8 @@ async def test_delete_then_reupload_restores_and_reclassifies_document(monkeypat
         deleted_at=deleted_at,
     )
     session = AsyncMock()
+    session.add = MagicMock()
+    session.scalar = AsyncMock(return_value=document)
     delete_document = AsyncMock()
     upsert_document = AsyncMock()
     extract_metadata = AsyncMock(return_value={"invoice_number": "INV-42", "total_amount": "1250.00"})
@@ -112,37 +114,36 @@ async def test_delete_then_reupload_restores_and_reclassifies_document(monkeypat
             [],
             Principal(tenant_id="tenant-a", user_id="user-a", roles=["admin"]),
             session,
-            document,
+            None,
         )
     ]
 
-    assert document.deleted_at is None
-    assert document.document_name == "restored.pdf"
-    assert document.document_type == "accounts_payable.invoice"
-    assert document.schema_version == 2
-    assert document.classification_status == "confirmed"
-    assert document.classification_source == "automatic"
-    assert document.classification_confidence == 0.93
-    assert document.extraction_status == "completed"
-    assert document.extracted_metadata == {"invoice_number": "INV-42", "total_amount": "1250.00"}
     assert any(event.get("stage") == "metadata_extraction" for event in events)
     assert events[-1]["percentage"] == 100
-    assert events[-1]["document_id"] == document.document_id
-    assert events[-1]["message"] == "Document was restored and re-indexed"
-    delete_document.assert_awaited_once_with("tenant-a", document.document_id)
-    assert upsert_document.await_args.args[1] == document.document_id
+    assert events[-1]["document_id"] != document.document_id
+    assert events[-1]["message"] == "Document is searchable"
+    delete_document.assert_not_awaited()
+    assert upsert_document.await_args.args[1] == events[-1]["document_id"]
     extract_metadata.assert_awaited_once()
     assert extract_metadata.await_args.args[0] == "Invoice"
     assert "invoice_number" in extract_metadata.await_args.args[1]
     classify_document.assert_awaited_once()
+    session.delete.assert_awaited_once_with(document)
+    session.flush.assert_awaited_once()
+    assert session.add.call_args.args[0].document_type == "accounts_payable.invoice"
 
 
 @pytest.mark.asyncio
-async def test_reupload_without_delete_reclassifies_and_updates_metadata(monkeypatch) -> None:
+async def test_reupload_without_delete_keeps_completed_classification_and_updates_metadata(monkeypatch) -> None:
     document = DocumentRecord(
         document_id="00000000-0000-0000-0000-000000000002",
         tenant_id="tenant-a",
-        document_name="unknown.pdf",
+        document_name="invoice.pdf",
+        document_type="accounts_payable.invoice",
+        schema_version=2,
+        classification_status="confirmed",
+        classification_source="automatic",
+        classification_confidence=0.91,
         content_type="application/pdf",
         content_sha256="b" * 64,
         size_bytes=100,
@@ -179,10 +180,11 @@ async def test_reupload_without_delete_reclassifies_and_updates_metadata(monkeyp
     )
     monkeypatch.setattr(main, "chunk_text", lambda _text: ["invoice text"])
     monkeypatch.setattr(main.model_server, "embed_batches", embed_batches)
+    classify_document = AsyncMock(return_value=("contracts.service_agreement", 0.99))
     monkeypatch.setattr(
         main.model_server,
         "classify_document",
-        AsyncMock(return_value=("accounts_payable.invoice", 0.93)),
+        classify_document,
     )
     monkeypatch.setattr(
         main.model_server,
@@ -211,14 +213,15 @@ async def test_reupload_without_delete_reclassifies_and_updates_metadata(monkeyp
     assert document.document_type == "accounts_payable.invoice"
     assert document.classification_status == "confirmed"
     assert document.classification_source == "automatic"
-    assert document.classification_confidence == 0.93
+    assert document.classification_confidence == 0.91
     assert document.extraction_status == "completed"
     assert document.extracted_metadata == {"invoice_number": "INV-42"}
     assert [event.get("stage") for event in events if event.get("type") == "progress"][:3] == [
         "extracting",
-        "classification",
         "metadata_extraction",
+        "chunking",
     ]
+    classify_document.assert_not_awaited()
 
 
 @pytest.mark.asyncio

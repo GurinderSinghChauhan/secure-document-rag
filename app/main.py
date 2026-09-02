@@ -28,7 +28,7 @@ from .models import BulkDeleteResponse, ChatDetail, ChatMessage, ChatSummary, Cl
 from .providers import ModelClient
 from .super_admin import router as super_admin_router
 from .trials import is_pdf, require_active_trial, reserve_pdf_trial_slot, reserve_question_trial_slot
-from .repository import add_chat_message, create_chat, database_is_ready, get_chat, get_document, get_document_by_content_hash, get_latest_document_source, list_authorized_documents, list_chat_messages, list_chats, list_documents, mark_document_deleted, mark_documents_deleted, search_authorized_documents
+from .repository import add_chat_message, create_chat, database_is_ready, delete_document_record, get_chat, get_document, get_document_by_content_hash, get_latest_document_source, list_authorized_documents, list_chat_messages, list_chats, list_documents, mark_documents_deleted, search_authorized_documents
 from .vector_store import VectorStore
 from .version import APP_COMMIT, APP_VERSION
 
@@ -304,11 +304,33 @@ async def index_document_events(
     if len(chunks) > settings.max_document_chunks:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Document exceeds configured chunk limit")
 
-    resolved_document_type = document_type
-    classification_status = "confirmed" if document_type else "unclassified"
-    classification_source = "manual" if document_type else "automatic"
-    classification_confidence: float | None = None
-    if document_type is None:
+    existing_classification_is_complete = (
+        existing_document is not None
+        and existing_document.deleted_at is None
+        and (existing_document.classification_status or "unclassified") == "confirmed"
+    )
+    resolved_document_type = (
+        document_type
+        or (existing_document.document_type if existing_classification_is_complete else None)
+    )
+    classification_status = (
+        "confirmed"
+        if document_type or existing_classification_is_complete
+        else "unclassified"
+    )
+    classification_source = (
+        "manual"
+        if document_type
+        else (existing_document.classification_source or "automatic")
+        if existing_classification_is_complete
+        else "automatic"
+    )
+    classification_confidence: float | None = (
+        existing_document.classification_confidence
+        if existing_classification_is_complete
+        else None
+    )
+    if document_type is None and not existing_classification_is_complete:
         yield {
             "type": "progress",
             "percentage": 25,
@@ -366,7 +388,6 @@ async def index_document_events(
             "message": f"Embedded {completed} of {total} chunks",
         }
 
-    was_deleted = existing_document is not None and existing_document.deleted_at is not None
     document_id = existing_document.document_id if existing_document is not None else str(uuid4())
     yield {"type": "progress", "percentage": 90, "stage": "vector_storage", "message": "Saving searchable vectors"}
     if existing_document is not None:
@@ -375,6 +396,15 @@ async def index_document_events(
     yield {"type": "progress", "percentage": 96, "stage": "metadata", "message": "Saving document metadata"}
     try:
         if existing_document is None:
+            soft_deleted_duplicate = await get_document_by_content_hash(
+                session,
+                principal.tenant_id,
+                content_sha256,
+                include_deleted=True,
+            )
+            if soft_deleted_duplicate is not None and soft_deleted_duplicate.deleted_at is not None:
+                await session.delete(soft_deleted_duplicate)
+                await session.flush()
             session.add(DocumentRecord(document_id=document_id, tenant_id=principal.tenant_id, document_name=document_name, document_type=resolved_document_type, schema_version=SCHEMA_VERSION, classification_status=classification_status, classification_source=classification_source, classification_confidence=classification_confidence, extraction_status=extraction_status, extracted_metadata=extracted_metadata, content_type=content_type, content_sha256=content_sha256, size_bytes=len(content), chunk_count=len(chunks), allowed_roles=allowed_roles, allowed_users=allowed_users, created_by=principal.user_id))
         else:
             existing_document.document_name = document_name
@@ -390,7 +420,6 @@ async def index_document_events(
             existing_document.chunk_count = len(chunks)
             existing_document.allowed_roles = allowed_roles
             existing_document.allowed_users = allowed_users
-            existing_document.deleted_at = None
         await session.commit()
     except IntegrityError as error:
         await session.rollback()
@@ -402,7 +431,7 @@ async def index_document_events(
         return
     await record(
         session,
-        "document_restored" if was_deleted else "document_reindexed" if existing_document is not None else "document_ingested",
+        "document_reindexed" if existing_document is not None else "document_ingested",
         principal.tenant_id,
         principal.user_id,
         document_id=document_id,
@@ -422,7 +451,7 @@ async def index_document_events(
         "tables_indexed": parsed.table_count,
         "visuals_indexed": visuals_indexed,
         "reindexed": existing_document is not None,
-        "message": "Document was restored and re-indexed" if was_deleted else "Document was re-indexed" if existing_document is not None else "Document is searchable",
+        "message": "Document was re-indexed" if existing_document is not None else "Document is searchable",
     }
 
 
@@ -452,7 +481,7 @@ async def run_local_compute_session(compute_session_id: str, job_ids: list[str])
             job.attempt_count = attempt_count
             await session.commit()
             principal = Principal(tenant_id=job.tenant_id, user_id=job.created_by, roles=job.allowed_roles)
-            existing = await get_document_by_content_hash(session, job.tenant_id, job.content_sha256, include_deleted=True)
+            existing = await get_document_by_content_hash(session, job.tenant_id, job.content_sha256)
             try:
                 async for event in index_document_events(job.content, job.content_type, job.content_sha256, job.document_name, job.allowed_roles, job.allowed_users, principal, session, existing, job.document_type):
                     elapsed = monotonic() - started
@@ -1005,7 +1034,7 @@ async def delete_document(
     if document is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
     await vectors.delete_document(principal.tenant_id, document_id)
-    await mark_document_deleted(session, document)
+    await delete_document_record(session, document)
     await record(session, "document_deleted", principal.tenant_id, principal.user_id, document_id=document_id)
     return DeleteResponse(document_id=document_id, status="deleted")
 

@@ -5,7 +5,7 @@ import pytest
 from app.database import DocumentRecord
 from app.main import classify_document_manually, delete_all_documents, delete_document, list_indexed_documents
 from app.models import ClassifyDocumentRequest, Principal
-from app.repository import get_latest_document_source
+from app.repository import delete_document_record, get_latest_document_source
 
 
 class DocumentSession:
@@ -16,6 +16,22 @@ class DocumentSession:
     async def scalars(self, statement):
         self.statement = statement
         return self.documents
+
+
+class DeleteSession:
+    def __init__(self):
+        self.statement = None
+        self.deleted = None
+        self.committed = False
+
+    async def execute(self, statement):
+        self.statement = statement
+
+    async def delete(self, record):
+        self.deleted = record
+
+    async def commit(self):
+        self.committed = True
 
 
 def admin(tenant_id="org-a"):
@@ -89,6 +105,58 @@ async def test_document_delete_uses_calling_admin_tenant(monkeypatch):
         await delete_document("document-from-another-org", admin("org-a"), object())
 
     assert requested == {"tenant_id": "org-a", "document_id": "document-from-another-org"}
+
+
+@pytest.mark.asyncio
+async def test_document_delete_removes_document_record(monkeypatch):
+    document = DocumentRecord(document_id="document-a", tenant_id="org-a")
+    calls = {}
+
+    async def get_active(_session, tenant_id, document_id):
+        calls["lookup"] = (tenant_id, document_id)
+        return document
+
+    async def delete_vectors(tenant_id, document_id):
+        calls["vectors"] = (tenant_id, document_id)
+
+    async def delete_record(_session, record):
+        calls["record"] = record
+
+    async def audit(_session, action, tenant_id, user_id, **metadata):
+        calls["audit"] = (action, tenant_id, user_id, metadata)
+
+    monkeypatch.setattr("app.main.get_document", get_active)
+    monkeypatch.setattr("app.main.vectors.delete_document", delete_vectors)
+    monkeypatch.setattr("app.main.delete_document_record", delete_record)
+    monkeypatch.setattr("app.main.record", audit)
+
+    result = await delete_document("document-a", admin("org-a"), object())
+
+    assert result.status == "deleted"
+    assert calls["lookup"] == ("org-a", "document-a")
+    assert calls["vectors"] == ("org-a", "document-a")
+    assert calls["record"] is document
+    assert calls["audit"] == (
+        "document_deleted",
+        "org-a",
+        "admin-a",
+        {"document_id": "document-a"},
+    )
+
+
+@pytest.mark.asyncio
+async def test_document_record_delete_removes_retained_pipeline_sources():
+    document = DocumentRecord(document_id="document-a", tenant_id="org-a")
+    session = DeleteSession()
+
+    await delete_document_record(session, document)
+
+    sql = str(session.statement.compile(compile_kwargs={"literal_binds": True}))
+    assert "DELETE FROM ingestion_jobs" in sql
+    assert "ingestion_jobs.tenant_id = 'org-a'" in sql
+    assert "ingestion_jobs.result_document_id = 'document-a'" in sql
+    assert session.deleted is document
+    assert session.committed is True
 
 
 @pytest.mark.asyncio
