@@ -156,13 +156,13 @@ export function uploadDocument(
   });
 }
 
-export const reindexDocument = (id: string, documentType: string) =>
+export const classifyDocument = (id: string, documentType: string) =>
   api.json<UploadResult>(
-    `/v1/admin/documents/${id}/reindex`,
+    `/v1/admin/documents/${id}/classification`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ document_type: documentType || null }),
+      body: JSON.stringify({ document_type: documentType }),
     },
-    "Unable to queue the document for re-indexing.",
+    "Unable to classify the document.",
   );

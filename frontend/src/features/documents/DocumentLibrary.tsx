@@ -1,12 +1,12 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  classifyDocument,
   deleteAllDocuments,
   deleteDocument,
   documentKeys,
   listDocuments,
   listDocumentSchemas,
-  reindexDocument,
   schemaKeys,
 } from "./api";
 import { releaseJobs } from "../compute/api";
@@ -54,7 +54,7 @@ export function DocumentLibrary({
     queryKey: schemaKeys.all,
     queryFn: listDocumentSchemas,
   });
-  const reindex = useMutation({
+  const classify = useMutation({
     mutationFn: async ({
       documentId,
       documentType,
@@ -62,7 +62,7 @@ export function DocumentLibrary({
       documentId: string;
       documentType: string;
     }) => {
-      const job = await reindexDocument(documentId, documentType);
+      const job = await classifyDocument(documentId, documentType);
       return releaseJobs(
         [job.job_id],
         Math.max(job.recommended_gpu_minutes, 1),
@@ -173,56 +173,59 @@ export function DocumentLibrary({
               </small>
             </div>
             <div className="indexed-document-actions">
-              <Select
-                aria-label={`Classification for ${document.document_name}`}
-                value={
-                  classificationChoices[document.document_id] ??
-                  document.document_type ??
-                  ""
-                }
-                onChange={(event) =>
-                  setClassificationChoices((current) => ({
-                    ...current,
-                    [document.document_id]: event.target.value,
-                  }))
-                }
-              >
-                <option value="">Auto-detect document type</option>
-                {schemas.data?.map((industry) => (
-                  <optgroup label={industry.label} key={industry.key}>
-                    {industry.document_types.map((documentType) => (
-                      <option value={documentType.key} key={documentType.key}>
-                        {documentType.label}
-                      </option>
+              {(document.classification_status === "unclassified" ||
+                document.classification_status === "failed") && (
+                <>
+                  <Select
+                    aria-label={`Classification for ${document.document_name}`}
+                    value={classificationChoices[document.document_id] ?? ""}
+                    onChange={(event) =>
+                      setClassificationChoices((current) => ({
+                        ...current,
+                        [document.document_id]: event.target.value,
+                      }))
+                    }
+                  >
+                    <option value="">Select document type</option>
+                    {schemas.data?.map((industry) => (
+                      <optgroup label={industry.label} key={industry.key}>
+                        {industry.document_types.map((documentType) => (
+                          <option
+                            value={documentType.key}
+                            key={documentType.key}
+                          >
+                            {documentType.label}
+                          </option>
+                        ))}
+                      </optgroup>
                     ))}
-                  </optgroup>
-                ))}
-              </Select>
-              <Button
-                variant="text"
-                type="button"
-                disabled={
-                  reindex.isPending || remove.isPending || removeAll.isPending
-                }
-                busy={
-                  reindex.isPending &&
-                  reindex.variables?.documentId === document.document_id
-                }
-                busyLabel="Queueing…"
-                onClick={() =>
-                  reindex.mutate({
-                    documentId: document.document_id,
-                    documentType:
-                      classificationChoices[document.document_id] ??
-                      document.document_type ??
-                      "",
-                  })
-                }
-              >
-                {document.classification_status === "confirmed"
-                  ? "Reclassify & re-index"
-                  : "Classify & re-index"}
-              </Button>
+                  </Select>
+                  <Button
+                    variant="text"
+                    type="button"
+                    disabled={
+                      !classificationChoices[document.document_id] ||
+                      classify.isPending ||
+                      remove.isPending ||
+                      removeAll.isPending
+                    }
+                    busy={
+                      classify.isPending &&
+                      classify.variables?.documentId === document.document_id
+                    }
+                    busyLabel="Starting pipeline…"
+                    onClick={() =>
+                      classify.mutate({
+                        documentId: document.document_id,
+                        documentType:
+                          classificationChoices[document.document_id] ?? "",
+                      })
+                    }
+                  >
+                    Classify & complete indexing
+                  </Button>
+                </>
+              )}
               <Button
                 variant="text"
                 className="danger-action"
@@ -250,9 +253,9 @@ export function DocumentLibrary({
           </p>
         )}
       </div>
-      {reindex.error instanceof Error && (
+      {classify.error instanceof Error && (
         <StatusMessage className="upload-status error">
-          {reindex.error.message}
+          {classify.error.message}
         </StatusMessage>
       )}
     </Panel>

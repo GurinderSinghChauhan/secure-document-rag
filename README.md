@@ -101,7 +101,7 @@ The command prompts for the password and never accepts it through arguments or e
 
 `POST /v1/documents` saves `text/plain`, PDF, DOCX, PPTX, XLSX, PNG, JPEG, or WebP request bodies as durable `held_for_compute` jobs. It never starts GPU capacity. An authenticated administrator must explicitly enable dispatch, open a bounded compute session, and release selected jobs. MinerU and model inference run only after that release.
 
-Indexing is idempotent per tenant and file content. Releasing a repeat upload rebuilds vectors under the existing document ID and updates its metadata and ACLs. The admin console's **Upload and index** action uploads sequentially and releases all successful files into one bounded compute session. `POST /v1/admin/documents/{id}/reindex` reuses the retained completed-job source so an administrator can rerun automatic classification or apply a corrected manual type while rebuilding vectors and extracted metadata.
+Indexing is idempotent per tenant and file content. Uploading the same file again—with or without deleting its current document first—rebuilds vectors under the existing document ID and reruns automatic classification, field extraction, metadata, and ACL updates. The admin console's **Upload and index** action uploads sequentially and releases all successful files into one bounded compute session. For a document whose automatic classification is `unclassified` or `failed`, `POST /v1/admin/documents/{id}/classification` queues the retained source with a manual type and completes field extraction through indexing; confirmed and review-required documents are rejected by that endpoint.
 
 - `X-Document-Name` (required)
 - `X-Allowed-Roles`: comma-separated role list

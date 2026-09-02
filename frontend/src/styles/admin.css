@@ -471,13 +471,15 @@
   color: var(--text-tertiary);
 }
 .indexed-document-actions {
-  display: grid;
-  grid-template-columns: minmax(210px, 1fr) auto auto;
+  display: flex;
   align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
   gap: 8px;
   min-width: min(100%, 540px);
 }
 .indexed-document-actions select {
+  flex: 1 1 210px;
   min-width: 0;
 }
 .empty-admin-list {
@@ -626,7 +628,8 @@
   }
 
   .indexed-document-actions {
-    grid-template-columns: 1fr;
+    align-items: stretch;
+    flex-direction: column;
     width: 100%;
   }
 

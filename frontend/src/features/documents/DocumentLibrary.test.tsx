@@ -66,7 +66,7 @@ test("confirms and deletes every organization document in one request", async ()
   ).toBeVisible();
 });
 
-test("manually classifies and re-indexes an unclassified document", async () => {
+test("manually classifies an unclassified document and starts the remaining pipeline", async () => {
   const onComputeStarted = vi.fn();
   let requestedType: string | null = null;
   server.use(
@@ -108,20 +108,23 @@ test("manually classifies and re-indexes an unclassified document", async () => 
         },
       ]),
     ),
-    http.post("/v1/admin/documents/document-1/reindex", async ({ request }) => {
-      requestedType = (
-        (await request.json()) as { document_type: string | null }
-      ).document_type;
-      return HttpResponse.json(
-        {
-          job_id: "job-1",
-          state: "held_for_compute",
-          message: "Document saved and waiting.",
-          recommended_gpu_minutes: 6,
-        },
-        { status: 202 },
-      );
-    }),
+    http.post(
+      "/v1/admin/documents/document-1/classification",
+      async ({ request }) => {
+        requestedType = (
+          (await request.json()) as { document_type: string | null }
+        ).document_type;
+        return HttpResponse.json(
+          {
+            job_id: "job-1",
+            state: "held_for_compute",
+            message: "Document saved and waiting.",
+            recommended_gpu_minutes: 6,
+          },
+          { status: 202 },
+        );
+      },
+    ),
     http.post("/v1/admin/compute-sessions", () =>
       HttpResponse.json({ session_id: "session-1" }, { status: 201 }),
     ),
@@ -144,7 +147,7 @@ test("manually classifies and re-indexes an unclassified document", async () => 
     "accounts_payable.invoice",
   );
   await userEvent.click(
-    screen.getByRole("button", { name: "Classify & re-index" }),
+    screen.getByRole("button", { name: "Classify & complete indexing" }),
   );
 
   await waitFor(() => {

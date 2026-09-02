@@ -59,7 +59,7 @@ async def test_content_hash_lookup_can_include_soft_deleted_documents() -> None:
 
 
 @pytest.mark.asyncio
-async def test_reindexing_soft_deleted_content_restores_existing_row(monkeypatch) -> None:
+async def test_delete_then_reupload_restores_and_reclassifies_document(monkeypatch) -> None:
     deleted_at = datetime.now(UTC)
     document = DocumentRecord(
         document_id="00000000-0000-0000-0000-000000000001",
@@ -78,7 +78,7 @@ async def test_reindexing_soft_deleted_content_restores_existing_row(monkeypatch
     delete_document = AsyncMock()
     upsert_document = AsyncMock()
     extract_metadata = AsyncMock(return_value={"invoice_number": "INV-42", "total_amount": "1250.00"})
-    classify_document = AsyncMock()
+    classify_document = AsyncMock(return_value=("accounts_payable.invoice", 0.93))
 
     async def embed_batches(_chunks):
         yield 1, 1, [[0.1, 0.2]]
@@ -113,7 +113,6 @@ async def test_reindexing_soft_deleted_content_restores_existing_row(monkeypatch
             Principal(tenant_id="tenant-a", user_id="user-a", roles=["admin"]),
             session,
             document,
-            "accounts_payable.invoice",
         )
     ]
 
@@ -122,8 +121,8 @@ async def test_reindexing_soft_deleted_content_restores_existing_row(monkeypatch
     assert document.document_type == "accounts_payable.invoice"
     assert document.schema_version == 2
     assert document.classification_status == "confirmed"
-    assert document.classification_source == "manual"
-    assert document.classification_confidence is None
+    assert document.classification_source == "automatic"
+    assert document.classification_confidence == 0.93
     assert document.extraction_status == "completed"
     assert document.extracted_metadata == {"invoice_number": "INV-42", "total_amount": "1250.00"}
     assert any(event.get("stage") == "metadata_extraction" for event in events)
@@ -135,11 +134,11 @@ async def test_reindexing_soft_deleted_content_restores_existing_row(monkeypatch
     extract_metadata.assert_awaited_once()
     assert extract_metadata.await_args.args[0] == "Invoice"
     assert "invoice_number" in extract_metadata.await_args.args[1]
-    classify_document.assert_not_awaited()
+    classify_document.assert_awaited_once()
 
 
 @pytest.mark.asyncio
-async def test_automatic_classification_persists_type_confidence_and_metadata(monkeypatch) -> None:
+async def test_reupload_without_delete_reclassifies_and_updates_metadata(monkeypatch) -> None:
     document = DocumentRecord(
         document_id="00000000-0000-0000-0000-000000000002",
         tenant_id="tenant-a",

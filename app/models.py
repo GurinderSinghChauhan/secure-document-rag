@@ -54,8 +54,8 @@ class HeldIngestResponse(BaseModel):
     recommended_gpu_minutes: int
 
 
-class ReindexDocumentRequest(BaseModel):
-    document_type: str | None = Field(default=None, max_length=96)
+class ClassifyDocumentRequest(BaseModel):
+    document_type: str = Field(min_length=1, max_length=96)
 
 
 class IngestionJobResponse(BaseModel):

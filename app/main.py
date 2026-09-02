@@ -24,7 +24,7 @@ from .database import ComputeSessionRecord, DocumentRecord, IngestionJobRecord, 
 from .document_parser import VisualAsset, extract_document
 from .document_schemas import DOCUMENT_SCHEMAS, INDUSTRIES, SCHEMA_VERSION, require_document_schema, schema_catalog
 from .mineru import MinerUClient, supports_mineru
-from .models import BulkDeleteResponse, ChatDetail, ChatMessage, ChatSummary, ComputeSessionCreate, ComputeSessionRelease, ComputeSessionResponse, DashboardDocumentListResponse, DashboardDocumentResponse, DashboardIndustryResponse, DashboardResponse, DeleteResponse, HeldIngestResponse, IndexedDocumentResponse, IndustrySchemaResponse, IngestionJobResponse, Principal, QueryRequest, QueryResponse, ReadinessResponse, ReindexDocumentRequest, VersionResponse
+from .models import BulkDeleteResponse, ChatDetail, ChatMessage, ChatSummary, ClassifyDocumentRequest, ComputeSessionCreate, ComputeSessionRelease, ComputeSessionResponse, DashboardDocumentListResponse, DashboardDocumentResponse, DashboardIndustryResponse, DashboardResponse, DeleteResponse, HeldIngestResponse, IndexedDocumentResponse, IndustrySchemaResponse, IngestionJobResponse, Principal, QueryRequest, QueryResponse, ReadinessResponse, VersionResponse
 from .providers import ModelClient
 from .super_admin import router as super_admin_router
 from .trials import is_pdf, require_active_trial, reserve_pdf_trial_slot, reserve_question_trial_slot
@@ -830,13 +830,13 @@ async def list_indexed_documents(
 
 
 @app.post(
-    "/v1/admin/documents/{document_id}/reindex",
+    "/v1/admin/documents/{document_id}/classification",
     response_model=HeldIngestResponse,
     status_code=status.HTTP_202_ACCEPTED,
 )
-async def reindex_document(
+async def classify_document_manually(
     document_id: str,
-    payload: ReindexDocumentRequest,
+    payload: ClassifyDocumentRequest,
     principal: Principal = Depends(require_principal),
     session: AsyncSession = Depends(get_session),
 ) -> HeldIngestResponse:
@@ -845,13 +845,20 @@ async def reindex_document(
     document = await get_document(session, principal.tenant_id, document_id)
     if document is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
+    if (document.classification_status or "unclassified") not in {"unclassified", "failed"}:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Only documents that failed automatic classification can be classified manually",
+        )
+    document_type = validate_document_type(payload.document_type)
+    if document_type is None:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Document type is required")
     source = await get_latest_document_source(session, principal.tenant_id, document_id)
     if source is None:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="The original source is unavailable; upload the document again to re-index it.",
+            detail="The original source is unavailable; upload the document again to classify and index it.",
         )
-    document_type = validate_document_type(payload.document_type)
     job = await create_held_job(
         session=session,
         principal=principal,
@@ -864,13 +871,12 @@ async def reindex_document(
     )
     await record(
         session,
-        "document_reindex_queued",
+        "document_manual_classification_queued",
         principal.tenant_id,
         principal.user_id,
         document_id=document_id,
         job_id=job.job_id,
         document_type=document_type,
-        classification_source="manual" if document_type else "automatic",
     )
     return held_ingest_response(job)
 
