@@ -5,7 +5,7 @@ from sqlalchemy import cast, func, or_, select, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from .database import AuditEvent, ChatMessageRecord, ChatSessionRecord, DocumentRecord
+from .database import AuditEvent, ChatMessageRecord, ChatSessionRecord, DocumentRecord, IngestionJobRecord
 
 
 async def create_document(session: AsyncSession, record: DocumentRecord) -> None:
@@ -36,6 +36,23 @@ async def get_document(session: AsyncSession, tenant_id: str, document_id: str) 
             DocumentRecord.document_id == document_id,
             DocumentRecord.deleted_at.is_(None),
         )
+    )
+
+
+async def get_latest_document_source(
+    session: AsyncSession,
+    tenant_id: str,
+    document_id: str,
+) -> IngestionJobRecord | None:
+    return await session.scalar(
+        select(IngestionJobRecord)
+        .where(
+            IngestionJobRecord.tenant_id == tenant_id,
+            IngestionJobRecord.result_document_id == document_id,
+            IngestionJobRecord.state == "completed",
+        )
+        .order_by(IngestionJobRecord.updated_at.desc(), IngestionJobRecord.job_id.desc())
+        .limit(1)
     )
 
 

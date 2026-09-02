@@ -15,9 +15,17 @@ import {
   schemaKeys,
   uploadDocument,
   type UploadProgress,
+  type UploadResult,
 } from "./api";
+import { releaseJobs } from "../compute/api";
 
-export function DocumentUploader({ disabled }: { disabled: boolean }) {
+export function DocumentUploader({
+  disabled,
+  onComputeStarted,
+}: {
+  disabled: boolean;
+  onComputeStarted?: (sessionId: string) => void;
+}) {
   const queryClient = useQueryClient();
   const [files, setFiles] = useState<File[]>([]);
   const [selectionSource, setSelectionSource] = useState<
@@ -29,7 +37,7 @@ export function DocumentUploader({ disabled }: { disabled: boolean }) {
   const [documentType, setDocumentType] = useState("");
   const [progress, setProgress] = useState<UploadProgress | null>(null);
   const [status, setStatus] = useState(
-    "Choose documents to upload. They will remain held until you release them.",
+    "Choose documents to upload and index in one controlled action.",
   );
   const [statusTone, setStatusTone] = useState<"neutral" | "success" | "error">(
     "neutral",
@@ -49,7 +57,7 @@ export function DocumentUploader({ disabled }: { disabled: boolean }) {
     setStatus(
       nextFiles.length
         ? `${nextFiles.length} ${nextFiles.length === 1 ? "document" : "documents"} ready to upload.`
-        : "Choose documents to upload. They will remain held until you release them.",
+        : "Choose documents to upload and index in one controlled action.",
     );
   }
   function selectPdfFolder(selectedFiles: FileList | null) {
@@ -81,34 +89,66 @@ export function DocumentUploader({ disabled }: { disabled: boolean }) {
     setBusy(true);
     setStatusTone("neutral");
     const failed: File[] = [];
-    let queued = 0;
+    const uploaded: UploadResult[] = [];
     for (const [index, file] of files.entries()) {
       try {
-        await uploadDocument(file, roles, users, documentType, (value) =>
-          setProgress({
-            ...value,
-            percentage: batchUploadPercentage(
-              index,
-              files.length,
-              value.percentage,
-            ),
-            message:
-              files.length > 1
-                ? `Document ${index + 1} of ${files.length}: ${value.message}`
-                : value.message,
-          }),
+        const result = await uploadDocument(
+          file,
+          roles,
+          users,
+          documentType,
+          (value) =>
+            setProgress({
+              ...value,
+              percentage: batchUploadPercentage(
+                index,
+                files.length,
+                value.percentage,
+              ),
+              message:
+                files.length > 1
+                  ? `Document ${index + 1} of ${files.length}: ${value.message}`
+                  : value.message,
+            }),
         );
-        queued += 1;
+        uploaded.push(result);
       } catch {
         failed.push(file);
       }
     }
-    setStatus(
-      failed.length
-        ? `${queued} of ${files.length} saved. Retry: ${failed.map((file) => file.name).join(", ")}.`
-        : `${queued} ${queued === 1 ? "document is" : "documents are"} saved and waiting for release.`,
-    );
-    setStatusTone(failed.length ? "error" : "success");
+    let releaseError: Error | null = null;
+    if (uploaded.length) {
+      try {
+        const session = await releaseJobs(
+          uploaded.map((result) => result.job_id),
+          uploaded.reduce(
+            (total, result) => total + result.recommended_gpu_minutes,
+            0,
+          ),
+        );
+        onComputeStarted?.(session.session_id);
+      } catch (error) {
+        releaseError =
+          error instanceof Error
+            ? error
+            : new Error("Unable to start document indexing.");
+      }
+    }
+    const uploadedCount = uploaded.length;
+    if (releaseError) {
+      setStatus(
+        `${uploadedCount} ${uploadedCount === 1 ? "document was" : "documents were"} uploaded but remain held. ${releaseError.message}`,
+      );
+    } else if (failed.length) {
+      setStatus(
+        `${uploadedCount} of ${files.length} uploaded and indexing. Retry: ${failed.map((file) => file.name).join(", ")}.`,
+      );
+    } else {
+      setStatus(
+        `${uploadedCount} ${uploadedCount === 1 ? "document is" : "documents are"} uploaded and indexing.`,
+      );
+    }
+    setStatusTone(releaseError || failed.length ? "error" : "success");
     setFiles(failed);
     if (!failed.length) {
       setSelectionSource(null);
@@ -127,8 +167,8 @@ export function DocumentUploader({ disabled }: { disabled: boolean }) {
         titleId="upload-title"
       />
       <p className="panel-description">
-        Files are encrypted and held safely. Nothing starts compute until you
-        explicitly release it.
+        Files are encrypted, uploaded, and released into bounded compute from
+        the same action.
       </p>
       <form className="upload-form" onSubmit={(event) => void submit(event)}>
         <FormField
@@ -257,11 +297,11 @@ export function DocumentUploader({ disabled }: { disabled: boolean }) {
           type="submit"
           disabled={disabled || !files.length}
           busy={busy}
-          busyLabel={<span>Securing documents…</span>}
+          busyLabel={<span>Uploading and starting index…</span>}
         >
           <span>
             {files.length
-              ? `Upload and hold${files.length > 1 ? ` ${files.length}` : ""}`
+              ? `Upload and index${files.length > 1 ? ` ${files.length}` : ""}`
               : "Choose documents to upload"}
           </span>
         </Button>

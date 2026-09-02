@@ -51,6 +51,11 @@ class HeldIngestResponse(BaseModel):
     job_id: str
     state: str = "held_for_compute"
     message: str
+    recommended_gpu_minutes: int
+
+
+class ReindexDocumentRequest(BaseModel):
+    document_type: str | None = Field(default=None, max_length=96)
 
 
 class IngestionJobResponse(BaseModel):

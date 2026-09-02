@@ -5,13 +5,18 @@ import {
   deleteDocument,
   documentKeys,
   listDocuments,
+  listDocumentSchemas,
+  reindexDocument,
+  schemaKeys,
 } from "./api";
+import { releaseJobs } from "../compute/api";
 import {
   Button,
   FormField,
   Input,
   Panel,
   PanelHeader,
+  Select,
   StatusMessage,
 } from "../../components/ui";
 
@@ -21,8 +26,15 @@ function formatBytes(size: number) {
   return `${(size / 1024 ** 2).toFixed(1)} MB`;
 }
 
-export function DocumentLibrary() {
+export function DocumentLibrary({
+  onComputeStarted,
+}: {
+  onComputeStarted?: (sessionId: string) => void;
+}) {
   const [search, setSearch] = useState("");
+  const [classificationChoices, setClassificationChoices] = useState<
+    Record<string, string>
+  >({});
   const queryClient = useQueryClient();
   const documents = useQuery({
     queryKey: documentKeys.indexed,
@@ -37,6 +49,32 @@ export function DocumentLibrary() {
     mutationFn: deleteAllDocuments,
     onSuccess: () =>
       queryClient.invalidateQueries({ queryKey: documentKeys.indexed }),
+  });
+  const schemas = useQuery({
+    queryKey: schemaKeys.all,
+    queryFn: listDocumentSchemas,
+  });
+  const reindex = useMutation({
+    mutationFn: async ({
+      documentId,
+      documentType,
+    }: {
+      documentId: string;
+      documentType: string;
+    }) => {
+      const job = await reindexDocument(documentId, documentType);
+      return releaseJobs(
+        [job.job_id],
+        Math.max(job.recommended_gpu_minutes, 1),
+      );
+    },
+    onSuccess: (session) => {
+      onComputeStarted?.(session.session_id);
+      void queryClient.invalidateQueries({ queryKey: documentKeys.indexed });
+      void queryClient.invalidateQueries({
+        queryKey: ["compute", "held-jobs"],
+      });
+    },
   });
   const matches = (documents.data ?? []).filter((document) =>
     [
@@ -126,23 +164,82 @@ export function DocumentLibrary() {
                 Roles: {document.allowed_roles.join(", ") || "none"} · Explicit
                 users: {document.allowed_users.join(", ") || "none"}
               </small>
+              <small>
+                Classification:{" "}
+                {document.classification_status.replaceAll("_", " ")}
+                {typeof document.classification_confidence === "number"
+                  ? ` · ${Math.round(document.classification_confidence * 100)}% confidence`
+                  : ""}
+              </small>
             </div>
-            <Button
-              variant="text"
-              className="danger-action"
-              type="button"
-              disabled={remove.isPending || removeAll.isPending}
-              onClick={() => {
-                if (
-                  confirm(
-                    `Delete “${document.document_name}” from this organization's searchable index? This cannot be undone.`,
+            <div className="indexed-document-actions">
+              <Select
+                aria-label={`Classification for ${document.document_name}`}
+                value={
+                  classificationChoices[document.document_id] ??
+                  document.document_type ??
+                  ""
+                }
+                onChange={(event) =>
+                  setClassificationChoices((current) => ({
+                    ...current,
+                    [document.document_id]: event.target.value,
+                  }))
+                }
+              >
+                <option value="">Auto-detect document type</option>
+                {schemas.data?.map((industry) => (
+                  <optgroup label={industry.label} key={industry.key}>
+                    {industry.document_types.map((documentType) => (
+                      <option value={documentType.key} key={documentType.key}>
+                        {documentType.label}
+                      </option>
+                    ))}
+                  </optgroup>
+                ))}
+              </Select>
+              <Button
+                variant="text"
+                type="button"
+                disabled={
+                  reindex.isPending || remove.isPending || removeAll.isPending
+                }
+                busy={
+                  reindex.isPending &&
+                  reindex.variables?.documentId === document.document_id
+                }
+                busyLabel="Queueing…"
+                onClick={() =>
+                  reindex.mutate({
+                    documentId: document.document_id,
+                    documentType:
+                      classificationChoices[document.document_id] ??
+                      document.document_type ??
+                      "",
+                  })
+                }
+              >
+                {document.classification_status === "confirmed"
+                  ? "Reclassify & re-index"
+                  : "Classify & re-index"}
+              </Button>
+              <Button
+                variant="text"
+                className="danger-action"
+                type="button"
+                disabled={remove.isPending || removeAll.isPending}
+                onClick={() => {
+                  if (
+                    confirm(
+                      `Delete “${document.document_name}” from this organization's searchable index? This cannot be undone.`,
+                    )
                   )
-                )
-                  remove.mutate(document.document_id);
-              }}
-            >
-              Delete
-            </Button>
+                    remove.mutate(document.document_id);
+                }}
+              >
+                Delete
+              </Button>
+            </div>
           </article>
         ))}
         {!matches.length && !documents.isPending && (
@@ -153,6 +250,11 @@ export function DocumentLibrary() {
           </p>
         )}
       </div>
+      {reindex.error instanceof Error && (
+        <StatusMessage className="upload-status error">
+          {reindex.error.message}
+        </StatusMessage>
+      )}
     </Panel>
   );
 }

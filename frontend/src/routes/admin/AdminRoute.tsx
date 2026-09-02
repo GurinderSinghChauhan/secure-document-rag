@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useQueries } from "@tanstack/react-query";
 import { AppShell } from "../../components/layout/AppShell";
 import {
@@ -20,6 +21,7 @@ import { useAuth } from "../../features/auth";
 
 export default function AdminRoute() {
   const { user } = useAuth();
+  const [computeSessionId, setComputeSessionId] = useState<string | null>(null);
   const [held, documents, members] = useQueries({
     queries: [
       { queryKey: computeKeys.held, queryFn: listHeldJobs },
@@ -83,9 +85,16 @@ export default function AdminRoute() {
           />
         </section>
         <div className="admin-grid">
-          <DocumentUploader disabled={trialDisabled} />
-          <ComputeQueue disabled={trialDisabled} />
-          <DocumentLibrary />
+          <DocumentUploader
+            disabled={trialDisabled}
+            onComputeStarted={setComputeSessionId}
+          />
+          <ComputeQueue
+            disabled={trialDisabled}
+            sessionId={computeSessionId}
+            onSessionIdChange={setComputeSessionId}
+          />
+          <DocumentLibrary onComputeStarted={setComputeSessionId} />
           <OrganizationAccess />
           <section className="trust-note admin-trust">
             <div className="trust-note-heading">

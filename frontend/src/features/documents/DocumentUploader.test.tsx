@@ -4,13 +4,15 @@ import { http, HttpResponse } from "msw";
 import { server } from "../../test/server";
 import { DocumentUploader } from "./DocumentUploader";
 
-function renderUploader() {
+afterEach(() => vi.unstubAllGlobals());
+
+function renderUploader(onComputeStarted?: (sessionId: string) => void) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
   return render(
     <QueryClientProvider client={client}>
-      <DocumentUploader disabled={false} />
+      <DocumentUploader disabled={false} onComputeStarted={onComputeStarted} />
     </QueryClientProvider>,
   );
 }
@@ -53,7 +55,9 @@ test("selecting a folder keeps PDFs and reports ignored non-PDF files", async ()
   expect(
     within(folderCard).getByText("1 PDF file contained · ready to upload"),
   ).toBeVisible();
-  expect(screen.getByRole("button", { name: "Upload and hold" })).toBeEnabled();
+  expect(
+    screen.getByRole("button", { name: "Upload and index" }),
+  ).toBeEnabled();
 });
 
 test("individual files stay in the document selection card", () => {
@@ -126,4 +130,54 @@ test("selecting a folder with no PDFs leaves upload disabled", async () => {
   expect(
     screen.getByRole("button", { name: "Choose documents to upload" }),
   ).toBeDisabled();
+});
+
+test("uploads and starts indexing from the same button", async () => {
+  const requestListeners = new Map<string, (event: ProgressEvent) => void>();
+  const uploadListeners = new Map<string, (event: ProgressEvent) => void>();
+  class FakeXMLHttpRequest {
+    responseText =
+      '{"type":"complete","job_id":"job-1","state":"held_for_compute","recommended_gpu_minutes":6}\n';
+    status = 200;
+    upload = {
+      addEventListener: (
+        type: string,
+        listener: (event: ProgressEvent) => void,
+      ) => uploadListeners.set(type, listener),
+    };
+    open() {}
+    setRequestHeader() {}
+    addEventListener(type: string, listener: (event: ProgressEvent) => void) {
+      requestListeners.set(type, listener);
+    }
+    send() {
+      uploadListeners.get("load")?.(new ProgressEvent("load"));
+      requestListeners.get("load")?.(new ProgressEvent("load"));
+    }
+  }
+  vi.stubGlobal("XMLHttpRequest", FakeXMLHttpRequest);
+  server.use(
+    http.get("/v1/document-schemas", () => HttpResponse.json([])),
+    http.post("/v1/admin/compute-sessions", () =>
+      HttpResponse.json({ session_id: "session-1" }, { status: 201 }),
+    ),
+    http.post("/v1/admin/compute-sessions/session-1/release", () =>
+      HttpResponse.json({ session_id: "session-1" }),
+    ),
+  );
+  const onComputeStarted = vi.fn();
+  renderUploader(onComputeStarted);
+  const document = new File(["invoice"], "invoice.pdf", {
+    type: "application/pdf",
+  });
+
+  fireEvent.change(screen.getByLabelText("Choose individual documents"), {
+    target: { files: [document] },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Upload and index" }));
+
+  expect(
+    await screen.findByText("1 document is uploaded and indexing."),
+  ).toBeVisible();
+  expect(onComputeStarted).toHaveBeenCalledWith("session-1");
 });

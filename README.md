@@ -101,7 +101,7 @@ The command prompts for the password and never accepts it through arguments or e
 
 `POST /v1/documents` saves `text/plain`, PDF, DOCX, PPTX, XLSX, PNG, JPEG, or WebP request bodies as durable `held_for_compute` jobs. It never starts GPU capacity. An authenticated administrator must explicitly enable dispatch, open a bounded compute session, and release selected jobs. MinerU and model inference run only after that release.
 
-Indexing is idempotent per tenant and file content. Releasing a repeat upload rebuilds vectors under the existing document ID and updates its metadata and ACLs.
+Indexing is idempotent per tenant and file content. Releasing a repeat upload rebuilds vectors under the existing document ID and updates its metadata and ACLs. The admin console's **Upload and index** action uploads sequentially and releases all successful files into one bounded compute session. `POST /v1/admin/documents/{id}/reindex` reuses the retained completed-job source so an administrator can rerun automatic classification or apply a corrected manual type while rebuilding vectors and extracted metadata.
 
 - `X-Document-Name` (required)
 - `X-Allowed-Roles`: comma-separated role list
@@ -121,7 +121,7 @@ Chat conversations are stored in PostgreSQL and scoped to the authenticated tena
 
 Every session requires `max_jobs` and `max_gpu_minutes`, plus an optional `max_estimated_cost_usd`. The dispatcher stops at its bounds, returns retryable failures to held state, and closes the session when released work drains. The initial profile targets a quantized Qwen3-VL-4B on a 16 GB NVIDIA pool, with a configurable 24 GB fallback for out-of-memory retries.
 
-For large uploads, the admin console automatically selects the files that were just uploaded. Administrators can also select or clear every waiting document with one action. The selected document count and conservative GPU-minute estimate are recalculated from the current selection and shown as read-only values. Compute stops as soon as the selected work finishes.
+For large uploads, the admin console starts indexing the files that were successfully uploaded from the same primary action. Administrators can also select or clear every other waiting document with one action. The selected document count and conservative GPU-minute estimate are recalculated from the current selection and shown as read-only values. Compute stops as soon as the selected work finishes.
 
 ## Chat UI
 

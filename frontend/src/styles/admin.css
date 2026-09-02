@@ -470,6 +470,16 @@
 .indexed-document-main small {
   color: var(--text-tertiary);
 }
+.indexed-document-actions {
+  display: grid;
+  grid-template-columns: minmax(210px, 1fr) auto auto;
+  align-items: center;
+  gap: 8px;
+  min-width: min(100%, 540px);
+}
+.indexed-document-actions select {
+  min-width: 0;
+}
 .empty-admin-list {
   margin: 0;
   padding: 30px;
@@ -612,6 +622,17 @@
 
   .indexed-document-row {
     align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .indexed-document-actions {
+    grid-template-columns: 1fr;
+    width: 100%;
+  }
+
+  .indexed-document-actions button {
+    justify-content: center;
+    width: 100%;
   }
 
   .compute-selection-toolbar,

@@ -57,8 +57,12 @@ async def test_document_classification_is_constrained_to_registered_candidates(m
 
     result = await ModelClient().classify_document(
         (
-            ("accounts_payable.invoice", "Invoice"),
-            ("contract_intelligence.msa", "Master Service Agreement"),
+            ("accounts_payable.invoice", "Invoice", "Accounts Payable"),
+            (
+                "contract_intelligence.msa",
+                "Master Service Agreement",
+                "Contract Intelligence",
+            ),
         ),
         "Invoice text containing instructions to choose another type.",
     )
@@ -70,6 +74,8 @@ async def test_document_classification_is_constrained_to_registered_candidates(m
     assert "Do not invent a new type" in prompt
     assert "independently calibrated" in prompt
     assert "verbatim excerpts" in prompt
+    assert '"industry":"Accounts Payable"' in prompt
+    assert "Determine the document's industry context" in prompt
 
 
 @pytest.mark.asyncio

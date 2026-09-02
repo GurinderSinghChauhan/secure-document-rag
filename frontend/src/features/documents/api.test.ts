@@ -45,7 +45,7 @@ test("moves a fast upload from byte progress to securing state", async () => {
 
   class FakeXMLHttpRequest {
     responseText =
-      '{"type":"complete","job_id":"job-1","state":"held_for_compute"}\n';
+      '{"type":"complete","job_id":"job-1","state":"held_for_compute","recommended_gpu_minutes":6}\n';
     status = 200;
     upload = {
       addEventListener: (
@@ -81,7 +81,7 @@ test("moves a fast upload from byte progress to securing state", async () => {
       "",
       (progress) => updates.push(progress),
     ),
-  ).resolves.toEqual({ job_id: "job-1" });
+  ).resolves.toEqual({ job_id: "job-1", recommended_gpu_minutes: 6 });
 
   expect(updates).toEqual([
     {

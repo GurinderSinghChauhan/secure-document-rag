@@ -24,11 +24,11 @@ from .database import ComputeSessionRecord, DocumentRecord, IngestionJobRecord, 
 from .document_parser import VisualAsset, extract_document
 from .document_schemas import DOCUMENT_SCHEMAS, INDUSTRIES, SCHEMA_VERSION, require_document_schema, schema_catalog
 from .mineru import MinerUClient, supports_mineru
-from .models import BulkDeleteResponse, ChatDetail, ChatMessage, ChatSummary, ComputeSessionCreate, ComputeSessionRelease, ComputeSessionResponse, DashboardDocumentListResponse, DashboardDocumentResponse, DashboardIndustryResponse, DashboardResponse, DeleteResponse, HeldIngestResponse, IndexedDocumentResponse, IndustrySchemaResponse, IngestionJobResponse, Principal, QueryRequest, QueryResponse, ReadinessResponse, VersionResponse
+from .models import BulkDeleteResponse, ChatDetail, ChatMessage, ChatSummary, ComputeSessionCreate, ComputeSessionRelease, ComputeSessionResponse, DashboardDocumentListResponse, DashboardDocumentResponse, DashboardIndustryResponse, DashboardResponse, DeleteResponse, HeldIngestResponse, IndexedDocumentResponse, IndustrySchemaResponse, IngestionJobResponse, Principal, QueryRequest, QueryResponse, ReadinessResponse, ReindexDocumentRequest, VersionResponse
 from .providers import ModelClient
 from .super_admin import router as super_admin_router
 from .trials import is_pdf, require_active_trial, reserve_pdf_trial_slot, reserve_question_trial_slot
-from .repository import add_chat_message, create_chat, database_is_ready, get_chat, get_document, get_document_by_content_hash, list_authorized_documents, list_chat_messages, list_chats, list_documents, mark_document_deleted, mark_documents_deleted, search_authorized_documents
+from .repository import add_chat_message, create_chat, database_is_ready, get_chat, get_document, get_document_by_content_hash, get_latest_document_source, list_authorized_documents, list_chat_messages, list_chats, list_documents, mark_document_deleted, mark_documents_deleted, search_authorized_documents
 from .vector_store import VectorStore
 from .version import APP_COMMIT, APP_VERSION
 
@@ -140,6 +140,15 @@ def job_response(job: IngestionJobRecord) -> IngestionJobResponse:
     values = {column.name: getattr(job, column.name) for column in IngestionJobRecord.__table__.columns}
     values["recommended_gpu_minutes"] = recommended_gpu_minutes(job.content_type, job.size_bytes)
     return IngestionJobResponse.model_validate(values)
+
+
+def held_ingest_response(job: IngestionJobRecord) -> HeldIngestResponse:
+    return HeldIngestResponse(
+        job_id=job.job_id,
+        state=job.state,
+        message=job.message,
+        recommended_gpu_minutes=recommended_gpu_minutes(job.content_type, job.size_bytes),
+    )
 
 
 def indexed_document_response(document: DocumentRecord) -> IndexedDocumentResponse:
@@ -309,8 +318,8 @@ async def index_document_events(
         try:
             candidate, confidence = await model_server.classify_document(
                 tuple(
-                    (key, schema.label)
-                    for key, (_, schema) in DOCUMENT_SCHEMAS.items()
+                    (key, schema.label, industry.label)
+                    for key, (industry, schema) in DOCUMENT_SCHEMAS.items()
                 ),
                 index_text,
             )
@@ -745,7 +754,7 @@ async def ingest_document(
     allowed_roles = parse_acl(x_allowed_roles) or principal.roles
     allowed_users = parse_acl(x_allowed_users)
     job = await create_held_job(session=session, principal=principal, document_name=document_name, content=content, content_type=content_type, allowed_roles=allowed_roles, allowed_users=allowed_users, document_type=document_type)
-    return HeldIngestResponse(job_id=job.job_id, message=job.message)
+    return held_ingest_response(job)
 
 
 @app.post("/v1/documents/stream")
@@ -776,6 +785,7 @@ async def stream_ingest_document(
         yield encode_event({
             "type": "complete", "percentage": 100, "job_id": job.job_id, "state": job.state,
             "chunks_indexed": 0, "tables_indexed": 0, "visuals_indexed": 0, "reindexed": False,
+            "recommended_gpu_minutes": recommended_gpu_minutes(job.content_type, job.size_bytes),
             "message": job.message,
         })
 
@@ -817,6 +827,52 @@ async def list_indexed_documents(
     require_admin(principal)
     documents = await list_documents(session, principal.tenant_id, limit=limit, offset=offset)
     return [indexed_document_response(document) for document in documents]
+
+
+@app.post(
+    "/v1/admin/documents/{document_id}/reindex",
+    response_model=HeldIngestResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def reindex_document(
+    document_id: str,
+    payload: ReindexDocumentRequest,
+    principal: Principal = Depends(require_principal),
+    session: AsyncSession = Depends(get_session),
+) -> HeldIngestResponse:
+    require_admin(principal)
+    require_active_trial(principal)
+    document = await get_document(session, principal.tenant_id, document_id)
+    if document is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
+    source = await get_latest_document_source(session, principal.tenant_id, document_id)
+    if source is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="The original source is unavailable; upload the document again to re-index it.",
+        )
+    document_type = validate_document_type(payload.document_type)
+    job = await create_held_job(
+        session=session,
+        principal=principal,
+        document_name=document.document_name,
+        content=source.content,
+        content_type=document.content_type,
+        allowed_roles=document.allowed_roles,
+        allowed_users=document.allowed_users,
+        document_type=document_type,
+    )
+    await record(
+        session,
+        "document_reindex_queued",
+        principal.tenant_id,
+        principal.user_id,
+        document_id=document_id,
+        job_id=job.job_id,
+        document_type=document_type,
+        classification_source="manual" if document_type else "automatic",
+    )
+    return held_ingest_response(job)
 
 
 @app.post("/v1/admin/compute-sessions", response_model=ComputeSessionResponse, status_code=status.HTTP_201_CREATED)

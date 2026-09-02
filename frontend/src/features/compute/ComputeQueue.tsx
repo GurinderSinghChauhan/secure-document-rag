@@ -37,10 +37,24 @@ function formatStage(stage: string) {
   return stages[stage] ?? stage.replaceAll("_", " ");
 }
 
-export function ComputeQueue({ disabled }: { disabled: boolean }) {
+export function ComputeQueue({
+  disabled,
+  sessionId: controlledSessionId,
+  onSessionIdChange,
+}: {
+  disabled: boolean;
+  sessionId?: string | null;
+  onSessionIdChange?: (sessionId: string | null) => void;
+}) {
   const queryClient = useQueryClient();
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [localSessionId, setLocalSessionId] = useState<string | null>(null);
+  const sessionId =
+    controlledSessionId === undefined ? localSessionId : controlledSessionId;
+  function setSessionId(value: string | null) {
+    setLocalSessionId(value);
+    onSessionIdChange?.(value);
+  }
   const held = useQuery({
     queryKey: computeKeys.held,
     queryFn: listHeldJobs,
