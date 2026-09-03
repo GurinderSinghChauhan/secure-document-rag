@@ -82,6 +82,26 @@ def test_held_job_response_includes_inputs_for_automatic_guardrails():
 
 
 @pytest.mark.asyncio
+async def test_active_compute_session_restores_the_tenant_open_session(monkeypatch):
+    principal = Principal(tenant_id="organization", user_id="admin", roles=["admin"])
+    compute_session = object()
+    payload = object()
+
+    async def get_open(session, tenant_id):
+        assert tenant_id == "organization"
+        return compute_session
+
+    async def serialize(session, record):
+        assert record is compute_session
+        return payload
+
+    monkeypatch.setattr(main, "get_open_compute_session", get_open)
+    monkeypatch.setattr(main, "compute_session_payload", serialize)
+
+    assert await main.get_active_compute_session(principal, object()) is payload
+
+
+@pytest.mark.asyncio
 async def test_held_job_inventory_supports_stable_pages_beyond_500():
     class Session:
         statement = None
@@ -105,6 +125,52 @@ async def test_held_job_inventory_supports_stable_pages_beyond_500():
     assert result == []
     assert "ingestion_jobs.created_at DESC, ingestion_jobs.job_id DESC" in sql
     assert "LIMIT 500 OFFSET 500" in sql
+
+
+@pytest.mark.asyncio
+async def test_failed_ingestion_job_can_be_reset_for_an_explicit_retry(monkeypatch):
+    now = datetime.now(UTC)
+    job = IngestionJobRecord(
+        job_id="job", tenant_id="organization", state="failed", stage="failed", progress=96,
+        message="Retry limit exhausted.", document_name="report.pdf", content_type="application/pdf",
+        content_sha256="a" * 64, content=b"document", size_bytes=1024, allowed_roles=["admin"],
+        allowed_users=[], created_by="user", compute_session_id="old-session", provider_job_id="provider-job",
+        attempt_count=3, retry_limit=3, result_document_id=None, chunks_indexed=0, tables_indexed=0,
+        visuals_indexed=0, gpu_seconds=1, estimated_cost_usd=0, error_code="processing_failed",
+        error_message="metadata failed", created_at=now, updated_at=now,
+    )
+
+    class Session:
+        async def scalar(self, statement):
+            return job
+
+        async def commit(self):
+            return None
+
+        async def refresh(self, record):
+            return None
+
+    async def no_audit(*args, **kwargs):
+        return None
+
+    monkeypatch.setattr(main, "record", no_audit)
+    principal = Principal(
+        tenant_id="organization",
+        user_id="admin",
+        roles=["admin"],
+        is_super_admin=True,
+    )
+
+    result = await main.retry_ingestion_job("job", principal, Session())
+
+    assert result.state == "held_for_compute"
+    assert result.stage == "held"
+    assert result.progress == 0
+    assert job.attempt_count == 0
+    assert job.compute_session_id is None
+    assert job.provider_job_id is None
+    assert job.error_code is None
+    assert job.error_message is None
 
 
 def test_chat_compute_is_available_without_a_document_session(monkeypatch):

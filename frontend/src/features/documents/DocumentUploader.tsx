@@ -4,8 +4,6 @@ import {
   Button,
   FormField,
   Input,
-  Panel,
-  PanelHeader,
   ProgressBar,
   Select,
 } from "../../components/ui";
@@ -155,17 +153,15 @@ export function DocumentUploader({
       setFolderName("");
     }
     setProgress(null);
-    await queryClient.invalidateQueries({ queryKey: ["compute", "held-jobs"] });
+    await queryClient.invalidateQueries({ queryKey: ["compute", "queue"] });
     setBusy(false);
   }
   return (
-    <Panel id="documents" className="workflow-card" labelledBy="upload-title">
-      <PanelHeader
-        step="01"
-        kicker="Add knowledge"
-        title="Upload documents"
-        titleId="upload-title"
-      />
+    <section className="upload-pane" aria-labelledby="upload-title">
+      <div className="workflow-subheading">
+        <span className="section-kicker">New documents</span>
+        <h3 id="upload-title">Choose files</h3>
+      </div>
       <p className="panel-description">
         Files are encrypted, uploaded, and released into bounded compute from
         the same action.
@@ -306,6 +302,6 @@ export function DocumentUploader({
           </span>
         </Button>
       </form>
-    </Panel>
+    </section>
   );
 }

@@ -62,7 +62,16 @@ function renderQueue() {
 
 test("shows compute as the single authoritative processing stage", async () => {
   server.use(
-    http.get("/v1/admin/ingestion-jobs", () => HttpResponse.json([job])),
+    http.get("/v1/admin/compute-sessions/active", () =>
+      HttpResponse.json(null),
+    ),
+    http.get("/v1/admin/ingestion-jobs", ({ request }) =>
+      HttpResponse.json(
+        new URL(request.url).searchParams.get("state") === "held_for_compute"
+          ? [job]
+          : [],
+      ),
+    ),
     http.post("/v1/admin/compute-sessions", () =>
       HttpResponse.json(session, { status: 201 }),
     ),
@@ -76,10 +85,9 @@ test("shows compute as the single authoritative processing stage", async () => {
   const user = userEvent.setup();
   renderQueue();
 
-  expect(await screen.findByText(/1 document safely held/)).toBeVisible();
-  await user.click(screen.getByLabelText("Select all waiting"));
+  expect(await screen.findByText(/1 document needs attention/)).toBeVisible();
   await user.click(
-    screen.getByRole("button", { name: "Start selected batch" }),
+    screen.getByRole("button", { name: "Start queued documents (1)" }),
   );
 
   expect(await screen.findByText("Extracting content")).toBeVisible();
@@ -91,4 +99,112 @@ test("shows compute as the single authoritative processing stage", async () => {
   expect(
     screen.queryByRole("button", { name: "Refresh" }),
   ).not.toBeInTheDocument();
+});
+
+test("restores an active indexing session after a page reload", async () => {
+  server.use(
+    http.get("/v1/admin/compute-sessions/active", () =>
+      HttpResponse.json(session),
+    ),
+    http.get("/v1/admin/compute-sessions/session-1", () =>
+      HttpResponse.json(session),
+    ),
+  );
+
+  renderQueue();
+
+  expect(await screen.findByText("Extracting content")).toBeVisible();
+  expect(
+    screen.getByText("MinerU is extracting document content"),
+  ).toBeVisible();
+  expect(screen.getByText("13%")).toBeVisible();
+  expect(screen.queryByRole("button")).not.toBeInTheDocument();
+});
+
+test("retries every failed document in one GPU session", async () => {
+  const failedJob = {
+    ...job,
+    state: "failed",
+    stage: "failed",
+    message: "Retry limit exhausted.",
+    error_code: "processing_failed",
+    error_message: "Metadata extraction failed",
+  };
+  const failedJob2 = {
+    ...failedJob,
+    job_id: "job-2",
+    document_name: "invoice.pdf",
+    created_at: "2030-01-02T00:00:00Z",
+  };
+  const retryRequest = vi.fn();
+  const openRequest = vi.fn();
+  const releaseRequest = vi.fn();
+  server.use(
+    http.get("/v1/admin/compute-sessions/active", () =>
+      HttpResponse.json(null),
+    ),
+    http.get("/v1/admin/ingestion-jobs", ({ request }) =>
+      HttpResponse.json(
+        new URL(request.url).searchParams.get("state") === "failed"
+          ? [failedJob, failedJob2]
+          : [],
+      ),
+    ),
+    http.post("/v1/admin/ingestion-jobs/:jobId/retry", ({ params }) => {
+      retryRequest(params.jobId);
+      return HttpResponse.json({ ...job, job_id: params.jobId });
+    }),
+    http.post("/v1/admin/compute-sessions", async ({ request }) => {
+      openRequest(await request.json());
+      return HttpResponse.json(session, { status: 201 });
+    }),
+    http.post(
+      "/v1/admin/compute-sessions/session-1/release",
+      async ({ request }) => {
+        releaseRequest(await request.json());
+        return HttpResponse.json(session);
+      },
+    ),
+    http.get("/v1/admin/compute-sessions/session-1", () =>
+      HttpResponse.json(session),
+    ),
+  );
+  const user = userEvent.setup();
+
+  renderQueue();
+
+  expect(await screen.findAllByText("Indexing failed")).toHaveLength(2);
+  expect(screen.getAllByText("Metadata extraction failed")).toHaveLength(2);
+  await user.click(
+    screen.getByRole("button", { name: "Retry failed documents (2)" }),
+  );
+  expect(await screen.findByText("Extracting content")).toBeVisible();
+  expect(retryRequest).toHaveBeenCalledTimes(2);
+  expect(openRequest).toHaveBeenCalledOnce();
+  expect(openRequest).toHaveBeenCalledWith({
+    max_jobs: 2,
+    max_gpu_minutes: 12,
+  });
+  expect(releaseRequest).toHaveBeenCalledOnce();
+  expect(releaseRequest).toHaveBeenCalledWith({
+    job_ids: ["job-2", "job-1"],
+  });
+});
+
+test("shows a clear queue when no documents need attention", async () => {
+  server.use(
+    http.get("/v1/admin/compute-sessions/active", () =>
+      HttpResponse.json(null),
+    ),
+    http.get("/v1/admin/ingestion-jobs", () => HttpResponse.json([])),
+  );
+
+  renderQueue();
+
+  expect(
+    await screen.findByText(
+      "No documents are waiting. New uploads start indexing automatically.",
+    ),
+  ).toBeVisible();
+  expect(screen.queryByRole("button")).not.toBeInTheDocument();
 });

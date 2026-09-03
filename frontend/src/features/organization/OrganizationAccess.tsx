@@ -69,7 +69,7 @@ export function OrganizationAccess() {
   return (
     <Panel id="members" className="members-card" labelledBy="members-title">
       <PanelHeader
-        step="04"
+        step="03"
         kicker="People and permissions"
         title="Organization access"
         titleId="members-title"

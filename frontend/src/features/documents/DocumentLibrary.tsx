@@ -72,7 +72,7 @@ export function DocumentLibrary({
       onComputeStarted?.(session.session_id);
       void queryClient.invalidateQueries({ queryKey: documentKeys.indexed });
       void queryClient.invalidateQueries({
-        queryKey: ["compute", "held-jobs"],
+        queryKey: ["compute", "queue"],
       });
     },
   });
@@ -94,7 +94,7 @@ export function DocumentLibrary({
       labelledBy="indexed-documents-title"
     >
       <PanelHeader
-        step="03"
+        step="02"
         kicker="Searchable knowledge"
         title="Indexed documents"
         titleId="indexed-documents-title"

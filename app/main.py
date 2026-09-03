@@ -846,6 +846,55 @@ async def list_ingestion_jobs(
     return [job_response(job) for job in jobs]
 
 
+@app.post(
+    "/v1/admin/ingestion-jobs/{job_id}/retry",
+    response_model=IngestionJobResponse,
+)
+async def retry_ingestion_job(
+    job_id: str,
+    principal: Principal = Depends(require_principal),
+    session: AsyncSession = Depends(get_session),
+) -> IngestionJobResponse:
+    require_admin(principal)
+    require_active_trial(principal)
+    job = await session.scalar(
+        select(IngestionJobRecord).where(
+            IngestionJobRecord.job_id == job_id,
+            IngestionJobRecord.tenant_id == principal.tenant_id,
+        )
+    )
+    if job is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Ingestion job not found",
+        )
+    if job.state != "failed":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Only failed ingestion jobs can be retried",
+        )
+    job.state = "held_for_compute"
+    job.stage = "held"
+    job.progress = 0
+    job.message = "Retry requested; document is ready for indexing."
+    job.compute_session_id = None
+    job.provider_job_id = None
+    job.attempt_count = 0
+    job.error_code = None
+    job.error_message = None
+    await session.commit()
+    await session.refresh(job)
+    await record(
+        session,
+        "document_indexing_retry_requested",
+        principal.tenant_id,
+        principal.user_id,
+        job_id=job.job_id,
+        document_name=job.document_name,
+    )
+    return job_response(job)
+
+
 @app.get("/v1/admin/documents", response_model=list[IndexedDocumentResponse])
 async def list_indexed_documents(
     limit: int = Query(default=500, ge=1, le=500),
@@ -1014,6 +1063,18 @@ async def cancel_compute_session(session_id: str, principal: Principal = Depends
     record_.status = "closed"
     record_.closed_at = func.now()
     await session.commit()
+    return await compute_session_payload(session, record_)
+
+
+@app.get("/v1/admin/compute-sessions/active", response_model=ComputeSessionResponse | None)
+async def get_active_compute_session(
+    principal: Principal = Depends(require_principal),
+    session: AsyncSession = Depends(get_session),
+) -> ComputeSessionResponse | None:
+    require_admin(principal)
+    record_ = await get_open_compute_session(session, principal.tenant_id)
+    if record_ is None:
+        return None
     return await compute_session_payload(session, record_)
 
 

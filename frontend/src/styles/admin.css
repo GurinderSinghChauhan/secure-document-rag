@@ -62,6 +62,33 @@
   height: auto;
 }
 
+.document-workflow-card {
+  grid-column: 1 / -1;
+}
+
+.document-workflow-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.12fr) minmax(340px, 0.88fr);
+  gap: 28px;
+  margin-top: 20px;
+}
+
+.upload-pane,
+.processing-pane {
+  min-width: 0;
+}
+
+.processing-pane {
+  padding-left: 28px;
+  border-left: 1px solid var(--border);
+}
+
+.workflow-subheading h3 {
+  margin: 3px 0 0;
+  font-size: 17px;
+  letter-spacing: -0.02em;
+}
+
 .admin-overview {
   display: grid;
   grid-template-columns: 1.5fr repeat(3, 1fr);
@@ -328,6 +355,19 @@
   background: linear-gradient(135deg, #fbfcff, #f7f9ff);
 }
 
+.compute-job-card.failed {
+  border-color: #f0c4c4;
+  background: linear-gradient(135deg, #fffafa, #fff5f5);
+}
+
+.compute-job-card.failed .compute-job-stage > span {
+  color: var(--danger);
+}
+
+.queue-batch-action {
+  margin-top: 12px;
+}
+
 .compute-job-card > header {
   display: flex;
   align-items: flex-start;
@@ -591,6 +631,17 @@
   .admin-grid {
     grid-template-columns: 1fr;
   }
+
+  .document-workflow-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .processing-pane {
+    padding-top: 24px;
+    padding-left: 0;
+    border-top: 1px solid var(--border);
+    border-left: 0;
+  }
 }
 
 @media (max-width: 860px) {
@@ -662,6 +713,7 @@
   }
   .members-card,
   .indexed-documents-card,
+  .document-workflow-card,
   .admin-trust {
     grid-column: auto;
   }

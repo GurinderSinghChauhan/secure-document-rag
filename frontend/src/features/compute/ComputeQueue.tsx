@@ -1,19 +1,15 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   computeKeys,
+  getActiveComputeSession,
   getComputeSession,
-  listHeldJobs,
+  listQueueJobs,
   releaseJobs,
+  retryIngestionJob,
 } from "./api";
-import {
-  Button,
-  Input,
-  Panel,
-  PanelHeader,
-  ProgressBar,
-  StatusMessage,
-} from "../../components/ui";
+import type { IngestionJob } from "../../api/types";
+import { Button, ProgressBar, StatusMessage } from "../../components/ui";
 
 function formatBytes(size: number) {
   if (size < 1024) return `${size} B`;
@@ -31,8 +27,8 @@ function formatStage(stage: string) {
     metadata: "Finalizing document",
     completion: "Searchable",
     completed: "Searchable",
-    failed: "Action required",
-    held: "Safely held",
+    failed: "Indexing failed",
+    held: "Waiting to index",
   };
   return stages[stage] ?? stage.replaceAll("_", " ");
 }
@@ -47,17 +43,24 @@ export function ComputeQueue({
   onSessionIdChange?: (sessionId: string | null) => void;
 }) {
   const queryClient = useQueryClient();
-  const [selected, setSelected] = useState<Set<string>>(new Set());
   const [localSessionId, setLocalSessionId] = useState<string | null>(null);
-  const sessionId =
+  const requestedSessionId =
     controlledSessionId === undefined ? localSessionId : controlledSessionId;
+  const activeSession = useQuery({
+    queryKey: computeKeys.active,
+    queryFn: getActiveComputeSession,
+    enabled: !requestedSessionId,
+  });
+  const sessionId =
+    requestedSessionId ?? activeSession.data?.session_id ?? null;
   function setSessionId(value: string | null) {
     setLocalSessionId(value);
     onSessionIdChange?.(value);
   }
-  const held = useQuery({
-    queryKey: computeKeys.held,
-    queryFn: listHeldJobs,
+  const queue = useQuery({
+    queryKey: computeKeys.queue,
+    queryFn: listQueueJobs,
+    enabled: activeSession.isFetched && !sessionId,
     refetchInterval: sessionId ? false : 3000,
   });
   const session = useQuery({
@@ -67,174 +70,143 @@ export function ComputeQueue({
     refetchInterval: (query) =>
       query.state.data?.status === "closed" ? false : 2000,
   });
-  const chosen = useMemo(
-    () => (held.data ?? []).filter((job) => selected.has(job.job_id)),
-    [held.data, selected],
-  );
-  const minutes = chosen.reduce(
-    (total, job) => total + Number(job.recommended_gpu_minutes || 0),
-    0,
-  );
-  const release = useMutation({
-    mutationFn: () => releaseJobs([...selected], minutes),
-    onSuccess: (value) => setSessionId(value.session_id),
+  const start = useMutation({
+    mutationFn: async (jobs: IngestionJob[]) => {
+      const ready = await Promise.all(
+        jobs.map((job) =>
+          job.state === "failed"
+            ? retryIngestionJob(job.job_id)
+            : Promise.resolve(job),
+        ),
+      );
+      return releaseJobs(
+        ready.map((job) => job.job_id),
+        Math.max(
+          ready.reduce((total, job) => total + job.recommended_gpu_minutes, 0),
+          1,
+        ),
+      );
+    },
+    onSuccess: async (value) => {
+      setSessionId(value.session_id);
+      await queryClient.invalidateQueries({ queryKey: computeKeys.queue });
+    },
   });
   useEffect(() => {
     if (session.data?.status !== "closed") return;
-    void queryClient.invalidateQueries({ queryKey: computeKeys.held });
+    void queryClient.invalidateQueries({ queryKey: computeKeys.queue });
     void queryClient.invalidateQueries({ queryKey: ["documents", "indexed"] });
   }, [session.data?.status, queryClient]);
-  const jobs = sessionId ? (session.data?.jobs ?? []) : (held.data ?? []);
+  const jobs = sessionId ? (session.data?.jobs ?? []) : (queue.data ?? []);
   const message = sessionId
     ? session.data
       ? session.data.status === "closed"
-        ? `Session closed. GPU capacity released after ${(session.data.gpu_seconds / 60).toFixed(1)} recorded GPU minutes. Estimated cost: $${session.data.estimated_cost_usd.toFixed(4)}.`
+        ? session.data.jobs.some((job) => job.state === "failed")
+          ? "Indexing finished with errors. Retry the failed documents below."
+          : `Indexing complete. ${(session.data.gpu_seconds / 60).toFixed(1)} GPU minutes used.`
         : `${session.data.jobs.filter((job) => job.state === "completed").length} of ${session.data.jobs.length} documents complete · ${(session.data.gpu_seconds / 60).toFixed(1)} of ${session.data.max_gpu_minutes} GPU minutes used.`
-      : "Opening compute session…"
-    : held.isPending
-      ? "Loading held documents…"
-      : held.error instanceof Error
-        ? held.error.message
-        : chosen.length
-          ? `${chosen.length} of ${held.data?.length ?? 0} waiting documents selected. Estimated GPU time: ${minutes} minutes.`
-          : held.data?.length
-            ? `${held.data.length} ${held.data.length === 1 ? "document" : "documents"} safely held. Select individual files or all waiting documents.`
-            : "Nothing is waiting for compute.";
-  function toggle(id: string) {
-    setSelected((current) => {
-      const next = new Set(current);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }
+      : "Restoring document processing…"
+    : activeSession.isPending
+      ? "Checking for active document processing…"
+      : queue.isPending
+        ? "Loading the indexing queue…"
+        : queue.error instanceof Error
+          ? queue.error.message
+          : queue.data?.length
+            ? `${queue.data.length} ${queue.data.length === 1 ? "document needs" : "documents need"} attention.`
+            : "No documents are waiting. New uploads start indexing automatically.";
+  const canStartFromSession = session.data?.status === "closed";
+  const queuedJobs = jobs.filter(
+    (job) => job.state === "failed" || job.state === "held_for_compute",
+  );
+  const failedCount = queuedJobs.filter(
+    (job) => job.state === "failed" || Boolean(job.error_code),
+  ).length;
+  const heldCount = queuedJobs.length - failedCount;
+  const queueActionAvailable =
+    queuedJobs.length > 0 && (!sessionId || canStartFromSession);
+  const queueActionLabel = failedCount
+    ? heldCount
+      ? `Retry and index queue (${queuedJobs.length})`
+      : `Retry failed documents (${failedCount})`
+    : `Start queued documents (${heldCount})`;
+
   return (
-    <Panel id="compute" className="workflow-card" labelledBy="compute-title">
-      <PanelHeader
-        step="02"
-        kicker="Controlled processing"
-        title="Release to compute"
-        titleId="compute-title"
-        action={
-          <span className="auto-refresh-badge">
-            <i aria-hidden="true" /> Auto-updating
-          </span>
-        }
-      />
-      <StatusMessage className="panel-description">
-        {release.error instanceof Error ? release.error.message : message}
-      </StatusMessage>
-      {!sessionId && (
-        <div className="compute-selection-toolbar">
-          <label>
-            <Input
-              type="checkbox"
-              checked={
-                Boolean(held.data?.length) &&
-                selected.size === held.data?.length
-              }
-              ref={(input) => {
-                if (input)
-                  input.indeterminate =
-                    selected.size > 0 &&
-                    selected.size < (held.data?.length ?? 0);
-              }}
-              onChange={(event) =>
-                setSelected(
-                  event.target.checked
-                    ? new Set((held.data ?? []).map((job) => job.job_id))
-                    : new Set(),
-                )
-              }
-            />{" "}
-            Select all waiting
-          </label>
-          <Button
-            variant="text"
-            type="button"
-            disabled={!selected.size}
-            onClick={() => setSelected(new Set())}
-          >
-            Clear
-          </Button>
-          <strong role="status">{selected.size} selected</strong>
+    <section
+      id="compute"
+      className="processing-pane"
+      aria-labelledby="compute-title"
+    >
+      <div className="compute-heading">
+        <div className="workflow-subheading">
+          <span className="section-kicker">Processing queue</span>
+          <h3 id="compute-title">Indexing status</h3>
         </div>
-      )}
+        <span className="auto-refresh-badge">
+          <i aria-hidden="true" /> Auto-updating
+        </span>
+      </div>
+      <StatusMessage className="panel-description">
+        {start.error instanceof Error ? start.error.message : message}
+      </StatusMessage>
       <div
         className={`held-jobs compute-queue ${sessionId ? "active-session" : ""}`}
       >
-        {jobs.map((job) =>
-          sessionId ? (
-            <article className="compute-job-card" key={job.job_id}>
+        {jobs.map((job) => {
+          const failed = job.state === "failed";
+          const held = job.state === "held_for_compute";
+          return (
+            <article
+              className={`compute-job-card ${failed ? "failed" : ""}`}
+              key={job.job_id}
+            >
               <header>
                 <strong>{job.document_name}</strong>
                 <span>{job.progress}%</span>
               </header>
               <div className="compute-job-stage">
                 <span>{formatStage(job.stage)}</span>
-                <small>{job.message}</small>
-              </div>
-              <div className="compute-job-progress">
-                <ProgressBar
-                  variant="job"
-                  label={`${job.document_name} processing progress`}
-                  value={job.progress}
-                />
-              </div>
-            </article>
-          ) : (
-            <label className="held-job" key={job.job_id}>
-              <Input
-                type="checkbox"
-                checked={selected.has(job.job_id)}
-                onChange={() => toggle(job.job_id)}
-              />
-              <span>
-                <strong>{job.document_name}</strong>
                 <small>
-                  {formatBytes(job.size_bytes)} · suggested ceiling{" "}
-                  {job.recommended_gpu_minutes} GPU minutes
+                  {failed ? job.error_message || job.message : job.message}
                 </small>
-                <small>{job.message}</small>
-              </span>
-            </label>
-          ),
+                {!sessionId && (
+                  <small>
+                    {formatBytes(job.size_bytes)} · estimated{" "}
+                    {job.recommended_gpu_minutes} GPU minutes
+                  </small>
+                )}
+              </div>
+              {!failed && !held && (
+                <div className="compute-job-progress">
+                  <ProgressBar
+                    variant="job"
+                    label={`${job.document_name} processing progress`}
+                    value={job.progress}
+                  />
+                </div>
+              )}
+            </article>
+          );
+        })}
+        {!jobs.length && !queue.isPending && (
+          <small>
+            The queue is clear. Uploaded documents will appear here.
+          </small>
         )}
-        {!jobs.length && <small>No documents are waiting for compute.</small>}
       </div>
-      {!sessionId && (
-        <>
-          <div className="limit-heading">
-            <strong>Automatic guardrails</strong>
-            <small>Calculated from the documents you select.</small>
-          </div>
-          <div className="compute-limits" aria-live="polite">
-            <label>
-              <span>Selected documents</span>
-              <Input type="number" min={0} value={selected.size} readOnly />
-            </label>
-            <label>
-              <span>Estimated GPU minutes</span>
-              <Input type="number" min={0} value={minutes} readOnly />
-            </label>
-          </div>
-          <p className="guardrail-note">
-            Document count and GPU minutes update automatically with the
-            selection. Processing stops earlier when the batch finishes.
-          </p>
-          <Button
-            variant="primary"
-            className="full-button"
-            type="button"
-            disabled={disabled || !selected.size}
-            busy={release.isPending}
-            busyLabel="Opening compute session…"
-            onClick={() => release.mutate()}
-          >
-            Start selected batch
-          </Button>
-        </>
+      {queueActionAvailable && (
+        <Button
+          variant="primary"
+          className="full-button queue-batch-action"
+          type="button"
+          disabled={disabled || start.isPending}
+          busy={start.isPending}
+          busyLabel="Starting one GPU session…"
+          onClick={() => start.mutate(queuedJobs)}
+        >
+          {queueActionLabel}
+        </Button>
       )}
-    </Panel>
+    </section>
   );
 }

@@ -22,12 +22,12 @@ test("loads every held-job page beyond the first 500 records", async () => {
     1,
     "/v1/admin/ingestion-jobs?state=held_for_compute&limit=500&offset=0",
     {},
-    "Unable to load held documents.",
+    "Unable to load the indexing queue.",
   );
   expect(request).toHaveBeenNthCalledWith(
     2,
     "/v1/admin/ingestion-jobs?state=held_for_compute&limit=500&offset=500",
     {},
-    "Unable to load held documents.",
+    "Unable to load the indexing queue.",
   );
 });
