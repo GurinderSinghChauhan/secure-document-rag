@@ -5,6 +5,75 @@ import { http, HttpResponse } from "msw";
 import { server } from "../../test/server";
 import { DocumentLibrary } from "./DocumentLibrary";
 
+test("selects multiple visible documents and deletes them together", async () => {
+  const deletedIds: string[] = [];
+  const makeDocument = (documentId: string, documentName: string) => ({
+    document_id: documentId,
+    document_name: documentName,
+    document_type: "legal.policy",
+    schema_version: 2,
+    classification_status: "classified",
+    classification_source: "automatic",
+    classification_confidence: 0.94,
+    extraction_status: "completed",
+    extracted_metadata: {},
+    content_type: "application/pdf",
+    size_bytes: 1024,
+    chunk_count: 4,
+    allowed_roles: ["admin"],
+    allowed_users: [],
+    created_by: "admin-1",
+    created_at: "2030-01-01T00:00:00Z",
+  });
+  server.use(
+    http.get("/v1/document-schemas", () => HttpResponse.json([])),
+    http.get("/v1/admin/documents", () =>
+      HttpResponse.json(
+        [
+          makeDocument("document-1", "policy.pdf"),
+          makeDocument("document-2", "contract.pdf"),
+          makeDocument("document-3", "invoice.pdf"),
+        ].filter((document) => !deletedIds.includes(document.document_id)),
+      ),
+    ),
+    http.delete("/v1/documents/:documentId", ({ params }) => {
+      deletedIds.push(String(params.documentId));
+      return HttpResponse.json({
+        document_id: params.documentId,
+        status: "deleted",
+      });
+    }),
+  );
+  vi.spyOn(window, "confirm").mockReturnValue(true);
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+  });
+  render(
+    <QueryClientProvider client={queryClient}>
+      <DocumentLibrary />
+    </QueryClientProvider>,
+  );
+
+  expect(await screen.findByText("policy.pdf")).toBeVisible();
+  await userEvent.click(screen.getByLabelText("Select policy.pdf"));
+  await userEvent.click(screen.getByLabelText("Select contract.pdf"));
+  expect(screen.getByText("2 selected")).toBeVisible();
+
+  await userEvent.click(
+    screen.getByRole("button", { name: "Delete selected" }),
+  );
+
+  expect(window.confirm).toHaveBeenCalledWith(
+    expect.stringContaining("Delete 2 selected documents"),
+  );
+  await waitFor(() =>
+    expect(deletedIds.sort()).toEqual(["document-1", "document-2"]),
+  );
+  expect(await screen.findByText("invoice.pdf")).toBeVisible();
+  await waitFor(() => expect(screen.queryByText("policy.pdf")).toBeNull());
+  expect(screen.getByText("0 selected")).toBeVisible();
+});
+
 test("confirms and deletes every organization document in one request", async () => {
   let deleted = false;
   let deleteRequests = 0;

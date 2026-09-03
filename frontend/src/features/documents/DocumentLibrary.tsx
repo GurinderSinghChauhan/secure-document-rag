@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   classifyDocument,
@@ -32,6 +32,10 @@ export function DocumentLibrary({
   onComputeStarted?: (sessionId: string) => void;
 }) {
   const [search, setSearch] = useState("");
+  const [selectedDocumentIds, setSelectedDocumentIds] = useState<Set<string>>(
+    () => new Set(),
+  );
+  const [bulkDeleteError, setBulkDeleteError] = useState("");
   const [classificationChoices, setClassificationChoices] = useState<
     Record<string, string>
   >({});
@@ -42,13 +46,44 @@ export function DocumentLibrary({
   });
   const remove = useMutation({
     mutationFn: deleteDocument,
-    onSuccess: () =>
-      queryClient.invalidateQueries({ queryKey: documentKeys.indexed }),
+    onSuccess: (_, documentId) => {
+      setSelectedDocumentIds((current) => {
+        const next = new Set(current);
+        next.delete(documentId);
+        return next;
+      });
+      void queryClient.invalidateQueries({ queryKey: documentKeys.indexed });
+    },
   });
   const removeAll = useMutation({
     mutationFn: deleteAllDocuments,
-    onSuccess: () =>
-      queryClient.invalidateQueries({ queryKey: documentKeys.indexed }),
+    onSuccess: () => {
+      setSelectedDocumentIds(new Set());
+      void queryClient.invalidateQueries({ queryKey: documentKeys.indexed });
+    },
+  });
+  const removeSelected = useMutation({
+    mutationFn: async (documentIds: string[]) => {
+      const results = await Promise.allSettled(documentIds.map(deleteDocument));
+      return {
+        deleted: documentIds.filter((_, index) =>
+          results[index] ? results[index].status === "fulfilled" : false,
+        ),
+        failed: documentIds.filter((_, index) =>
+          results[index] ? results[index].status === "rejected" : true,
+        ),
+      };
+    },
+    onSuccess: ({ deleted, failed }) => {
+      setSelectedDocumentIds(new Set(failed));
+      setBulkDeleteError(
+        failed.length
+          ? `${failed.length} selected ${failed.length === 1 ? "document could" : "documents could"} not be deleted. The failed selection has been kept so you can try again.`
+          : "",
+      );
+      if (deleted.length)
+        void queryClient.invalidateQueries({ queryKey: documentKeys.indexed });
+    },
   });
   const schemas = useQuery({
     queryKey: schemaKeys.all,
@@ -84,6 +119,26 @@ export function DocumentLibrary({
       value.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()),
     ),
   );
+  const selectedAvailableDocumentIds = (documents.data ?? [])
+    .map((document) => document.document_id)
+    .filter((documentId) => selectedDocumentIds.has(documentId));
+  const visibleDocumentIds = matches.map((document) => document.document_id);
+  const selectedVisibleCount = visibleDocumentIds.filter((documentId) =>
+    selectedDocumentIds.has(documentId),
+  ).length;
+  const allVisibleSelected =
+    visibleDocumentIds.length > 0 &&
+    selectedVisibleCount === visibleDocumentIds.length;
+  const selectAllRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (selectAllRef.current)
+      selectAllRef.current.indeterminate =
+        selectedVisibleCount > 0 && !allVisibleSelected;
+  }, [allVisibleSelected, selectedVisibleCount]);
+
+  const deletionPending =
+    remove.isPending || removeSelected.isPending || removeAll.isPending;
   return (
     <Panel
       id="indexed-documents"
@@ -121,35 +176,107 @@ export function DocumentLibrary({
         />
       </FormField>
       <div className="indexed-document-toolbar">
-        <span>
-          Delete all removes every indexed document in this organization,
-          including documents outside the current search.
-        </span>
-        <Button
-          variant="text"
-          className="danger-action"
-          type="button"
-          disabled={
-            !documents.data?.length || remove.isPending || removeAll.isPending
-          }
-          busy={removeAll.isPending}
-          busyLabel="Deleting all…"
-          onClick={() => {
-            const count = documents.data?.length ?? 0;
-            if (
-              confirm(
-                `Delete all indexed documents in this organization? At least ${count} ${count === 1 ? "document" : "documents"} will be removed. This cannot be undone.`,
+        <div className="indexed-document-selection">
+          <label>
+            <Input
+              ref={selectAllRef}
+              type="checkbox"
+              checked={allVisibleSelected}
+              disabled={!visibleDocumentIds.length || deletionPending}
+              onChange={() => {
+                setBulkDeleteError("");
+                setSelectedDocumentIds((current) => {
+                  const next = new Set(current);
+                  visibleDocumentIds.forEach((documentId) => {
+                    if (allVisibleSelected) next.delete(documentId);
+                    else next.add(documentId);
+                  });
+                  return next;
+                });
+              }}
+            />
+            Select all shown
+          </label>
+          <strong>{selectedAvailableDocumentIds.length} selected</strong>
+          {selectedAvailableDocumentIds.length > 0 && (
+            <Button
+              variant="text"
+              type="button"
+              disabled={deletionPending}
+              onClick={() => setSelectedDocumentIds(new Set())}
+            >
+              Clear
+            </Button>
+          )}
+        </div>
+        <div className="indexed-document-bulk-actions">
+          <Button
+            variant="text"
+            className="danger-action"
+            type="button"
+            disabled={!selectedAvailableDocumentIds.length || deletionPending}
+            busy={removeSelected.isPending}
+            busyLabel="Deleting selected…"
+            onClick={() => {
+              const selectedIds = selectedAvailableDocumentIds;
+              if (
+                confirm(
+                  `Delete ${selectedIds.length} selected ${selectedIds.length === 1 ? "document" : "documents"} from this organization? This cannot be undone.`,
+                )
+              ) {
+                setBulkDeleteError("");
+                removeSelected.mutate(selectedIds);
+              }
+            }}
+          >
+            Delete selected
+          </Button>
+          <Button
+            variant="text"
+            className="danger-action"
+            type="button"
+            disabled={!documents.data?.length || deletionPending}
+            busy={removeAll.isPending}
+            busyLabel="Deleting all…"
+            onClick={() => {
+              const count = documents.data?.length ?? 0;
+              if (
+                confirm(
+                  `Delete all indexed documents in this organization? At least ${count} ${count === 1 ? "document" : "documents"} will be removed. This cannot be undone.`,
+                )
               )
-            )
-              removeAll.mutate();
-          }}
-        >
-          Delete all documents
-        </Button>
+                removeAll.mutate();
+            }}
+          >
+            Delete all documents
+          </Button>
+        </div>
       </div>
+      <span className="indexed-document-delete-note">
+        Delete all includes documents outside the current search.
+      </span>
       <div className="indexed-document-list">
         {matches.map((document) => (
-          <article className="indexed-document-row" key={document.document_id}>
+          <article
+            className={`indexed-document-row${selectedDocumentIds.has(document.document_id) ? " selected" : ""}`}
+            key={document.document_id}
+          >
+            <Input
+              className="indexed-document-select"
+              type="checkbox"
+              aria-label={`Select ${document.document_name}`}
+              checked={selectedDocumentIds.has(document.document_id)}
+              disabled={deletionPending}
+              onChange={(event) => {
+                setBulkDeleteError("");
+                setSelectedDocumentIds((current) => {
+                  const next = new Set(current);
+                  if (event.target.checked) next.add(document.document_id);
+                  else next.delete(document.document_id);
+                  return next;
+                });
+              }}
+            />
             <div className="indexed-document-main">
               <strong>{document.document_name}</strong>
               <small>
@@ -203,8 +330,7 @@ export function DocumentLibrary({
                     disabled={
                       !classificationChoices[document.document_id] ||
                       classify.isPending ||
-                      remove.isPending ||
-                      removeAll.isPending
+                      deletionPending
                     }
                     busy={
                       classify.isPending &&
@@ -227,7 +353,7 @@ export function DocumentLibrary({
                 variant="text"
                 className="danger-action"
                 type="button"
-                disabled={remove.isPending || removeAll.isPending}
+                disabled={deletionPending}
                 onClick={() => {
                   if (
                     confirm(
@@ -253,6 +379,11 @@ export function DocumentLibrary({
       {classify.error instanceof Error && (
         <StatusMessage className="upload-status error">
           {classify.error.message}
+        </StatusMessage>
+      )}
+      {bulkDeleteError && (
+        <StatusMessage className="upload-status error">
+          {bulkDeleteError}
         </StatusMessage>
       )}
     </Panel>
