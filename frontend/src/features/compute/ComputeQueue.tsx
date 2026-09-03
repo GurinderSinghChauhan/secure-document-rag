@@ -79,13 +79,7 @@ export function ComputeQueue({
             : Promise.resolve(job),
         ),
       );
-      return releaseJobs(
-        ready.map((job) => job.job_id),
-        Math.max(
-          ready.reduce((total, job) => total + job.recommended_gpu_minutes, 0),
-          1,
-        ),
-      );
+      return releaseJobs(ready.map((job) => job.job_id));
     },
     onSuccess: async (value) => {
       setSessionId(value.session_id);
@@ -97,14 +91,16 @@ export function ComputeQueue({
     void queryClient.invalidateQueries({ queryKey: computeKeys.queue });
     void queryClient.invalidateQueries({ queryKey: ["documents", "indexed"] });
   }, [session.data?.status, queryClient]);
-  const jobs = sessionId ? (session.data?.jobs ?? []) : (queue.data ?? []);
+  const jobs = sessionId
+    ? (session.data?.jobs ?? []).filter((job) => job.state !== "completed")
+    : (queue.data ?? []);
   const message = sessionId
     ? session.data
       ? session.data.status === "closed"
         ? session.data.jobs.some((job) => job.state === "failed")
           ? "Indexing finished with errors. Retry the failed documents below."
-          : `Indexing complete. ${(session.data.gpu_seconds / 60).toFixed(1)} GPU minutes used.`
-        : `${session.data.jobs.filter((job) => job.state === "completed").length} of ${session.data.jobs.length} documents complete · ${(session.data.gpu_seconds / 60).toFixed(1)} of ${session.data.max_gpu_minutes} GPU minutes used.`
+          : "Indexing complete."
+        : `${session.data.jobs.filter((job) => job.state === "completed").length} of ${session.data.jobs.length} documents complete. New uploads will join this session.`
       : "Restoring document processing…"
     : activeSession.isPending
       ? "Checking for active document processing…"
@@ -171,8 +167,7 @@ export function ComputeQueue({
                 </small>
                 {!sessionId && (
                   <small>
-                    {formatBytes(job.size_bytes)} · estimated{" "}
-                    {job.recommended_gpu_minutes} GPU minutes
+                    {formatBytes(job.size_bytes)} · ready for compute
                   </small>
                 )}
               </div>

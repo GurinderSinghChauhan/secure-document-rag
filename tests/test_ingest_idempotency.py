@@ -268,7 +268,7 @@ async def test_compute_failure_after_rollback_is_persisted_with_sql_update(monke
         return compute_session if model is ComputeSessionRecord else job
 
     session.get.side_effect = get_record
-    session.scalar.side_effect = [3, 0]
+    session.scalar.side_effect = [compute_session, 3, compute_session, None]
 
     class SessionContext:
         async def __aenter__(self):

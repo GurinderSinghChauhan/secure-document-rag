@@ -125,10 +125,7 @@ test("manually classifies an unclassified document and starts the remaining pipe
         );
       },
     ),
-    http.post("/v1/admin/compute-sessions", () =>
-      HttpResponse.json({ session_id: "session-1" }, { status: 201 }),
-    ),
-    http.post("/v1/admin/compute-sessions/session-1/release", () =>
+    http.post("/v1/admin/compute-sessions/release", () =>
       HttpResponse.json({ session_id: "session-1" }),
     ),
   );

@@ -180,10 +180,19 @@ async def create_held_job(
     return job
 
 
-async def get_open_compute_session(session: AsyncSession, tenant_id: str) -> ComputeSessionRecord | None:
-    return await session.scalar(
-        select(ComputeSessionRecord).where(ComputeSessionRecord.tenant_id == tenant_id, ComputeSessionRecord.status == "open")
+async def get_open_compute_session(
+    session: AsyncSession,
+    tenant_id: str,
+    *,
+    for_update: bool = False,
+) -> ComputeSessionRecord | None:
+    statement = select(ComputeSessionRecord).where(
+        ComputeSessionRecord.tenant_id == tenant_id,
+        ComputeSessionRecord.status == "open",
     )
+    if for_update:
+        statement = statement.with_for_update()
+    return await session.scalar(statement)
 
 
 def require_compute_for_query() -> None:
@@ -455,24 +464,53 @@ async def index_document_events(
     }
 
 
-async def run_local_compute_session(compute_session_id: str, job_ids: list[str]) -> None:
-    """Runs one heavy operation at a time after an explicit admin release."""
+async def run_local_compute_session(compute_session_id: str, job_ids: list[str] | None = None) -> None:
+    """Sequentially drains a bounded session, including jobs appended while it runs."""
     settings = get_settings()
-    for job_id in job_ids:
+    preferred_job_ids = list(job_ids or [])
+    while True:
         started = monotonic()
         async with SessionFactory() as session:
-            compute_session = await session.get(ComputeSessionRecord, compute_session_id)
-            job = await session.get(IngestionJobRecord, job_id)
-            if compute_session is None or job is None or compute_session.status not in {"open", "draining"}:
-                continue
+            compute_session = await session.scalar(
+                select(ComputeSessionRecord)
+                .where(ComputeSessionRecord.session_id == compute_session_id)
+                .with_for_update()
+            )
+            if compute_session is None or compute_session.status not in {"open", "draining"}:
+                break
+            job = None
+            while preferred_job_ids and job is None:
+                candidate = await session.get(IngestionJobRecord, preferred_job_ids.pop(0))
+                if candidate is not None and candidate.state == "provider_queued":
+                    job = candidate
+            if job is None:
+                job = await session.scalar(
+                    select(IngestionJobRecord)
+                    .where(
+                        IngestionJobRecord.compute_session_id == compute_session_id,
+                        IngestionJobRecord.state == "provider_queued",
+                    )
+                    .order_by(IngestionJobRecord.created_at, IngestionJobRecord.job_id)
+                    .limit(1)
+                )
+            if job is None:
+                compute_session.status = "closed"
+                compute_session.closed_at = func.now()
+                await session.commit()
+                break
+            job_id = job.job_id
             if compute_session.gpu_seconds >= compute_session.max_gpu_minutes * 60:
                 job.state, job.stage, job.progress = "held_for_compute", "held", 0
                 job.message = "Session GPU time limit reached; document returned to held state."
+                compute_session.status = "closed"
+                compute_session.closed_at = func.now()
                 await session.commit()
                 break
             if compute_session.max_estimated_cost_usd is not None and compute_session.estimated_cost_usd >= compute_session.max_estimated_cost_usd:
                 job.state, job.stage, job.progress = "held_for_compute", "held", 0
                 job.message = "Session cost limit reached; document returned to held state."
+                compute_session.status = "closed"
+                compute_session.closed_at = func.now()
                 await session.commit()
                 break
             job.state, job.stage, job.progress = "processing", "cold_start", 1
@@ -551,25 +589,6 @@ async def run_local_compute_session(compute_session_id: str, job_ids: list[str])
                 )
                 await session.commit()
 
-    async with SessionFactory() as session:
-        compute_session = await session.get(ComputeSessionRecord, compute_session_id)
-        if compute_session is not None:
-            await session.execute(
-                update(IngestionJobRecord).where(
-                    IngestionJobRecord.compute_session_id == compute_session_id,
-                    IngestionJobRecord.state == "provider_queued",
-                ).values(state="held_for_compute", stage="held", progress=0, message="Session stopped before dispatch; document remains held.")
-            )
-            remaining = await session.scalar(
-                select(func.count()).select_from(IngestionJobRecord).where(
-                    IngestionJobRecord.compute_session_id == compute_session_id,
-                    IngestionJobRecord.state.in_(["provider_queued", "cold_start", "processing", "retrying"]),
-                )
-            )
-            if not remaining:
-                compute_session.status = "closed"
-                compute_session.closed_at = func.now()
-                await session.commit()
     compute_tasks.pop(compute_session_id, None)
 
 
@@ -993,19 +1012,15 @@ async def owned_compute_session(session: AsyncSession, principal: Principal, ses
     return record_
 
 
-@app.post("/v1/admin/compute-sessions/{session_id}/release", response_model=ComputeSessionResponse)
-async def release_compute_jobs(
-    session_id: str,
+async def release_jobs_into_session(
+    record_: ComputeSessionRecord,
     payload: ComputeSessionRelease,
-    principal: Principal = Depends(require_principal),
-    session: AsyncSession = Depends(get_session),
+    principal: Principal,
+    session: AsyncSession,
 ) -> ComputeSessionResponse:
-    require_admin(principal)
-    require_active_trial(principal)
     settings = get_settings()
     if not settings.gpu_dispatch_enabled:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="GPU dispatch is disabled; no provider was contacted.")
-    record_ = await owned_compute_session(session, principal, session_id)
     if record_.status != "open":
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Compute session is not open")
     if len(payload.job_ids) != len(set(payload.job_ids)):
@@ -1015,6 +1030,14 @@ async def release_compute_jobs(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="One or more jobs were not found")
     if any(job.state != "held_for_compute" for job in jobs):
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Only held jobs can be released")
+    additional_gpu_minutes = sum(
+        recommended_gpu_minutes(job.content_type, job.size_bytes) for job in jobs
+    )
+    record_.max_jobs = record_.released_job_count + len(jobs)
+    record_.max_gpu_minutes = max(
+        record_.max_gpu_minutes,
+        record_.gpu_seconds / 60,
+    ) + additional_gpu_minutes
     try:
         assert_release_within_limits(
             released_job_count=record_.released_job_count, requested_jobs=len(jobs), max_jobs=record_.max_jobs,
@@ -1027,14 +1050,63 @@ async def release_compute_jobs(
         raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="Hosted worker artifact exchange is not configured; no provider was contacted.")
     for job in jobs:
         job.state, job.stage, job.progress = "provider_queued", "provider_queue", 0
-        job.message = "Released into the bounded compute session."
+        job.message = "Added to the active document compute session."
         job.compute_session_id = record_.session_id
     record_.released_job_count += len(jobs)
     await session.commit()
     await record(session, "compute_jobs_released", principal.tenant_id, principal.user_id, compute_session_id=record_.session_id, job_ids=payload.job_ids)
-    task = asyncio.create_task(run_local_compute_session(record_.session_id, payload.job_ids))
-    compute_tasks[record_.session_id] = task
+    task = compute_tasks.get(record_.session_id)
+    if task is None or task.done():
+        compute_tasks[record_.session_id] = asyncio.create_task(
+            run_local_compute_session(record_.session_id, payload.job_ids)
+        )
     return await compute_session_payload(session, record_)
+
+
+@app.post("/v1/admin/compute-sessions/release", response_model=ComputeSessionResponse)
+async def release_compute_jobs_automatically(
+    payload: ComputeSessionRelease,
+    principal: Principal = Depends(require_principal),
+    session: AsyncSession = Depends(get_session),
+) -> ComputeSessionResponse:
+    require_admin(principal)
+    require_active_trial(principal)
+    settings = get_settings()
+    if not settings.gpu_dispatch_enabled:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="GPU dispatch is disabled; no provider was contacted.")
+    record_ = await get_open_compute_session(
+        session,
+        principal.tenant_id,
+        for_update=True,
+    )
+    created = record_ is None
+    if record_ is None:
+        record_ = ComputeSessionRecord(
+            session_id=str(uuid4()), tenant_id=principal.tenant_id,
+            provider=settings.compute_provider, status="open", max_jobs=0,
+            max_gpu_minutes=0, max_estimated_cost_usd=None,
+            released_job_count=0, gpu_seconds=0, estimated_cost_usd=0,
+            created_by=principal.user_id,
+        )
+        session.add(record_)
+        await session.flush()
+    response = await release_jobs_into_session(record_, payload, principal, session)
+    if created:
+        await record(session, "compute_session_opened", principal.tenant_id, principal.user_id, compute_session_id=record_.session_id, provider=record_.provider)
+    return response
+
+
+@app.post("/v1/admin/compute-sessions/{session_id}/release", response_model=ComputeSessionResponse)
+async def release_compute_jobs(
+    session_id: str,
+    payload: ComputeSessionRelease,
+    principal: Principal = Depends(require_principal),
+    session: AsyncSession = Depends(get_session),
+) -> ComputeSessionResponse:
+    require_admin(principal)
+    require_active_trial(principal)
+    record_ = await owned_compute_session(session, principal, session_id)
+    return await release_jobs_into_session(record_, payload, principal, session)
 
 
 @app.post("/v1/admin/compute-sessions/{session_id}/drain", response_model=ComputeSessionResponse)

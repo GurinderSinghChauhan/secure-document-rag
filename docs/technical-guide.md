@@ -90,8 +90,9 @@ GitHub Actions uses one workflow with dependent jobs. The validation job has rea
 | `POST` | `/v1/documents/stream` | Tenant admin | Save a document as a durable `held_for_compute` job |
 | `GET` | `/v1/admin/ingestion-jobs` | Tenant admin | List held and historical ingestion jobs |
 | `POST` | `/v1/admin/documents/{id}/classification` | Tenant admin | Manually classify an unclassified/failed document and queue its remaining extraction-to-indexing pipeline |
+| `POST` | `/v1/admin/compute-sessions/release` | Tenant admin | Add held jobs to the open tenant session, creating one when needed |
 | `POST` | `/v1/admin/compute-sessions` | Tenant admin | Open a manually bounded compute session |
-| `POST` | `/v1/admin/compute-sessions/{id}/release` | Tenant admin | Release selected held jobs within explicit limits |
+| `POST` | `/v1/admin/compute-sessions/{id}/release` | Tenant admin | Append held jobs to a named open session for compatibility |
 | `POST` | `/v1/admin/compute-sessions/{id}/drain` | Tenant admin | Stop accepting more work into a session |
 | `POST` | `/v1/admin/compute-sessions/{id}/cancel` | Tenant admin | Cancel local work and return unfinished jobs to held state |
 | `GET` | `/v1/admin/compute-sessions/{id}` | Tenant admin | Report stages, GPU seconds, estimated cost, and limits |

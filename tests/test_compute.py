@@ -6,8 +6,8 @@ from fastapi import HTTPException
 
 from app.compute import RunpodProvider, assert_release_within_limits, estimated_cost, recommended_gpu_minutes
 from app.config import Settings
-from app.database import IngestionJobRecord
-from app.models import Principal
+from app.database import ComputeSessionRecord, IngestionJobRecord
+from app.models import ComputeSessionRelease, Principal
 from app import main
 
 
@@ -171,6 +171,134 @@ async def test_failed_ingestion_job_can_be_reset_for_an_explicit_retry(monkeypat
     assert job.provider_job_id is None
     assert job.error_code is None
     assert job.error_message is None
+
+
+@pytest.mark.asyncio
+async def test_new_jobs_extend_the_existing_document_session(monkeypatch):
+    now = datetime.now(UTC)
+    compute_session = ComputeSessionRecord(
+        session_id="session", tenant_id="organization", provider="local_docker", status="open",
+        max_jobs=1, max_gpu_minutes=1, max_estimated_cost_usd=None, released_job_count=1,
+        gpu_seconds=0, estimated_cost_usd=0, created_by="admin",
+    )
+    jobs = [
+        IngestionJobRecord(
+            job_id=f"job-{index}", tenant_id="organization", state="held_for_compute", stage="held",
+            progress=0, message="Waiting", document_name=f"document-{index}.txt", content_type="text/plain",
+            content_sha256=str(index) * 64, content=b"content", size_bytes=7, allowed_roles=["admin"],
+            allowed_users=[], created_by="admin", compute_session_id=None, provider_job_id=None,
+            attempt_count=0, retry_limit=3, result_document_id=None, chunks_indexed=0, tables_indexed=0,
+            visuals_indexed=0, gpu_seconds=0, estimated_cost_usd=0, error_code=None, error_message=None,
+            created_at=now, updated_at=now,
+        )
+        for index in (1, 2)
+    ]
+
+    class Session:
+        async def scalars(self, statement):
+            return jobs
+
+        async def commit(self):
+            return None
+
+    class RunningTask:
+        def done(self):
+            return False
+
+    async def no_audit(*args, **kwargs):
+        return None
+
+    async def payload(session, record):
+        return "payload"
+
+    monkeypatch.setattr(main, "get_settings", lambda: settings(gpu_dispatch_enabled=True, compute_provider="local_docker"))
+    monkeypatch.setattr(main, "record", no_audit)
+    monkeypatch.setattr(main, "compute_session_payload", payload)
+    monkeypatch.setitem(main.compute_tasks, "session", RunningTask())
+    principal = Principal(tenant_id="organization", user_id="admin", roles=["admin"], is_super_admin=True)
+
+    result = await main.release_jobs_into_session(
+        compute_session,
+        ComputeSessionRelease(job_ids=["job-1", "job-2"]),
+        principal,
+        Session(),
+    )
+
+    assert result == "payload"
+    assert compute_session.max_jobs == 3
+    assert compute_session.max_gpu_minutes == 3
+    assert compute_session.released_job_count == 3
+    assert all(job.compute_session_id == "session" for job in jobs)
+    assert all(job.state == "provider_queued" for job in jobs)
+
+
+@pytest.mark.asyncio
+async def test_automatic_release_reuses_the_open_tenant_session(monkeypatch):
+    compute_session = object()
+    payload = object()
+    released = []
+
+    async def get_open(session, tenant_id, *, for_update=False):
+        assert tenant_id == "organization"
+        assert for_update is True
+        return compute_session
+
+    async def release(record, request, principal, session):
+        released.append((record, request.job_ids))
+        return payload
+
+    monkeypatch.setattr(main, "get_open_compute_session", get_open)
+    monkeypatch.setattr(main, "release_jobs_into_session", release)
+    monkeypatch.setattr(main, "get_settings", lambda: settings(gpu_dispatch_enabled=True, compute_provider="local_docker"))
+    principal = Principal(tenant_id="organization", user_id="admin", roles=["admin"], is_super_admin=True)
+
+    result = await main.release_compute_jobs_automatically(
+        ComputeSessionRelease(job_ids=["job"]),
+        principal,
+        object(),
+    )
+
+    assert result is payload
+    assert released == [(compute_session, ["job"])]
+
+
+@pytest.mark.asyncio
+async def test_automatic_release_creates_a_session_when_none_is_open(monkeypatch):
+    added = []
+
+    class Session:
+        def add(self, record):
+            added.append(record)
+
+        async def flush(self):
+            return None
+
+    async def get_open(session, tenant_id, *, for_update=False):
+        return None
+
+    async def release(record, request, principal, session):
+        return record
+
+    async def no_audit(*args, **kwargs):
+        return None
+
+    monkeypatch.setattr(main, "get_open_compute_session", get_open)
+    monkeypatch.setattr(main, "release_jobs_into_session", release)
+    monkeypatch.setattr(main, "record", no_audit)
+    monkeypatch.setattr(main, "get_settings", lambda: settings(gpu_dispatch_enabled=True, compute_provider="local_docker"))
+    principal = Principal(tenant_id="organization", user_id="admin", roles=["admin"], is_super_admin=True)
+
+    result = await main.release_compute_jobs_automatically(
+        ComputeSessionRelease(job_ids=["job"]),
+        principal,
+        Session(),
+    )
+
+    assert result is added[0]
+    assert result.tenant_id == "organization"
+    assert result.status == "open"
+    assert result.max_jobs == 0
+    assert result.max_gpu_minutes == 0
 
 
 def test_chat_compute_is_available_without_a_document_session(monkeypatch):

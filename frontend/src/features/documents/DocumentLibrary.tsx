@@ -63,10 +63,7 @@ export function DocumentLibrary({
       documentType: string;
     }) => {
       const job = await classifyDocument(documentId, documentType);
-      return releaseJobs(
-        [job.job_id],
-        Math.max(job.recommended_gpu_minutes, 1),
-      );
+      return releaseJobs([job.job_id]);
     },
     onSuccess: (session) => {
       onComputeStarted?.(session.session_id);

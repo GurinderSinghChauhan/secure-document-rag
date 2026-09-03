@@ -41,26 +41,14 @@ export const retryIngestionJob = (jobId: string) =>
     { method: "POST" },
     "Unable to retry document indexing.",
   );
-export async function releaseJobs(jobIds: string[], maxGpuMinutes: number) {
-  const session = await api.json<ComputeSession>(
-    "/v1/admin/compute-sessions",
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        max_jobs: jobIds.length,
-        max_gpu_minutes: maxGpuMinutes,
-      }),
-    },
-    "Unable to open compute session.",
-  );
+export async function releaseJobs(jobIds: string[]) {
   return api.json<ComputeSession>(
-    `/v1/admin/compute-sessions/${session.session_id}/release`,
+    "/v1/admin/compute-sessions/release",
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ job_ids: jobIds }),
     },
-    "Unable to release jobs.",
+    "Unable to add documents to compute.",
   );
 }

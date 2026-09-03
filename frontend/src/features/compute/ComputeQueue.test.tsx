@@ -72,10 +72,7 @@ test("shows compute as the single authoritative processing stage", async () => {
           : [],
       ),
     ),
-    http.post("/v1/admin/compute-sessions", () =>
-      HttpResponse.json(session, { status: 201 }),
-    ),
-    http.post("/v1/admin/compute-sessions/session-1/release", () =>
+    http.post("/v1/admin/compute-sessions/release", () =>
       HttpResponse.json(session),
     ),
     http.get("/v1/admin/compute-sessions/session-1", () =>
@@ -102,12 +99,26 @@ test("shows compute as the single authoritative processing stage", async () => {
 });
 
 test("restores an active indexing session after a page reload", async () => {
+  const restoredSession = {
+    ...session,
+    jobs: [
+      {
+        ...job,
+        job_id: "job-complete",
+        document_name: "finished.pdf",
+        state: "completed",
+        stage: "completed",
+        progress: 100,
+      },
+      ...session.jobs,
+    ],
+  };
   server.use(
     http.get("/v1/admin/compute-sessions/active", () =>
-      HttpResponse.json(session),
+      HttpResponse.json(restoredSession),
     ),
     http.get("/v1/admin/compute-sessions/session-1", () =>
-      HttpResponse.json(session),
+      HttpResponse.json(restoredSession),
     ),
   );
 
@@ -118,6 +129,7 @@ test("restores an active indexing session after a page reload", async () => {
     screen.getByText("MinerU is extracting document content"),
   ).toBeVisible();
   expect(screen.getByText("13%")).toBeVisible();
+  expect(screen.queryByText("finished.pdf")).not.toBeInTheDocument();
   expect(screen.queryByRole("button")).not.toBeInTheDocument();
 });
 
@@ -137,7 +149,6 @@ test("retries every failed document in one GPU session", async () => {
     created_at: "2030-01-02T00:00:00Z",
   };
   const retryRequest = vi.fn();
-  const openRequest = vi.fn();
   const releaseRequest = vi.fn();
   server.use(
     http.get("/v1/admin/compute-sessions/active", () =>
@@ -154,17 +165,10 @@ test("retries every failed document in one GPU session", async () => {
       retryRequest(params.jobId);
       return HttpResponse.json({ ...job, job_id: params.jobId });
     }),
-    http.post("/v1/admin/compute-sessions", async ({ request }) => {
-      openRequest(await request.json());
-      return HttpResponse.json(session, { status: 201 });
+    http.post("/v1/admin/compute-sessions/release", async ({ request }) => {
+      releaseRequest(await request.json());
+      return HttpResponse.json(session);
     }),
-    http.post(
-      "/v1/admin/compute-sessions/session-1/release",
-      async ({ request }) => {
-        releaseRequest(await request.json());
-        return HttpResponse.json(session);
-      },
-    ),
     http.get("/v1/admin/compute-sessions/session-1", () =>
       HttpResponse.json(session),
     ),
@@ -180,11 +184,6 @@ test("retries every failed document in one GPU session", async () => {
   );
   expect(await screen.findByText("Extracting content")).toBeVisible();
   expect(retryRequest).toHaveBeenCalledTimes(2);
-  expect(openRequest).toHaveBeenCalledOnce();
-  expect(openRequest).toHaveBeenCalledWith({
-    max_jobs: 2,
-    max_gpu_minutes: 12,
-  });
   expect(releaseRequest).toHaveBeenCalledOnce();
   expect(releaseRequest).toHaveBeenCalledWith({
     job_ids: ["job-2", "job-1"],

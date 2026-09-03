@@ -119,10 +119,6 @@ export function DocumentUploader({
       try {
         const session = await releaseJobs(
           uploaded.map((result) => result.job_id),
-          uploaded.reduce(
-            (total, result) => total + result.recommended_gpu_minutes,
-            0,
-          ),
         );
         onComputeStarted?.(session.session_id);
       } catch (error) {
