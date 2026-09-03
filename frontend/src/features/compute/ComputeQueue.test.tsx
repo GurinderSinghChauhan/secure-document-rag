@@ -7,6 +7,7 @@ import { ComputeQueue } from "./ComputeQueue";
 
 const job = {
   job_id: "job-1",
+  operation: "index" as const,
   document_name: "discharge_summary_07.pdf",
   document_type: null,
   content_type: "application/pdf",
@@ -84,7 +85,7 @@ test("shows compute as the single authoritative processing stage", async () => {
 
   expect(await screen.findByText(/1 document needs attention/)).toBeVisible();
   await user.click(
-    screen.getByRole("button", { name: "Start queued documents (1)" }),
+    screen.getByRole("button", { name: "Start queued work (1)" }),
   );
 
   expect(await screen.findByText("Extracting content")).toBeVisible();
@@ -180,7 +181,7 @@ test("retries every failed document in one GPU session", async () => {
   expect(await screen.findAllByText("Indexing failed")).toHaveLength(2);
   expect(screen.getAllByText("Metadata extraction failed")).toHaveLength(2);
   await user.click(
-    screen.getByRole("button", { name: "Retry failed documents (2)" }),
+    screen.getByRole("button", { name: "Retry failed work (2)" }),
   );
   expect(await screen.findByText("Extracting content")).toBeVisible();
   expect(retryRequest).toHaveBeenCalledTimes(2);
@@ -202,7 +203,7 @@ test("shows a clear queue when no documents need attention", async () => {
 
   expect(
     await screen.findByText(
-      "No documents are waiting. New uploads start indexing automatically.",
+      "No documents are waiting. New uploads start processing automatically.",
     ),
   ).toBeVisible();
   expect(screen.queryByRole("button")).not.toBeInTheDocument();

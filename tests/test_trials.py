@@ -11,6 +11,7 @@ from app.trials import (
     TRIAL_QUESTION_DAILY_LIMIT,
     is_pdf,
     new_trial_window,
+    reserve_pdf_trial_slot,
     require_active_trial,
     reserve_question_trial_slot,
     trial_payload,
@@ -100,3 +101,18 @@ async def test_super_admin_question_limit_bypasses_database_usage_check():
     await reserve_question_trial_slot(session, principal(expires=None, super_admin=True))
 
     session.scalar.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_pdf_trial_limit_counts_only_indexing_jobs():
+    session = AsyncMock()
+    session.scalar.side_effect = ["organization", 1]
+
+    await reserve_pdf_trial_slot(
+        session,
+        principal(expires=datetime.now(UTC) + timedelta(days=1)),
+    )
+
+    statement = session.scalar.await_args_list[1].args[0]
+    sql = str(statement.compile(compile_kwargs={"literal_binds": True}))
+    assert "ingestion_jobs.operation = 'index'" in sql

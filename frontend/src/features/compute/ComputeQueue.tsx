@@ -17,7 +17,16 @@ function formatBytes(size: number) {
   return `${(size / 1024 ** 2).toFixed(1)} MB`;
 }
 
-function formatStage(stage: string) {
+function formatStage(stage: string, operation: IngestionJob["operation"]) {
+  if (operation === "metadata_extraction") {
+    const extractionStages: Record<string, string> = {
+      completion: "Data extracted",
+      completed: "Data extracted",
+      failed: "Extraction failed",
+      held: "Waiting to extract data",
+    };
+    if (extractionStages[stage]) return extractionStages[stage];
+  }
   const stages: Record<string, string> = {
     cold_start: "Preparing worker",
     extracting: "Extracting content",
@@ -98,19 +107,19 @@ export function ComputeQueue({
     ? session.data
       ? session.data.status === "closed"
         ? session.data.jobs.some((job) => job.state === "failed")
-          ? "Indexing finished with errors. Retry the failed documents below."
-          : "Indexing complete."
+          ? "Processing finished with errors. Retry the failed documents below."
+          : "Processing complete."
         : `${session.data.jobs.filter((job) => job.state === "completed").length} of ${session.data.jobs.length} documents complete. New uploads will join this session.`
       : "Restoring document processing…"
     : activeSession.isPending
       ? "Checking for active document processing…"
       : queue.isPending
-        ? "Loading the indexing queue…"
+        ? "Loading the processing queue…"
         : queue.error instanceof Error
           ? queue.error.message
           : queue.data?.length
             ? `${queue.data.length} ${queue.data.length === 1 ? "document needs" : "documents need"} attention.`
-            : "No documents are waiting. New uploads start indexing automatically.";
+            : "No documents are waiting. New uploads start processing automatically.";
   const canStartFromSession = session.data?.status === "closed";
   const queuedJobs = jobs.filter(
     (job) => job.state === "failed" || job.state === "held_for_compute",
@@ -123,9 +132,9 @@ export function ComputeQueue({
     queuedJobs.length > 0 && (!sessionId || canStartFromSession);
   const queueActionLabel = failedCount
     ? heldCount
-      ? `Retry and index queue (${queuedJobs.length})`
-      : `Retry failed documents (${failedCount})`
-    : `Start queued documents (${heldCount})`;
+      ? `Retry queued work (${queuedJobs.length})`
+      : `Retry failed work (${failedCount})`
+    : `Start queued work (${heldCount})`;
 
   return (
     <section
@@ -136,7 +145,7 @@ export function ComputeQueue({
       <div className="compute-heading">
         <div className="workflow-subheading">
           <span className="section-kicker">Processing queue</span>
-          <h3 id="compute-title">Indexing status</h3>
+          <h3 id="compute-title">Processing status</h3>
         </div>
         <span className="auto-refresh-badge">
           <i aria-hidden="true" /> Auto-updating
@@ -161,7 +170,7 @@ export function ComputeQueue({
                 <span>{job.progress}%</span>
               </header>
               <div className="compute-job-stage">
-                <span>{formatStage(job.stage)}</span>
+                <span>{formatStage(job.stage, job.operation ?? "index")}</span>
                 <small>
                   {failed ? job.error_message || job.message : job.message}
                 </small>

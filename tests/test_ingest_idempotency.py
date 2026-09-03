@@ -225,6 +225,192 @@ async def test_reupload_without_delete_keeps_completed_classification_and_update
 
 
 @pytest.mark.asyncio
+async def test_manual_classification_extracts_metadata_without_reindexing(monkeypatch) -> None:
+    document = DocumentRecord(
+        document_id="00000000-0000-0000-0000-000000000003",
+        tenant_id="tenant-a",
+        document_name="invoice.pdf",
+        content_type="application/pdf",
+        content_sha256="c" * 64,
+        size_bytes=100,
+        chunk_count=4,
+        classification_status="failed",
+        classification_source="automatic",
+        allowed_roles=["admin"],
+        allowed_users=[],
+        created_by="user-a",
+    )
+    session = AsyncMock()
+    chunk_text = MagicMock(return_value=["must not be used"])
+    embed_batches = MagicMock()
+    delete_document = AsyncMock()
+    upsert_document = AsyncMock()
+    extract_metadata = AsyncMock(return_value={"invoice_number": "INV-42"})
+
+    monkeypatch.setattr(
+        main,
+        "get_settings",
+        lambda: SimpleNamespace(
+            mineru_enabled=False,
+            max_visuals_per_document=10,
+            max_document_chunks=100,
+        ),
+    )
+    monkeypatch.setattr(
+        main,
+        "extract_document",
+        lambda *_args: SimpleNamespace(
+            text="Invoice INV-42",
+            visuals=[],
+            described_visual_count=0,
+            table_count=0,
+        ),
+    )
+    monkeypatch.setattr(main, "chunk_text", chunk_text)
+    monkeypatch.setattr(main.model_server, "embed_batches", embed_batches)
+    monkeypatch.setattr(main.model_server, "extract_metadata", extract_metadata)
+    monkeypatch.setattr(main.model_server, "classify_document", AsyncMock())
+    monkeypatch.setattr(main.vectors, "delete_document", delete_document)
+    monkeypatch.setattr(main.vectors, "upsert_document", upsert_document)
+
+    events = [
+        event
+        async for event in main.index_document_events(
+            b"invoice content",
+            "application/pdf",
+            "c" * 64,
+            "invoice.pdf",
+            ["admin"],
+            [],
+            Principal(tenant_id="tenant-a", user_id="user-a", roles=["admin"]),
+            session,
+            document,
+            "accounts_payable.invoice",
+            index_vectors=False,
+        )
+    ]
+
+    assert document.document_type == "accounts_payable.invoice"
+    assert document.classification_status == "confirmed"
+    assert document.classification_source == "manual"
+    assert document.extraction_status == "completed"
+    assert document.extracted_metadata == {"invoice_number": "INV-42"}
+    assert document.chunk_count == 4
+    assert events[-1]["message"] == "Classification and extracted data updated"
+    assert events[-1]["chunks_indexed"] == 0
+    chunk_text.assert_not_called()
+    embed_batches.assert_not_called()
+    delete_document.assert_not_awaited()
+    upsert_document.assert_not_awaited()
+    extract_metadata.assert_awaited_once()
+    session.commit.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_metadata_extraction_job_dispatches_without_vector_indexing(monkeypatch) -> None:
+    compute_session = ComputeSessionRecord(
+        session_id="session-a",
+        tenant_id="tenant-a",
+        provider="local_docker",
+        status="open",
+        max_jobs=1,
+        max_gpu_minutes=10,
+        max_estimated_cost_usd=None,
+        released_job_count=1,
+        gpu_seconds=0,
+        estimated_cost_usd=0,
+        created_by="user-a",
+    )
+    document = DocumentRecord(
+        document_id="document-a",
+        tenant_id="tenant-a",
+        document_name="invoice.pdf",
+        content_type="application/pdf",
+        content_sha256="d" * 64,
+        size_bytes=7,
+        chunk_count=4,
+        classification_status="failed",
+        allowed_roles=["admin"],
+        allowed_users=[],
+        created_by="user-a",
+    )
+    job = IngestionJobRecord(
+        job_id="job-a",
+        tenant_id="tenant-a",
+        state="provider_queued",
+        stage="queued",
+        progress=0,
+        message="Queued",
+        operation="metadata_extraction",
+        document_name="invoice.pdf",
+        document_type="accounts_payable.invoice",
+        content_type="application/pdf",
+        content_sha256="d" * 64,
+        content=b"content",
+        size_bytes=7,
+        allowed_roles=["admin"],
+        allowed_users=[],
+        created_by="user-a",
+        result_document_id="document-a",
+        attempt_count=0,
+        retry_limit=3,
+        chunks_indexed=0,
+        tables_indexed=0,
+        visuals_indexed=0,
+        gpu_seconds=0,
+        estimated_cost_usd=0,
+    )
+    session = AsyncMock()
+
+    async def get_record(model, _record_id):
+        return job if model is IngestionJobRecord else None
+
+    session.get.side_effect = get_record
+    session.scalar.side_effect = [compute_session, compute_session, None]
+
+    class SessionContext:
+        async def __aenter__(self):
+            return session
+
+        async def __aexit__(self, *_args):
+            return False
+
+    dispatched = {}
+
+    async def extraction_events(*_args, **kwargs):
+        dispatched.update(kwargs)
+        yield {
+            "type": "complete",
+            "percentage": 100,
+            "stage": "completion",
+            "document_id": "document-a",
+            "chunks_indexed": 0,
+            "tables_indexed": 0,
+            "visuals_indexed": 0,
+            "message": "Classification and extracted data updated",
+        }
+
+    monkeypatch.setattr(main, "SessionFactory", SessionContext)
+    monkeypatch.setattr(main, "get_document", AsyncMock(return_value=document))
+    hash_lookup = AsyncMock()
+    monkeypatch.setattr(main, "get_document_by_content_hash", hash_lookup)
+    monkeypatch.setattr(main, "index_document_events", extraction_events)
+    monkeypatch.setattr(
+        main,
+        "get_settings",
+        lambda: SimpleNamespace(compute_gpu_hourly_cost_usd=0.5),
+    )
+
+    await main.run_local_compute_session("session-a", ["job-a"])
+
+    assert dispatched["index_vectors"] is False
+    hash_lookup.assert_not_awaited()
+    main.get_document.assert_awaited_once_with(session, "tenant-a", "document-a")
+    assert job.state == "completed"
+    assert job.chunks_indexed == 0
+
+
+@pytest.mark.asyncio
 async def test_compute_failure_after_rollback_is_persisted_with_sql_update(monkeypatch) -> None:
     compute_session = ComputeSessionRecord(
         session_id="session-a",

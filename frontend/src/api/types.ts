@@ -46,6 +46,7 @@ export interface ChatDetail extends ChatSummary {
 
 export interface IngestionJob {
   job_id: string;
+  operation: "index" | "metadata_extraction";
   document_name: string;
   document_type: string | null;
   content_type: string;

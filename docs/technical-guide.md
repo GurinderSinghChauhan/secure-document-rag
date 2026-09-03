@@ -37,6 +37,7 @@ All services are intended to run in a private network. Docker Compose publishes 
 10. The model server creates dense text embeddings using `EMBEDDING_MODEL` in batches of `EMBEDDING_BATCH_SIZE`. This implementation uses caption-based visual retrieval rather than a separate image embedding space.
 11. Qdrant stores each vector with `document_id`, `document_name`, `chunk_index`, `text`, `allowed_roles`, and `allowed_users`.
 12. PostgreSQL records the document metadata and SHA-256 content hash. A duplicate active hash within the same tenant is rejected.
+13. Manual type assignment creates a `metadata_extraction` compute job. It reparses the retained source and runs schema-specific extraction, but preserves the existing chunks, embeddings, and Qdrant vectors.
 
 ### Retrieval
 

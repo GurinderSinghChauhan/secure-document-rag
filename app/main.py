@@ -138,6 +138,7 @@ def existing_document_event(document: DocumentRecord) -> dict[str, object]:
 
 def job_response(job: IngestionJobRecord) -> IngestionJobResponse:
     values = {column.name: getattr(job, column.name) for column in IngestionJobRecord.__table__.columns}
+    values["operation"] = values.get("operation") or "index"
     values["recommended_gpu_minutes"] = recommended_gpu_minutes(job.content_type, job.size_bytes)
     return IngestionJobResponse.model_validate(values)
 
@@ -164,14 +165,20 @@ def indexed_document_response(document: DocumentRecord) -> IndexedDocumentRespon
 async def create_held_job(
     *, session: AsyncSession, principal: Principal, document_name: str, content: bytes,
     content_type: str, allowed_roles: list[str], allowed_users: list[str], document_type: str | None = None,
+    operation: str = "index", result_document_id: str | None = None,
 ) -> IngestionJobRecord:
+    waiting_message = (
+        "Compute is off; metadata extraction is waiting."
+        if operation == "metadata_extraction"
+        else "GPU processing is off; document saved and waiting."
+    )
     job = IngestionJobRecord(
         job_id=str(uuid4()), tenant_id=principal.tenant_id, state="held_for_compute", stage="held", progress=0,
-        message="GPU processing is off; document saved and waiting.", document_name=document_name,
-        document_type=document_type,
+        message=waiting_message, document_name=document_name,
+        operation=operation, document_type=document_type,
         content_type=content_type, content_sha256=sha256(content).hexdigest(), content=content, size_bytes=len(content),
         allowed_roles=allowed_roles, allowed_users=allowed_users, created_by=principal.user_id,
-        retry_limit=get_settings().compute_retry_limit,
+        retry_limit=get_settings().compute_retry_limit, result_document_id=result_document_id,
     )
     session.add(job)
     await session.commit()
@@ -244,6 +251,7 @@ async def index_document_events(
     session: AsyncSession,
     existing_document: DocumentRecord | None = None,
     document_type: str | None = None,
+    index_vectors: bool = True,
 ):
     settings = get_settings()
     yield {"type": "progress", "percentage": 5, "stage": "extracting", "message": "Extracting text, tables, and visual content"}
@@ -307,10 +315,10 @@ async def index_document_events(
                     visuals_indexed += 1
 
     index_text = "\n\n".join(text_sections)
-    chunks = chunk_text(index_text)
-    if not chunks:
+    if not index_text.strip():
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Document has no indexable text, tables, or visuals")
-    if len(chunks) > settings.max_document_chunks:
+    chunks = chunk_text(index_text) if index_vectors else []
+    if index_vectors and len(chunks) > settings.max_document_chunks:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Document exceeds configured chunk limit")
 
     existing_classification_is_complete = (
@@ -384,6 +392,33 @@ async def index_document_events(
             extraction_status = "completed"
         except HTTPException:
             extraction_status = "failed"
+
+    if not index_vectors:
+        if existing_document is None:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="The document is no longer available for metadata extraction",
+            )
+        existing_document.document_type = resolved_document_type
+        existing_document.schema_version = SCHEMA_VERSION
+        existing_document.classification_status = classification_status
+        existing_document.classification_source = classification_source
+        existing_document.classification_confidence = classification_confidence
+        existing_document.extraction_status = extraction_status
+        existing_document.extracted_metadata = extracted_metadata
+        await session.commit()
+        yield {
+            "type": "complete",
+            "percentage": 100,
+            "stage": "completion",
+            "document_id": existing_document.document_id,
+            "chunks_indexed": 0,
+            "tables_indexed": 0,
+            "visuals_indexed": 0,
+            "reindexed": False,
+            "message": "Classification and extracted data updated",
+        }
+        return
 
     yield {"type": "progress", "percentage": 28, "stage": "chunking", "message": f"Prepared {len(chunks)} searchable chunks"}
     embeddings: list[list[float]] = []
@@ -519,9 +554,28 @@ async def run_local_compute_session(compute_session_id: str, job_ids: list[str] 
             job.attempt_count = attempt_count
             await session.commit()
             principal = Principal(tenant_id=job.tenant_id, user_id=job.created_by, roles=job.allowed_roles)
-            existing = await get_document_by_content_hash(session, job.tenant_id, job.content_sha256)
+            operation = getattr(job, "operation", "index") or "index"
+            existing = (
+                await get_document(session, job.tenant_id, job.result_document_id)
+                if operation == "metadata_extraction" and job.result_document_id
+                else await get_document_by_content_hash(
+                    session, job.tenant_id, job.content_sha256
+                )
+            )
             try:
-                async for event in index_document_events(job.content, job.content_type, job.content_sha256, job.document_name, job.allowed_roles, job.allowed_users, principal, session, existing, job.document_type):
+                async for event in index_document_events(
+                    job.content,
+                    job.content_type,
+                    job.content_sha256,
+                    job.document_name,
+                    job.allowed_roles,
+                    job.allowed_users,
+                    principal,
+                    session,
+                    existing,
+                    job.document_type,
+                    index_vectors=operation != "metadata_extraction",
+                ):
                     elapsed = monotonic() - started
                     if compute_session.gpu_seconds + elapsed >= compute_session.max_gpu_minutes * 60:
                         raise TimeoutError("Compute session GPU time limit reached")
@@ -945,7 +999,7 @@ async def classify_document_manually(
     if (document.classification_status or "unclassified") not in {"unclassified", "failed"}:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="Only documents that failed automatic classification can be classified manually",
+            detail="Only unclassified documents or documents with failed automatic classification can be classified manually",
         )
     document_type = validate_document_type(payload.document_type)
     if document_type is None:
@@ -954,7 +1008,7 @@ async def classify_document_manually(
     if source is None:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="The original source is unavailable; upload the document again to classify and index it.",
+            detail="The original source is unavailable; upload the document again to classify it and extract data.",
         )
     job = await create_held_job(
         session=session,
@@ -965,6 +1019,8 @@ async def classify_document_manually(
         allowed_roles=document.allowed_roles,
         allowed_users=document.allowed_users,
         document_type=document_type,
+        operation="metadata_extraction",
+        result_document_id=document.document_id,
     )
     await record(
         session,

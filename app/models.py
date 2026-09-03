@@ -60,6 +60,7 @@ class ClassifyDocumentRequest(BaseModel):
 
 class IngestionJobResponse(BaseModel):
     job_id: str
+    operation: str = "index"
     document_name: str
     document_type: str | None = None
     content_type: str

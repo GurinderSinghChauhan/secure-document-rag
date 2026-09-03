@@ -266,6 +266,8 @@ async def test_failed_document_can_be_classified_manually(monkeypatch):
     assert calls["source"] == ("org-a", "document-a")
     assert calls["job"]["content"] == b"source-pdf"
     assert calls["job"]["document_type"] == "accounts_payable.invoice"
+    assert calls["job"]["operation"] == "metadata_extraction"
+    assert calls["job"]["result_document_id"] == "document-a"
     assert calls["job"]["allowed_roles"] == ["admin"]
     assert calls["audit"][0] == "document_manual_classification_queued"
     assert calls["audit"][3]["document_type"] == "accounts_payable.invoice"
@@ -293,7 +295,7 @@ async def test_confirmed_document_cannot_be_manually_reclassified(monkeypatch):
 
     monkeypatch.setattr("app.main.get_document", find_document)
 
-    with pytest.raises(Exception, match="Only documents that failed automatic classification"):
+    with pytest.raises(Exception, match="Only unclassified documents"):
         await classify_document_manually(
             "document-a",
             ClassifyDocumentRequest(document_type="accounts_payable.invoice"),

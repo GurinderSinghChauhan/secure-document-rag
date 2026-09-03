@@ -36,6 +36,7 @@ export function DocumentLibrary({
     () => new Set(),
   );
   const [bulkDeleteError, setBulkDeleteError] = useState("");
+  const [bulkClassifyError, setBulkClassifyError] = useState("");
   const [classificationChoices, setClassificationChoices] = useState<
     Record<string, string>
   >({});
@@ -89,19 +90,49 @@ export function DocumentLibrary({
     queryKey: schemaKeys.all,
     queryFn: listDocumentSchemas,
   });
-  const classify = useMutation({
-    mutationFn: async ({
-      documentId,
-      documentType,
-    }: {
-      documentId: string;
-      documentType: string;
-    }) => {
-      const job = await classifyDocument(documentId, documentType);
-      return releaseJobs([job.job_id]);
+  const classifySelected = useMutation({
+    mutationFn: async (
+      targets: { documentId: string; documentType: string }[],
+    ) => {
+      const results = await Promise.allSettled(
+        targets.map(async (target) => ({
+          target,
+          job: await classifyDocument(target.documentId, target.documentType),
+        })),
+      );
+      const completed = results.flatMap((result) =>
+        result.status === "fulfilled" ? [result.value] : [],
+      );
+      const failed = targets.filter(
+        (_, index) => results[index]?.status === "rejected",
+      );
+      const session = completed.length
+        ? await releaseJobs(completed.map(({ job }) => job.job_id))
+        : undefined;
+      return {
+        session,
+        completedIds: completed.map(({ target }) => target.documentId),
+        failed,
+      };
     },
-    onSuccess: (session) => {
-      onComputeStarted?.(session.session_id);
+    onSuccess: ({ session, completedIds, failed }) => {
+      const completedIdSet = new Set(completedIds);
+      setSelectedDocumentIds(
+        new Set(failed.map(({ documentId }) => documentId)),
+      );
+      setClassificationChoices((current) =>
+        Object.fromEntries(
+          Object.entries(current).filter(
+            ([documentId]) => !completedIdSet.has(documentId),
+          ),
+        ),
+      );
+      setBulkClassifyError(
+        failed.length
+          ? `${failed.length} selected ${failed.length === 1 ? "document could" : "documents could"} not be started. The failed selection has been kept so you can try again.`
+          : "",
+      );
+      if (session) onComputeStarted?.(session.session_id);
       void queryClient.invalidateQueries({ queryKey: documentKeys.indexed });
       void queryClient.invalidateQueries({
         queryKey: ["compute", "queue"],
@@ -122,6 +153,19 @@ export function DocumentLibrary({
   const selectedAvailableDocumentIds = (documents.data ?? [])
     .map((document) => document.document_id)
     .filter((documentId) => selectedDocumentIds.has(documentId));
+  const selectedClassifiableDocuments = (documents.data ?? []).filter(
+    (document) =>
+      selectedDocumentIds.has(document.document_id) &&
+      (document.classification_status === "unclassified" ||
+        document.classification_status === "failed"),
+  );
+  const selectedDocumentsReadyToClassify =
+    selectedClassifiableDocuments.length > 0 &&
+    selectedClassifiableDocuments.length ===
+      selectedAvailableDocumentIds.length &&
+    selectedClassifiableDocuments.every(
+      (document) => classificationChoices[document.document_id],
+    );
   const visibleDocumentIds = matches.map((document) => document.document_id);
   const selectedVisibleCount = visibleDocumentIds.filter((documentId) =>
     selectedDocumentIds.has(documentId),
@@ -182,9 +226,14 @@ export function DocumentLibrary({
               ref={selectAllRef}
               type="checkbox"
               checked={allVisibleSelected}
-              disabled={!visibleDocumentIds.length || deletionPending}
+              disabled={
+                !visibleDocumentIds.length ||
+                deletionPending ||
+                classifySelected.isPending
+              }
               onChange={() => {
                 setBulkDeleteError("");
+                setBulkClassifyError("");
                 setSelectedDocumentIds((current) => {
                   const next = new Set(current);
                   visibleDocumentIds.forEach((documentId) => {
@@ -202,8 +251,12 @@ export function DocumentLibrary({
             <Button
               variant="text"
               type="button"
-              disabled={deletionPending}
-              onClick={() => setSelectedDocumentIds(new Set())}
+              disabled={deletionPending || classifySelected.isPending}
+              onClick={() => {
+                setBulkDeleteError("");
+                setBulkClassifyError("");
+                setSelectedDocumentIds(new Set());
+              }}
             >
               Clear
             </Button>
@@ -212,9 +265,36 @@ export function DocumentLibrary({
         <div className="indexed-document-bulk-actions">
           <Button
             variant="text"
+            type="button"
+            disabled={
+              !selectedDocumentsReadyToClassify ||
+              classifySelected.isPending ||
+              deletionPending
+            }
+            busy={classifySelected.isPending}
+            busyLabel="Starting extraction…"
+            onClick={() => {
+              setBulkClassifyError("");
+              classifySelected.mutate(
+                selectedClassifiableDocuments.map((document) => ({
+                  documentId: document.document_id,
+                  documentType:
+                    classificationChoices[document.document_id] ?? "",
+                })),
+              );
+            }}
+          >
+            Apply types &amp; extract data
+          </Button>
+          <Button
+            variant="text"
             className="danger-action"
             type="button"
-            disabled={!selectedAvailableDocumentIds.length || deletionPending}
+            disabled={
+              !selectedAvailableDocumentIds.length ||
+              deletionPending ||
+              classifySelected.isPending
+            }
             busy={removeSelected.isPending}
             busyLabel="Deleting selected…"
             onClick={() => {
@@ -235,7 +315,11 @@ export function DocumentLibrary({
             variant="text"
             className="danger-action"
             type="button"
-            disabled={!documents.data?.length || deletionPending}
+            disabled={
+              !documents.data?.length ||
+              deletionPending ||
+              classifySelected.isPending
+            }
             busy={removeAll.isPending}
             busyLabel="Deleting all…"
             onClick={() => {
@@ -266,9 +350,10 @@ export function DocumentLibrary({
               type="checkbox"
               aria-label={`Select ${document.document_name}`}
               checked={selectedDocumentIds.has(document.document_id)}
-              disabled={deletionPending}
+              disabled={deletionPending || classifySelected.isPending}
               onChange={(event) => {
                 setBulkDeleteError("");
+                setBulkClassifyError("");
                 setSelectedDocumentIds((current) => {
                   const next = new Set(current);
                   if (event.target.checked) next.add(document.document_id);
@@ -299,61 +384,39 @@ export function DocumentLibrary({
             <div className="indexed-document-actions">
               {(document.classification_status === "unclassified" ||
                 document.classification_status === "failed") && (
-                <>
-                  <Select
-                    aria-label={`Classification for ${document.document_name}`}
-                    value={classificationChoices[document.document_id] ?? ""}
-                    onChange={(event) =>
-                      setClassificationChoices((current) => ({
-                        ...current,
-                        [document.document_id]: event.target.value,
-                      }))
-                    }
-                  >
-                    <option value="">Select document type</option>
-                    {schemas.data?.map((industry) => (
-                      <optgroup label={industry.label} key={industry.key}>
-                        {industry.document_types.map((documentType) => (
-                          <option
-                            value={documentType.key}
-                            key={documentType.key}
-                          >
-                            {documentType.label}
-                          </option>
-                        ))}
-                      </optgroup>
-                    ))}
-                  </Select>
-                  <Button
-                    variant="text"
-                    type="button"
-                    disabled={
-                      !classificationChoices[document.document_id] ||
-                      classify.isPending ||
-                      deletionPending
-                    }
-                    busy={
-                      classify.isPending &&
-                      classify.variables?.documentId === document.document_id
-                    }
-                    busyLabel="Starting pipeline…"
-                    onClick={() =>
-                      classify.mutate({
-                        documentId: document.document_id,
-                        documentType:
-                          classificationChoices[document.document_id] ?? "",
-                      })
-                    }
-                  >
-                    Classify & complete indexing
-                  </Button>
-                </>
+                <Select
+                  aria-label={`Classification for ${document.document_name}`}
+                  disabled={
+                    !selectedDocumentIds.has(document.document_id) ||
+                    deletionPending ||
+                    classifySelected.isPending
+                  }
+                  value={classificationChoices[document.document_id] ?? ""}
+                  onChange={(event) => {
+                    setBulkClassifyError("");
+                    setClassificationChoices((current) => ({
+                      ...current,
+                      [document.document_id]: event.target.value,
+                    }));
+                  }}
+                >
+                  <option value="">Select document type</option>
+                  {schemas.data?.map((industry) => (
+                    <optgroup label={industry.label} key={industry.key}>
+                      {industry.document_types.map((documentType) => (
+                        <option value={documentType.key} key={documentType.key}>
+                          {documentType.label}
+                        </option>
+                      ))}
+                    </optgroup>
+                  ))}
+                </Select>
               )}
               <Button
                 variant="text"
                 className="danger-action"
                 type="button"
-                disabled={deletionPending}
+                disabled={deletionPending || classifySelected.isPending}
                 onClick={() => {
                   if (
                     confirm(
@@ -376,9 +439,14 @@ export function DocumentLibrary({
           </p>
         )}
       </div>
-      {classify.error instanceof Error && (
+      {classifySelected.error instanceof Error && (
         <StatusMessage className="upload-status error">
-          {classify.error.message}
+          {classifySelected.error.message}
+        </StatusMessage>
+      )}
+      {bulkClassifyError && (
+        <StatusMessage className="upload-status error">
+          {bulkClassifyError}
         </StatusMessage>
       )}
       {bulkDeleteError && (

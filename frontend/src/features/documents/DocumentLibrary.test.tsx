@@ -135,9 +135,10 @@ test("confirms and deletes every organization document in one request", async ()
   ).toBeVisible();
 });
 
-test("manually classifies an unclassified document and starts the remaining pipeline", async () => {
+test("extracts data for selected document types in one compute session", async () => {
   const onComputeStarted = vi.fn();
-  let requestedType: string | null = null;
+  const requestedTypes: Record<string, string | null> = {};
+  let releasedJobIds: string[] = [];
   server.use(
     http.get("/v1/document-schemas", () =>
       HttpResponse.json([
@@ -175,17 +176,36 @@ test("manually classifies an unclassified document and starts the remaining pipe
           created_by: "admin-1",
           created_at: "2030-01-01T00:00:00Z",
         },
+        {
+          document_id: "document-2",
+          document_name: "credit-note.pdf",
+          document_type: null,
+          schema_version: 2,
+          classification_status: "failed",
+          classification_source: "automatic",
+          classification_confidence: null,
+          extraction_status: "failed",
+          extracted_metadata: {},
+          content_type: "application/pdf",
+          size_bytes: 2048,
+          chunk_count: 2,
+          allowed_roles: ["admin"],
+          allowed_users: [],
+          created_by: "admin-1",
+          created_at: "2030-01-02T00:00:00Z",
+        },
       ]),
     ),
     http.post(
-      "/v1/admin/documents/document-1/classification",
-      async ({ request }) => {
-        requestedType = (
+      "/v1/admin/documents/:documentId/classification",
+      async ({ params, request }) => {
+        const documentId = String(params.documentId);
+        requestedTypes[documentId] = (
           (await request.json()) as { document_type: string | null }
         ).document_type;
         return HttpResponse.json(
           {
-            job_id: "job-1",
+            job_id: `job-${documentId}`,
             state: "held_for_compute",
             message: "Document saved and waiting.",
             recommended_gpu_minutes: 6,
@@ -194,9 +214,11 @@ test("manually classifies an unclassified document and starts the remaining pipe
         );
       },
     ),
-    http.post("/v1/admin/compute-sessions/release", () =>
-      HttpResponse.json({ session_id: "session-1" }),
-    ),
+    http.post("/v1/admin/compute-sessions/release", async ({ request }) => {
+      releasedJobIds = ((await request.json()) as { job_ids: string[] })
+        .job_ids;
+      return HttpResponse.json({ session_id: "session-1" });
+    }),
   );
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
@@ -208,16 +230,30 @@ test("manually classifies an unclassified document and starts the remaining pipe
   );
 
   expect(await screen.findByText("invoice.pdf")).toBeVisible();
+  await userEvent.click(screen.getByLabelText("Select invoice.pdf"));
+  await userEvent.click(screen.getByLabelText("Select credit-note.pdf"));
+  const classifyButton = screen.getByRole("button", {
+    name: "Apply types & extract data",
+  });
+  expect(classifyButton).toBeDisabled();
   await userEvent.selectOptions(
     screen.getByLabelText("Classification for invoice.pdf"),
     "accounts_payable.invoice",
   );
-  await userEvent.click(
-    screen.getByRole("button", { name: "Classify & complete indexing" }),
+  expect(classifyButton).toBeDisabled();
+  await userEvent.selectOptions(
+    screen.getByLabelText("Classification for credit-note.pdf"),
+    "accounts_payable.invoice",
   );
+  expect(classifyButton).toBeEnabled();
+  await userEvent.click(classifyButton);
 
   await waitFor(() => {
-    expect(requestedType).toBe("accounts_payable.invoice");
+    expect(requestedTypes).toEqual({
+      "document-1": "accounts_payable.invoice",
+      "document-2": "accounts_payable.invoice",
+    });
+    expect(releasedJobIds.sort()).toEqual(["job-document-1", "job-document-2"]);
     expect(onComputeStarted).toHaveBeenCalledWith("session-1");
   });
 });
