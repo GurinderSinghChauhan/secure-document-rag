@@ -53,7 +53,9 @@ test("selecting a folder keeps PDFs and reports ignored non-PDF files", async ()
   expect(within(documentCard).queryByText("Claims")).not.toBeInTheDocument();
   expect(within(folderCard).getByText("Claims")).toBeVisible();
   expect(
-    within(folderCard).getByText("1 PDF file contained · ready to upload"),
+    within(folderCard).getByText(
+      "1 PDF file contained · ready to upload and index",
+    ),
   ).toBeVisible();
   expect(
     screen.getByRole("button", { name: "Upload and index" }),
@@ -109,7 +111,9 @@ test("a multi-PDF folder never appears in the document picker card", async () =>
   ).not.toBeInTheDocument();
   expect(within(folderCard).getByText("Selected PDF folder")).toBeVisible();
   expect(
-    within(folderCard).getByText("10 PDF files contained · ready to upload"),
+    within(folderCard).getByText(
+      "10 PDF files contained · ready to upload and index",
+    ),
   ).toBeVisible();
   expect(folderCard).toHaveClass("selected");
   expect(documentCard).not.toHaveClass("selected");
@@ -128,7 +132,7 @@ test("selecting a folder with no PDFs leaves upload disabled", async () => {
     "0 PDFs selected. 1 non-PDF file was ignored.",
   );
   expect(
-    screen.getByRole("button", { name: "Choose documents to upload" }),
+    screen.getByRole("button", { name: "Upload and index" }),
   ).toBeDisabled();
 });
 

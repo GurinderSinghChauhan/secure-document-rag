@@ -56,7 +56,7 @@ export function DocumentUploader({
     setStatusTone("neutral");
     setStatus(
       nextFiles.length
-        ? `${nextFiles.length} ${nextFiles.length === 1 ? "document" : "documents"} ready to upload.`
+        ? `${nextFiles.length} ${nextFiles.length === 1 ? "document" : "documents"} ready to upload and index.`
         : "Choose documents to upload and index in one controlled action.",
     );
   }
@@ -239,7 +239,7 @@ export function DocumentUploader({
             </strong>
             <span>
               {selectionSource === "folder" && files.length
-                ? `${files.length} PDF ${files.length === 1 ? "file" : "files"} contained · ready to upload`
+                ? `${files.length} PDF ${files.length === 1 ? "file" : "files"} contained · ready to upload and index`
                 : "Include nested folders"}
             </span>
             <small>
@@ -302,7 +302,7 @@ export function DocumentUploader({
           <span>
             {files.length
               ? `Upload and index${files.length > 1 ? ` ${files.length}` : ""}`
-              : "Choose documents to upload"}
+              : "Upload and index"}
           </span>
         </Button>
       </form>
