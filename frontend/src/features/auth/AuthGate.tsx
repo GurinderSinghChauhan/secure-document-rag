@@ -140,18 +140,24 @@ export function AuthGate() {
           </div>
           <div className="auth-showcase-copy">
             <span className="auth-eyebrow">
-              Document intelligence workspace
+              Enterprise document intelligence
             </span>
-            <h2>Answers grounded in the documents you can access.</h2>
+            <h2>Secure answers from the documents your teams can trust.</h2>
             <p>
-              Search, process, and govern organizational knowledge from one
-              focused workspace.
+              Give regulated organizations one governed workspace to search,
+              classify, and act on mission-critical knowledge without exposing
+              data beyond policy boundaries.
             </p>
+          </div>
+          <div className="auth-trust-row" aria-label="Product strengths">
+            <span>Role-based access</span>
+            <span>Audit-friendly</span>
+            <span>Self-hosted</span>
           </div>
           <ul className="auth-benefits">
             <li>
               <Icon name="lock" />
-              <span>Organization-scoped access</span>
+              <span>Policy-enforced access boundaries</span>
             </li>
             <li>
               <Icon name="documents" />
@@ -159,9 +165,19 @@ export function AuthGate() {
             </li>
             <li>
               <Icon name="message" />
-              <span>Permission-aware retrieval</span>
+              <span>Permission-aware answer generation</span>
             </li>
           </ul>
+          <div className="auth-showcase-footer" aria-label="Platform metrics">
+            <div className="auth-stat">
+              <strong>24/7</strong>
+              <span>Human-in-the-loop workflows</span>
+            </div>
+            <div className="auth-stat">
+              <strong>100%</strong>
+              <span>Organization scoping</span>
+            </div>
+          </div>
           <p className="auth-showcase-note">
             Self-hosted infrastructure · Role-based controls · v
             {__APP_VERSION__}

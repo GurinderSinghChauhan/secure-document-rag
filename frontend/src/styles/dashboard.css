@@ -1,25 +1,28 @@
 .dashboard-content {
-  width: min(1240px, 100%);
+  width: min(1280px, 100%);
   margin: 0 auto;
-  padding: 34px 32px 56px;
+  padding: 32px 28px 56px;
 }
 
 .dashboard-header {
   margin-bottom: 22px;
+  padding: 4px 0 6px;
 }
 
 .dashboard-header h1 {
   margin: 5px 0 7px;
-  font-size: clamp(27px, 3vw, 36px);
+  font-size: clamp(28px, 3vw, 38px);
   letter-spacing: -0.04em;
 }
 
 .dashboard-header p,
 .dashboard-section-heading p,
 .schema-browser header p {
-  max-width: 720px;
+  max-width: 760px;
   margin: 0;
   color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.6;
 }
 
 .dashboard-summary {
@@ -30,24 +33,27 @@
 
 .dashboard-summary-card {
   display: grid;
-  gap: 7px;
-  padding: 18px;
+  gap: 9px;
+  padding: 18px 18px 16px;
   border: 1px solid var(--border);
-  border-radius: 14px;
-  background: var(--surface);
+  border-radius: 16px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(244, 247, 252, 0.96));
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.03);
 }
 
 .dashboard-summary-card small {
   color: var(--text-tertiary);
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 750;
-  letter-spacing: 0.07em;
+  letter-spacing: 0.09em;
   text-transform: uppercase;
 }
 
 .dashboard-summary-card strong {
-  font-size: 28px;
-  letter-spacing: -0.04em;
+  font-size: 30px;
+  font-weight: 700;
+  letter-spacing: -0.05em;
 }
 
 .dashboard-status {
@@ -86,28 +92,31 @@
   display: grid;
   grid-template-columns: 1fr auto;
   gap: 4px 12px;
-  min-height: 106px;
+  min-height: 110px;
   padding: 16px;
   border: 1px solid var(--border);
-  border-radius: 13px;
+  border-radius: 14px;
   color: var(--text);
-  background: var(--surface);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(238, 243, 255, 0.92));
   text-align: left;
   cursor: pointer;
   transition:
     border-color 0.18s ease,
-    background 0.18s ease,
+    box-shadow 0.18s ease,
     transform 0.18s ease;
 }
 
 .industry-card:hover {
   border-color: var(--border-strong);
+  box-shadow: 0 8px 18px rgba(31, 61, 139, 0.06);
   transform: translateY(-1px);
 }
 
 .industry-card.active {
-  border-color: var(--primary);
-  background: var(--surface-selected);
+  border-color: rgba(47, 90, 224, 0.7);
+  background: linear-gradient(180deg, rgba(237, 243, 255, 0.98), rgba(255, 255, 255, 0.96));
+  box-shadow: 0 10px 28px rgba(47, 90, 224, 0.08);
 }
 
 .industry-card > span {
@@ -118,6 +127,7 @@
   grid-row: span 2;
   color: var(--primary);
   font-size: 26px;
+  letter-spacing: -0.04em;
 }
 
 .industry-card > small {
@@ -127,10 +137,11 @@
 
 .schema-browser {
   margin-bottom: 32px;
-  padding: 22px;
+  padding: 24px;
   border: 1px solid var(--border);
-  border-radius: 16px;
-  background: var(--surface);
+  border-radius: 18px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(245, 247, 252, 0.96));
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.025);
 }
 
 .schema-browser > header {
@@ -220,21 +231,24 @@
   justify-content: space-between;
   min-width: 0;
   gap: 16px;
-  padding: 16px;
+  padding: 18px 16px;
   border: 1px solid var(--border);
-  border-radius: 12px;
-  background: var(--surface);
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 255, 0.94));
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.025);
 }
 
 .dashboard-document-card h4 {
   margin: 0;
   font-size: 16px;
+  letter-spacing: -0.02em;
 }
 
 .dashboard-document-card p {
-  margin: 5px 0 0;
+  margin: 6px 0 0;
   color: var(--text-secondary);
   font-size: 11px;
+  line-height: 1.5;
 }
 
 .dashboard-document-card .secondary-button {

@@ -15,7 +15,7 @@
 .admin-content {
   width: min(1320px, 100%);
   margin: 0 auto;
-  padding: 38px 32px 52px;
+  padding: 32px 28px 56px;
 }
 
 .admin-page-header {
@@ -23,19 +23,21 @@
   align-items: flex-start;
   justify-content: space-between;
   gap: 24px;
-  margin-bottom: 20px;
+  margin-bottom: 24px;
 }
 
 .admin-page-header h1 {
   margin: 5px 0 6px;
-  font-size: clamp(25px, 3vw, 34px);
+  font-size: clamp(28px, 3vw, 38px);
   letter-spacing: -0.035em;
 }
 
 .admin-page-header p {
-  max-width: 650px;
+  max-width: 700px;
   margin: 0;
   color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.6;
 }
 
 .admin-grid {
@@ -53,9 +55,9 @@
 .admin-card {
   padding: 24px;
   border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  background: var(--surface);
-  box-shadow: var(--shadow-card);
+  border-radius: 18px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.97), rgba(245, 247, 252, 0.96));
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.04);
 }
 
 .workflow-card {
@@ -89,6 +91,10 @@
   letter-spacing: -0.02em;
 }
 
+.admin-card .section-kicker {
+  margin-bottom: 6px;
+}
+
 .admin-overview {
   display: grid;
   grid-template-columns: 1.5fr repeat(3, 1fr);
@@ -100,12 +106,12 @@
   display: flex;
   align-items: center;
   gap: 13px;
-  min-height: 88px;
+  min-height: 92px;
   padding: 16px 18px;
   border: 1px solid var(--border);
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.92);
-  box-shadow: var(--shadow-sm);
+  border-radius: 15px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(243, 247, 255, 0.96));
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.03);
   transition:
     border-color 0.18s ease,
     transform 0.18s ease,
@@ -114,7 +120,7 @@
 
 .overview-card:hover {
   border-color: #cad5e4;
-  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.06);
+  box-shadow: 0 10px 22px rgba(31, 61, 139, 0.06);
   transform: translateY(-1px);
 }
 
@@ -140,8 +146,9 @@
   letter-spacing: -0.03em;
 }
 .overview-trial {
-  border-color: #cdd9ff;
-  background: linear-gradient(135deg, #f4f7ff, #fff);
+  border-color: rgba(47, 90, 224, 0.26);
+  background: linear-gradient(135deg, #f4f7ff, #ffffff);
+  box-shadow: 0 10px 24px rgba(47, 90, 224, 0.08);
 }
 
 .overview-icon {
@@ -183,7 +190,7 @@
   margin: 12px 0 17px;
   color: var(--text-secondary);
   font-size: 13px;
-  line-height: 1.55;
+  line-height: 1.6;
 }
 
 .document-type-field {
