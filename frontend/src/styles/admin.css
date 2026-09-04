@@ -508,6 +508,30 @@
   width: 100%;
   padding-left: 40px;
 }
+.indexed-document-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-bottom: 12px;
+}
+.indexed-document-filter {
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--text-secondary);
+  background: var(--surface);
+  font-size: 12px;
+  font-weight: 700;
+}
+.indexed-document-filter:hover {
+  border-color: var(--border-strong);
+  background: var(--surface-subtle);
+}
+.indexed-document-filter[aria-pressed="true"] {
+  border-color: #3159d5;
+  color: #2448b8;
+  background: var(--primary-subtle);
+}
 .indexed-document-list {
   max-height: min(460px, 55vh);
   overflow-x: hidden;

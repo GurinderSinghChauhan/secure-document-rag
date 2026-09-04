@@ -32,6 +32,9 @@ export function DocumentLibrary({
   onComputeStarted?: (sessionId: string) => void;
 }) {
   const [search, setSearch] = useState("");
+  const [classificationFilter, setClassificationFilter] = useState<
+    "all" | "needs_classification"
+  >("all");
   const [selectedDocumentIds, setSelectedDocumentIds] = useState<Set<string>>(
     () => new Set(),
   );
@@ -139,16 +142,24 @@ export function DocumentLibrary({
       });
     },
   });
-  const matches = (documents.data ?? []).filter((document) =>
-    [
-      document.document_name,
-      document.content_type,
-      document.created_by,
-      ...document.allowed_roles,
-      ...document.allowed_users,
-    ].some((value) =>
-      value.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()),
-    ),
+  const needsClassification = (document: { classification_status: string }) =>
+    document.classification_status === "unclassified" ||
+    document.classification_status === "failed";
+  const needsClassificationCount = (documents.data ?? []).filter(
+    needsClassification,
+  ).length;
+  const matches = (documents.data ?? []).filter(
+    (document) =>
+      (classificationFilter === "all" || needsClassification(document)) &&
+      [
+        document.document_name,
+        document.content_type,
+        document.created_by,
+        ...document.allowed_roles,
+        ...document.allowed_users,
+      ].some((value) =>
+        value.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()),
+      ),
   );
   const selectedAvailableDocumentIds = (documents.data ?? [])
     .map((document) => document.document_id)
@@ -219,6 +230,38 @@ export function DocumentLibrary({
           onChange={(event) => setSearch(event.target.value)}
         />
       </FormField>
+      <div
+        className="indexed-document-filters"
+        role="group"
+        aria-label="Filter documents by classification status"
+      >
+        <Button
+          variant="text"
+          className="indexed-document-filter"
+          aria-pressed={classificationFilter === "all"}
+          onClick={() => {
+            setClassificationFilter("all");
+            setSelectedDocumentIds(new Set());
+            setBulkDeleteError("");
+            setBulkClassifyError("");
+          }}
+        >
+          All documents ({documents.data?.length ?? 0})
+        </Button>
+        <Button
+          variant="text"
+          className="indexed-document-filter"
+          aria-pressed={classificationFilter === "needs_classification"}
+          onClick={() => {
+            setClassificationFilter("needs_classification");
+            setSelectedDocumentIds(new Set());
+            setBulkDeleteError("");
+            setBulkClassifyError("");
+          }}
+        >
+          Needs classification ({needsClassificationCount})
+        </Button>
+      </div>
       <div className="indexed-document-toolbar">
         <div className="indexed-document-selection">
           <label>

@@ -194,6 +194,24 @@ test("extracts data for selected document types in one compute session", async (
           created_by: "admin-1",
           created_at: "2030-01-02T00:00:00Z",
         },
+        {
+          document_id: "document-3",
+          document_name: "classified-policy.pdf",
+          document_type: "legal.policy",
+          schema_version: 2,
+          classification_status: "confirmed",
+          classification_source: "automatic",
+          classification_confidence: 0.95,
+          extraction_status: "completed",
+          extracted_metadata: {},
+          content_type: "application/pdf",
+          size_bytes: 1024,
+          chunk_count: 3,
+          allowed_roles: ["admin"],
+          allowed_users: [],
+          created_by: "admin-1",
+          created_at: "2030-01-03T00:00:00Z",
+        },
       ]),
     ),
     http.post(
@@ -230,8 +248,14 @@ test("extracts data for selected document types in one compute session", async (
   );
 
   expect(await screen.findByText("invoice.pdf")).toBeVisible();
-  await userEvent.click(screen.getByLabelText("Select invoice.pdf"));
-  await userEvent.click(screen.getByLabelText("Select credit-note.pdf"));
+  expect(screen.getByText("classified-policy.pdf")).toBeVisible();
+  await userEvent.click(
+    screen.getByRole("button", { name: "Needs classification (2)" }),
+  );
+  expect(screen.queryByText("classified-policy.pdf")).not.toBeInTheDocument();
+  expect(screen.getByText("2 of 3 searchable documents shown.")).toBeVisible();
+  await userEvent.click(screen.getByLabelText("Select all shown"));
+  expect(screen.getByText("2 selected")).toBeVisible();
   const classifyButton = screen.getByRole("button", {
     name: "Apply types & extract data",
   });
