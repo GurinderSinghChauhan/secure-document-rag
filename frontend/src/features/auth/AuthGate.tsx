@@ -140,13 +140,13 @@ export function AuthGate() {
           </div>
           <div className="auth-showcase-copy">
             <span className="auth-eyebrow">
-              Enterprise document intelligence
+              Enterprise knowledge operations
             </span>
-            <h2>Secure answers from the documents your teams can trust.</h2>
+            <h2>Answer critical questions from the documents that matter most.</h2>
             <p>
-              Give regulated organizations one governed workspace to search,
-              classify, and act on mission-critical knowledge without exposing
-              data beyond policy boundaries.
+              Bring policy-controlled document intelligence into one governed
+              workspace so teams can search, classify, and act on trusted
+              information without leaving operational guardrails behind.
             </p>
           </div>
           <div className="auth-trust-row" aria-label="Product strengths">

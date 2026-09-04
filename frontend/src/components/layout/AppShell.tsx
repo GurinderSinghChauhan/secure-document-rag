@@ -19,6 +19,14 @@ export function AppShell({ section, children, sidebar }: AppShellProps) {
     .map((part) => part[0])
     .join("")
     .toUpperCase();
+  const adminSubNav =
+    section === "Admin"
+      ? [
+          { label: "Upload & processing", href: "#documents" },
+          { label: "Indexed library", href: "#indexed-documents" },
+          { label: "Members", href: "#members" },
+        ]
+      : [];
   const navItems: Array<{
     icon: IconName;
     label: string;
@@ -81,6 +89,16 @@ export function AppShell({ section, children, sidebar }: AppShellProps) {
                 <span>{item.label}</span>
               </NavLink>
             ))}
+          {adminSubNav.length > 0 && (
+            <div className="secondary-nav" aria-label="Admin sections">
+              <span className="secondary-nav-label">Manage</span>
+              {adminSubNav.map((item) => (
+                <a className="nav-item secondary-nav-item" href={item.href} key={item.href}>
+                  <span>{item.label}</span>
+                </a>
+              ))}
+            </div>
+          )}
         </nav>
         {sidebar}
         <div className="sidebar-footer">

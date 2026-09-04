@@ -291,6 +291,23 @@ svg {
   gap: 4px;
 }
 
+.secondary-nav {
+  display: grid;
+  gap: 2px;
+  margin-top: 6px;
+  padding: 8px 4px 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.secondary-nav-label {
+  margin: 0 8px 4px;
+  color: var(--sidebar-muted);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
 .nav-item {
   display: flex;
   min-height: 44px;
@@ -308,6 +325,14 @@ svg {
     background 0.16s ease;
 }
 
+.secondary-nav-item {
+  min-height: 36px;
+  padding-left: 22px;
+  color: #c7d2ef;
+  font-size: 12px;
+  font-weight: 560;
+}
+
 .nav-item svg {
   width: 18px;
   height: 18px;
@@ -316,6 +341,10 @@ svg {
 .nav-item:hover {
   color: #ffffff;
   background: rgba(255, 255, 255, 0.055);
+}
+
+.secondary-nav-item:hover {
+  background: rgba(255, 255, 255, 0.04);
 }
 
 .nav-item.active {

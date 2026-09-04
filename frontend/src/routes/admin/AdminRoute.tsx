@@ -37,33 +37,15 @@ export default function AdminRoute() {
       ? `Free trial · ends ${new Date(user.trial.ends_at).toLocaleDateString()}`
       : "Trial ended · processing unavailable";
   return (
-    <AppShell
-      section="Admin"
-      sidebar={
-        <>
-          <p className="admin-nav-label">Manage</p>
-          <nav className="primary-nav" aria-label="Admin sections">
-            <a className="nav-item" href="#documents">
-              Upload & processing
-            </a>
-            <a className="nav-item" href="#indexed-documents">
-              Indexed library
-            </a>
-            <a className="nav-item" href="#members">
-              Members
-            </a>
-          </nav>
-        </>
-      }
-    >
+    <AppShell section="Admin">
       <main id="main-content" className="admin-content">
         <header className="admin-page-header">
           <div>
             <span className="section-kicker">Organization administration</span>
             <h1>Executive operations center</h1>
             <p>
-              Monitor document intake, enforce access policy, and keep critical
-              knowledge available to authorized teams without losing operational
+              Monitor intake, enforce policy boundaries, and keep the knowledge
+              estate available to the right teams without sacrificing operational
               control.
             </p>
           </div>

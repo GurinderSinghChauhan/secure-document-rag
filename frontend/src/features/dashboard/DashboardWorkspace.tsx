@@ -152,11 +152,11 @@ export function DashboardWorkspace() {
         <header className="dashboard-header">
           <div>
             <span className="section-kicker">Structured intelligence</span>
-            <h1>Document dashboard</h1>
+            <h1>Operations dashboard</h1>
             <p>
-              Review authorized document coverage by industry, explore the
-              extraction schema, and inspect structured metadata without opening
-              source files.
+              Review authorized document coverage by vertical, inspect extraction
+              quality, and monitor the knowledge estate without leaving the
+              governed workspace.
             </p>
           </div>
         </header>
