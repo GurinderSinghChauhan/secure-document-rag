@@ -60,28 +60,29 @@ export default function AdminRoute() {
         <header className="admin-page-header">
           <div>
             <span className="section-kicker">Organization administration</span>
-            <h1>Workspace control center</h1>
+            <h1>Executive operations center</h1>
             <p>
-              Upload, index, and monitor documents in one place while keeping
-              access accountable.
+              Monitor document intake, enforce access policy, and keep critical
+              knowledge available to authorized teams without losing operational
+              control.
             </p>
           </div>
         </header>
         <section className="admin-overview" aria-label="Workspace overview">
-          <Overview icon="building" label="Plan" value={trialText} />
+          <Overview icon="building" label="Access plan" value={trialText} />
           <Overview
             icon="queue"
-            label="Indexing queue"
+            label="Active jobs"
             value={String(queue.data?.length ?? "—")}
           />
           <Overview
             icon="documents"
-            label="Indexed documents"
+            label="Indexed docs"
             value={String(documents.data?.length ?? "—")}
           />
           <Overview
             icon="members"
-            label="Organization members"
+            label="Authorized users"
             value={String(members.data?.length ?? "—")}
           />
         </section>
@@ -117,10 +118,11 @@ export default function AdminRoute() {
                 ✓
               </span>
               <div>
-                <strong>Security by design</strong>
+                <strong>Trust and governance</strong>
                 <small>
-                  Organization isolation, admin authorization, rotating
-                  sessions, and bounded compute are enforced by the API.
+                  Tenant isolation, role enforcement, activity visibility, and
+                  bounded processing keep the environment suitable for regulated
+                  teams.
                 </small>
               </div>
             </div>

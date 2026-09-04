@@ -56,14 +56,14 @@ export function AppShell({ section, children, sidebar }: AppShellProps) {
             <strong>Arcline</strong>
             <small>
               {section === "Ask"
-                ? "Document intelligence"
+                ? "Secure knowledge layer"
                 : section === "Insights"
-                  ? "Intelligence insights"
+                  ? "Operational intelligence"
                   : section === "Dashboard"
-                    ? "Intelligence dashboard"
+                    ? "Enterprise operations"
                     : section === "Admin"
-                      ? "Admin console"
-                      : "Platform console"}
+                      ? "Governance console"
+                      : "Platform control"}
             </small>
           </span>
         </div>
@@ -91,7 +91,7 @@ export function AppShell({ section, children, sidebar }: AppShellProps) {
             <div>
               <strong>Organization scoped</strong>
               <p>
-                Document access is enforced by the API for your current role.
+                Access is enforced at the tenant, role, and document boundary.
               </p>
             </div>
           </div>
