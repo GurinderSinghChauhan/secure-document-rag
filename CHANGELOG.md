@@ -4,6 +4,8 @@ This project follows [Semantic Versioning](https://semver.org/). Released change
 
 ## Unreleased
 
+## 0.4.9 - 2026-09-04
+
 ## 0.4.8 - 2026-09-04
 
 - Unified upload and processing into one document workflow, reused open compute sessions for newly added jobs, and removed completed jobs from the live queue.
