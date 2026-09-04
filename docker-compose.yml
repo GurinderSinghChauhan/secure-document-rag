@@ -4,7 +4,7 @@ services:
       context: .
       args:
         APP_COMMIT: ${APP_COMMIT:-development}
-        VITE_VOICE_INPUT_ENABLED: ${VITE_VOICE_INPUT_ENABLED:-false}
+        VITE_VOICE_INPUT_ENABLED: ${VITE_VOICE_INPUT_ENABLED:-true}
     env_file: .env
     environment:
       MINERU_URL: ${MINERU_URL:-http://mineru:8000}
