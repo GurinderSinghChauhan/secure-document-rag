@@ -1,35 +1,39 @@
 :root {
   color-scheme: light;
-  --canvas: #f5f7fb;
-  --page: var(--canvas);
-  --surface: #ffffff;
-  --surface-subtle: #f3f6fa;
-  --surface-selected: #eef3ff;
-  --text: #152033;
+  --canvas: #f3f6fb;
+  --page: #f7f9fc;
+  --surface: rgba(255, 255, 255, 0.9);
+  --surface-strong: #ffffff;
+  --surface-subtle: #f2f6fb;
+  --surface-selected: #edf3ff;
+  --text: #0f172a;
   --text-primary: var(--text);
-  --text-secondary: #586477;
-  --text-tertiary: #7b8799;
-  --border: #dce3ec;
-  --border-strong: #c6d0dc;
-  --primary: #3f5fce;
-  --primary-hover: #314eaf;
-  --primary-subtle: #edf2ff;
-  --success: #16845b;
-  --success-subtle: #e8f7f1;
-  --danger: #c43d4b;
-  --danger-subtle: #fdf0f1;
-  --warning: #a46708;
-  --focus: #3157d5;
-  --sidebar: #101828;
-  --sidebar-text: #dbe3f0;
-  --sidebar-muted: #94a3b8;
-  --radius-lg: 14px;
+  --text-secondary: #475467;
+  --text-tertiary: #667085;
+  --border: #dfe6ef;
+  --border-strong: #c9d3e2;
+  --primary: #2f5ae0;
+  --primary-strong: #1f3eba;
+  --primary-subtle: #edf3ff;
+  --success: #1c8e63;
+  --success-subtle: #ebfaf3;
+  --danger: #d5495b;
+  --danger-subtle: #fff1f2;
+  --warning: #b87416;
+  --focus: #335ee6;
+  --sidebar: #0f172a;
+  --sidebar-alt: #111f38;
+  --sidebar-text: #e5ebf9;
+  --sidebar-muted: #a3b4d6;
+  --radius-lg: 16px;
+  --radius-md: 12px;
+  --radius-sm: 10px;
   --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.04);
-  --shadow-card: 0 10px 30px rgba(15, 23, 42, 0.055);
+  --shadow-card: 0 14px 32px rgba(15, 23, 42, 0.08);
   --shadow-overlay: 0 24px 60px rgba(15, 23, 42, 0.16);
   --font-sans:
-    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
-    "Segoe UI", sans-serif;
+    Inter, "Segoe UI", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+    sans-serif;
 }
 
 .compute-panel {
@@ -137,16 +141,14 @@ body {
   min-height: 100vh;
   color: var(--text);
   background:
-    radial-gradient(
-      circle at 82% 0%,
-      rgba(83, 111, 211, 0.06),
-      transparent 30rem
-    ),
-    var(--canvas);
+    radial-gradient(circle at top right, rgba(47, 90, 224, 0.11), transparent 20rem),
+    linear-gradient(180deg, #f5f8fd 0%, var(--canvas) 100%);
   font-family: var(--font-sans);
   font-size: 14px;
   line-height: 1.5;
+  letter-spacing: -0.01em;
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
 button,
@@ -167,12 +169,34 @@ a {
   outline: none;
 }
 
+.skip-link {
+  position: fixed;
+  z-index: 2000;
+  top: 12px;
+  left: 12px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  color: #fff;
+  background: var(--primary-hover);
+  box-shadow: var(--shadow-overlay);
+  font-weight: 650;
+  text-decoration: none;
+  transform: translateY(-160%);
+  transition: transform 0.16s ease;
+}
+
+.skip-link:focus {
+  outline: 3px solid #fff;
+  outline-offset: 2px;
+  transform: translateY(0);
+}
+
 button:focus-visible,
 a:focus-visible,
 input:focus-visible,
 textarea:focus-visible,
 label[for]:has(input:focus-visible) {
-  outline: 3px solid rgba(49, 87, 213, 0.24);
+  outline: 3px solid var(--focus);
   outline-offset: 2px;
 }
 
@@ -187,26 +211,24 @@ svg {
 
 .app-shell {
   display: grid;
-  grid-template-columns: 248px minmax(0, 1fr);
+  grid-template-columns: 264px minmax(0, 1fr);
   min-height: 100vh;
 }
 
 .sidebar {
-  position: fixed;
-  inset: 0 auto 0 0;
+  position: sticky;
+  top: 0;
   z-index: 20;
   display: flex;
-  width: 248px;
+  width: 264px;
+  height: 100vh;
   flex-direction: column;
-  padding: 24px 16px 18px;
+  padding: 22px 16px 18px;
   color: var(--sidebar-text);
   background:
-    radial-gradient(
-      circle at 8% 4%,
-      rgba(98, 122, 218, 0.16),
-      transparent 15rem
-    ),
-    linear-gradient(180deg, #111b2e 0%, var(--sidebar) 62%, #0d1524 100%);
+    radial-gradient(circle at 12% 10%, rgba(99, 125, 224, 0.22), transparent 16rem),
+    linear-gradient(180deg, #0f172a 0%, var(--sidebar) 60%, #0d1729 100%);
+  border-right: 1px solid rgba(148, 163, 184, 0.18);
   box-shadow: inset -1px 0 rgba(255, 255, 255, 0.04);
 }
 
@@ -412,6 +434,23 @@ svg {
   background: rgba(255, 255, 255, 0.045);
 }
 
+.sidebar-footer {
+  display: grid;
+  gap: 11px;
+  margin-top: auto;
+}
+
+.sidebar-footer .sidebar-note {
+  margin-top: 18px;
+}
+
+.product-version {
+  padding-inline: 10px;
+  color: #718198;
+  font-size: 9px;
+  letter-spacing: 0.06em;
+}
+
 .privacy-icon {
   display: grid;
   width: 28px;
@@ -453,14 +492,15 @@ svg {
   top: 0;
   z-index: 15;
   display: flex;
-  min-height: 72px;
+  min-height: 74px;
   align-items: center;
   justify-content: space-between;
   gap: 20px;
   padding: 0 32px;
-  border-bottom: 1px solid rgba(210, 219, 230, 0.8);
-  background: rgba(255, 255, 255, 0.86);
-  backdrop-filter: blur(18px) saturate(150%);
+  border-bottom: 1px solid rgba(203, 213, 225, 0.9);
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(16px) saturate(150%);
+  box-shadow: 0 1px 0 rgba(15, 23, 42, 0.03);
 }
 
 .mobile-brand {
@@ -738,10 +778,10 @@ textarea:focus {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: 24px;
-  width: min(1240px, 100%);
+  width: min(1280px, 100%);
   min-height: calc(100vh - 68px);
   margin: 0 auto;
-  padding: 34px 32px 28px;
+  padding: 32px 28px 28px;
 }
 
 .assistant-workspace {
@@ -752,6 +792,7 @@ textarea:focus {
   min-width: 0;
   min-height: 0;
   flex-direction: column;
+  padding: 8px 4px 0;
 }
 
 .assistant-header {
