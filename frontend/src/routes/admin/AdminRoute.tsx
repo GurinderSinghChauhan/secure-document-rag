@@ -56,7 +56,7 @@ export default function AdminRoute() {
         </>
       }
     >
-      <main className="admin-content">
+      <main id="main-content" className="admin-content">
         <header className="admin-page-header">
           <div>
             <span className="section-kicker">Organization administration</span>

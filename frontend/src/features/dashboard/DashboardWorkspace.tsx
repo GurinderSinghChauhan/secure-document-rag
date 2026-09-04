@@ -148,7 +148,7 @@ export function DashboardWorkspace() {
 
   return (
     <AppShell section="Dashboard">
-      <main className="dashboard-content">
+      <main id="main-content" className="dashboard-content">
         <header className="dashboard-header">
           <div>
             <span className="section-kicker">Structured intelligence</span>

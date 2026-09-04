@@ -1,4 +1,17 @@
-import { expect, test } from "@playwright/test";
+import AxeBuilder from "@axe-core/playwright";
+import { expect, test, type Page } from "@playwright/test";
+
+async function expectNoAccessibilityViolations(page: Page) {
+  const results = await new AxeBuilder({ page })
+    .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])
+    .analyze();
+  expect(
+    results.violations,
+    results.violations
+      .map((violation) => `${violation.id}: ${violation.help}`)
+      .join("\n"),
+  ).toEqual([]);
+}
 
 test("direct SPA navigation falls back to the sign-in experience", async ({
   page,
@@ -15,6 +28,7 @@ test("direct SPA navigation falls back to the sign-in experience", async ({
     page.getByRole("heading", { name: "Sign in to Arcline" }),
   ).toBeVisible();
   await expect(page.getByLabel("Email")).toBeVisible();
+  await expectNoAccessibilityViolations(page);
 });
 
 test("an administrator navigates across lazy routes without reloading the session", async ({
@@ -83,6 +97,7 @@ test("an administrator navigates across lazy routes without reloading the sessio
   await expect(
     page.getByRole("heading", { name: "Workspace control center" }),
   ).toBeVisible();
+  await expectNoAccessibilityViolations(page);
   await page.evaluate(() => {
     (window as typeof window & { __spaMarker?: boolean }).__spaMarker = true;
   });

@@ -44,6 +44,9 @@ export function AppShell({ section, children, sidebar }: AppShellProps) {
   ];
   return (
     <div className={`app-shell ${section === "Ask" ? "" : "admin-shell"}`}>
+      <a className="skip-link" href="#main-content">
+        Skip to main content
+      </a>
       <aside className="sidebar" aria-label="Primary navigation">
         <div className="brand">
           <span className="brand-mark" aria-hidden="true">
@@ -80,14 +83,21 @@ export function AppShell({ section, children, sidebar }: AppShellProps) {
             ))}
         </nav>
         {sidebar}
-        <div className="sidebar-note">
-          <span className="privacy-icon" aria-hidden="true">
-            <Icon name="lock" />
-          </span>
-          <div>
-            <strong>Security by design</strong>
-            <p>Access is isolated by organization and enforced by the API.</p>
+        <div className="sidebar-footer">
+          <div className="sidebar-note">
+            <span className="privacy-icon" aria-hidden="true">
+              <Icon name="lock" />
+            </span>
+            <div>
+              <strong>Organization scoped</strong>
+              <p>
+                Document access is enforced by the API for your current role.
+              </p>
+            </div>
           </div>
+          <small className="product-version" title={`Build ${__APP_COMMIT__}`}>
+            Arcline v{__APP_VERSION__}
+          </small>
         </div>
       </aside>
       <div className="workspace">

@@ -83,6 +83,11 @@ test("restores one shared session and exposes role-appropriate navigation", asyn
   expect(
     primaryNavigation.queryByRole("link", { name: "Platform Admin" }),
   ).not.toBeInTheDocument();
+  expect(
+    screen.getByRole("link", { name: "Skip to main content" }),
+  ).toHaveAttribute("href", "#main-content");
+  expect(document.querySelector("main#main-content")).toBeInTheDocument();
+  expect(screen.getByText(`Arcline v${__APP_VERSION__}`)).toBeVisible();
 });
 
 test("renders authorized document coverage and schema-driven metadata", async () => {

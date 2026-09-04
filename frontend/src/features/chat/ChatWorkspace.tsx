@@ -32,7 +32,11 @@ export function ChatWorkspace() {
   const [composerStatus, setComposerStatus] = useState("Ready to search");
   const logRef = useRef<HTMLDivElement>(null);
   const changeQuestion = useCallback((value: string) => setQuestion(value), []);
-  const voice = useVoiceInput(question, changeQuestion);
+  const voice = useVoiceInput(
+    question,
+    changeQuestion,
+    __VOICE_INPUT_ENABLED__,
+  );
 
   async function load(chatId: string) {
     if (busy) return;
@@ -154,7 +158,7 @@ export function ChatWorkspace() {
   );
   return (
     <AppShell section="Ask" sidebar={sidebar}>
-      <main className="content">
+      <main id="main-content" className="content">
         <section
           className="assistant-workspace"
           aria-labelledby="assistant-title"

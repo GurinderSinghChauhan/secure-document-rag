@@ -75,6 +75,17 @@ class Settings(BaseSettings):
                 raise ValueError("Production requires COOKIE_SECURE=true")
             if self.email_sender != "resend" or not self.resend_api_key:
                 raise ValueError("Production requires Resend email configuration")
+            if not self.email_verification_required:
+                raise ValueError("Production requires EMAIL_VERIFICATION_REQUIRED=true")
+            if self.invitation_delivery != "email":
+                raise ValueError("Production requires INVITATION_DELIVERY=email")
+            if self.password_reset_delivery != "email":
+                raise ValueError("Production requires PASSWORD_RESET_DELIVERY=email")
+            if not self.public_app_url.startswith("https://"):
+                raise ValueError("Production requires an HTTPS PUBLIC_APP_URL")
+            production_hosts = set(self.allowed_host_list)
+            if production_hosts.intersection({"*", "localhost", "127.0.0.1"}):
+                raise ValueError("Production ALLOWED_HOSTS must contain only public application hosts")
         return self
 
     @model_validator(mode="after")

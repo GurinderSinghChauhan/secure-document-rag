@@ -18,6 +18,47 @@ def test_production_security_fails_closed() -> None:
         Settings(environment="production")
 
 
+def production_settings(**overrides: object) -> Settings:
+    values: dict[str, object] = {
+        "environment": "production",
+        "jwt_signing_keys_json": '{"current":"a-production-signing-key-that-is-at-least-forty-eight-characters-long"}',
+        "jwt_active_key_id": "current",
+        "cookie_secure": True,
+        "email_sender": "resend",
+        "resend_api_key": "test-resend-key",
+        "email_verification_required": True,
+        "invitation_delivery": "email",
+        "password_reset_delivery": "email",
+        "public_app_url": "https://app.example.com",
+        "allowed_hosts": "app.example.com",
+    }
+    values.update(overrides)
+    return Settings(**values)
+
+
+def test_production_security_accepts_complete_configuration() -> None:
+    settings = production_settings()
+
+    assert settings.environment == "production"
+
+
+@pytest.mark.parametrize(
+    ("override", "message"),
+    [
+        ({"email_verification_required": False}, "EMAIL_VERIFICATION_REQUIRED"),
+        ({"invitation_delivery": "manual"}, "INVITATION_DELIVERY"),
+        ({"password_reset_delivery": "disabled"}, "PASSWORD_RESET_DELIVERY"),
+        ({"public_app_url": "http://app.example.com"}, "HTTPS PUBLIC_APP_URL"),
+        ({"allowed_hosts": "localhost,app.example.com"}, "ALLOWED_HOSTS"),
+    ],
+)
+def test_production_security_rejects_unsafe_customer_configuration(
+    override: dict[str, object], message: str
+) -> None:
+    with pytest.raises(ValueError, match=message):
+        production_settings(**override)
+
+
 def test_development_security_defaults() -> None:
     settings = Settings()
     assert settings.jwt_active_key_id == "development"

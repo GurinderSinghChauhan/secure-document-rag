@@ -163,7 +163,8 @@ export function AuthGate() {
             </li>
           </ul>
           <p className="auth-showcase-note">
-            Self-hosted infrastructure · Role-based controls
+            Self-hosted infrastructure · Role-based controls · v
+            {__APP_VERSION__}
           </p>
         </aside>
         <div className="auth-card">

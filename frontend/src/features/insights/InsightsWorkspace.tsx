@@ -309,7 +309,7 @@ export function InsightsWorkspace() {
 
   return (
     <AppShell section="Insights">
-      <main className="insights-content">
+      <main id="main-content" className="insights-content">
         <Link className="insights-back-link" to="/">
           ← Back to document tables
         </Link>
