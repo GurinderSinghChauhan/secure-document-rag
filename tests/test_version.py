@@ -59,11 +59,17 @@ def test_automatic_bump_finalizes_unreleased_changelog():
 
 
 def test_release_workflow_auto_versions_and_tags_successful_main_builds():
-    workflow = Path(".github/workflows/ci.yml").read_text()
+    ci_workflow = Path(".github/workflows/ci.yml").read_text()
+    release_workflow = Path(".github/workflows/release.yml").read_text()
 
-    assert "needs: validate" in workflow
-    assert "github.ref == 'refs/heads/main'" in workflow
-    assert 'python tools/version.py --bump auto --since "$tag"' in workflow
-    assert 'git push origin HEAD:main' in workflow
-    assert 'git tag -a "$tag" "$release_sha"' in workflow
-    assert 'git push origin "$tag"' in workflow
+    assert "Tag and publish release" not in ci_workflow
+    assert "workflow_run:" in release_workflow
+    assert "workflows: [CI]" in release_workflow
+    assert "branches: [main]" in release_workflow
+    assert "github.event.workflow_run.conclusion == 'success'" in release_workflow
+    assert "github.event.workflow_run.event == 'push'" in release_workflow
+    assert "github.event.workflow_run.head_sha" in release_workflow
+    assert 'python tools/version.py --bump auto --since "$tag"' in release_workflow
+    assert 'git push origin HEAD:main' in release_workflow
+    assert 'git tag -a "$tag" "$release_sha"' in release_workflow
+    assert 'git push origin "$tag"' in release_workflow
