@@ -6,7 +6,7 @@ import {
   computeKeys,
   listQueueJobs,
 } from "../../features/compute";
-import { Panel, PanelHeader } from "../../components/ui";
+import { Icon, type IconName, Panel, PanelHeader } from "../../components/ui";
 import {
   DocumentLibrary,
   DocumentUploader,
@@ -68,16 +68,19 @@ export default function AdminRoute() {
           </div>
         </header>
         <section className="admin-overview" aria-label="Workspace overview">
-          <Overview label="Plan" value={trialText} />
+          <Overview icon="building" label="Plan" value={trialText} />
           <Overview
+            icon="queue"
             label="Indexing queue"
             value={String(queue.data?.length ?? "—")}
           />
           <Overview
+            icon="documents"
             label="Indexed documents"
             value={String(documents.data?.length ?? "—")}
           />
           <Overview
+            icon="members"
             label="Organization members"
             value={String(members.data?.length ?? "—")}
           />
@@ -128,11 +131,19 @@ export default function AdminRoute() {
   );
 }
 
-function Overview({ label, value }: { label: string; value: string }) {
+function Overview({
+  icon,
+  label,
+  value,
+}: {
+  icon: IconName;
+  label: string;
+  value: string;
+}) {
   return (
     <div className="overview-card">
       <span className="overview-icon" aria-hidden="true">
-        ●
+        <Icon name={icon} />
       </span>
       <div>
         <small>{label}</small>

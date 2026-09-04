@@ -5,6 +5,7 @@ import {
   Button,
   FormField,
   Input,
+  Icon,
   PasswordField,
   StatusMessage,
 } from "../../components/ui";
@@ -129,92 +130,141 @@ export function AuthGate() {
 
   return (
     <section className="auth-gate" aria-labelledby="auth-title">
-      <div className="auth-card">
-        <span className="brand-mark" aria-hidden="true">
-          ✓
-        </span>
-        <h1 id="auth-title">
-          {mode === "login"
-            ? "Sign in to Arcline"
-            : mode === "register"
-              ? "Create your Arcline workspace"
-              : mode === "invite"
-                ? "Accept your invitation"
-                : "Reset your password"}
-        </h1>
-        <StatusMessage>{message}</StatusMessage>
-        <form className="auth-form" onSubmit={(event) => void submit(event)}>
-          {(mode === "register" || mode === "invite") && (
-            <FormField label="Your name">
-              <Input
-                name="display_name"
-                autoComplete="name"
-                minLength={2}
+      <div className="auth-layout">
+        <aside className="auth-showcase" aria-label="About Arcline">
+          <div className="auth-brand">
+            <span className="brand-mark" aria-hidden="true">
+              <Icon name="check" />
+            </span>
+            <strong>Arcline</strong>
+          </div>
+          <div className="auth-showcase-copy">
+            <span className="auth-eyebrow">
+              Document intelligence workspace
+            </span>
+            <h2>Answers grounded in the documents you can access.</h2>
+            <p>
+              Search, process, and govern organizational knowledge from one
+              focused workspace.
+            </p>
+          </div>
+          <ul className="auth-benefits">
+            <li>
+              <Icon name="lock" />
+              <span>Organization-scoped access</span>
+            </li>
+            <li>
+              <Icon name="documents" />
+              <span>Traceable document processing</span>
+            </li>
+            <li>
+              <Icon name="message" />
+              <span>Permission-aware retrieval</span>
+            </li>
+          </ul>
+          <p className="auth-showcase-note">
+            Self-hosted infrastructure · Role-based controls
+          </p>
+        </aside>
+        <div className="auth-card">
+          <div className="auth-card-header">
+            <span className="auth-mobile-logo" aria-hidden="true">
+              <Icon name="check" />
+            </span>
+            <span className="section-kicker">Welcome to Arcline</span>
+          </div>
+          <h1 id="auth-title">
+            {mode === "login"
+              ? "Sign in to Arcline"
+              : mode === "register"
+                ? "Create your Arcline workspace"
+                : mode === "invite"
+                  ? "Accept your invitation"
+                  : "Reset your password"}
+          </h1>
+          <StatusMessage>{message}</StatusMessage>
+          <form className="auth-form" onSubmit={(event) => void submit(event)}>
+            {(mode === "register" || mode === "invite") && (
+              <FormField label="Your name">
+                <Input
+                  name="display_name"
+                  autoComplete="name"
+                  minLength={2}
+                  required
+                />
+              </FormField>
+            )}
+            {(mode === "login" || mode === "register") && (
+              <FormField label="Email">
+                <Input
+                  name="email"
+                  type="email"
+                  autoComplete="email"
+                  required
+                />
+              </FormField>
+            )}
+            <FormField label={mode === "login" ? "Password" : "New password"}>
+              <PasswordField
+                id="auth-password"
+                name="password"
+                autoComplete={
+                  mode === "login" ? "current-password" : "new-password"
+                }
+                minLength={mode === "login" ? 1 : 12}
                 required
               />
             </FormField>
-          )}
-          {(mode === "login" || mode === "register") && (
-            <FormField label="Email">
-              <Input name="email" type="email" autoComplete="email" required />
-            </FormField>
-          )}
-          <FormField label={mode === "login" ? "Password" : "New password"}>
-            <PasswordField
-              id="auth-password"
-              name="password"
-              autoComplete={
-                mode === "login" ? "current-password" : "new-password"
-              }
-              minLength={mode === "login" ? 1 : 12}
-              required
-            />
-          </FormField>
-          {mode === "register" && (
-            <FormField label="Organization name">
-              <Input name="organization_name" minLength={2} required />
-            </FormField>
-          )}
-          <Button
-            variant="primary"
-            type="submit"
-            busy={busy}
-            busyLabel="Please wait…"
-          >
-            {mode === "login"
-              ? "Sign in"
-              : mode === "register"
-                ? "Create organization"
-                : "Continue"}
-          </Button>
-          {mode === "login" && (
+            {mode === "register" && (
+              <FormField label="Organization name">
+                <Input name="organization_name" minLength={2} required />
+              </FormField>
+            )}
             <Button
-              variant="text"
-              type="button"
-              onClick={(event) => {
-                const value = new FormData(
-                  event.currentTarget.form ?? undefined,
-                ).get("email");
-                void forgotPassword(typeof value === "string" ? value : "");
-              }}
+              variant="primary"
+              type="submit"
+              busy={busy}
+              busyLabel="Please wait…"
             >
-              Forgot password?
+              {mode === "login"
+                ? "Sign in"
+                : mode === "register"
+                  ? "Create organization"
+                  : "Continue"}
             </Button>
+            {mode === "login" && (
+              <Button
+                variant="text"
+                type="button"
+                onClick={(event) => {
+                  const value = new FormData(
+                    event.currentTarget.form ?? undefined,
+                  ).get("email");
+                  void forgotPassword(typeof value === "string" ? value : "");
+                }}
+              >
+                Forgot password?
+              </Button>
+            )}
+          </form>
+          {(mode === "login" || mode === "register") && (
+            <div className="auth-alternate">
+              <span>
+                {mode === "login" ? "New to Arcline?" : "Already registered?"}
+              </span>
+              <Button
+                variant="text"
+                type="button"
+                onClick={() =>
+                  setMode((value) => (value === "login" ? "register" : "login"))
+                }
+              >
+                {mode === "login" ? "Create an account" : "Sign in"}
+                <Icon name="arrow-right" />
+              </Button>
+            </div>
           )}
-        </form>
-        {(mode === "login" || mode === "register") && (
-          <Button
-            variant="text"
-            type="button"
-            onClick={() =>
-              setMode((value) => (value === "login" ? "register" : "login"))
-            }
-          >
-            {mode === "login"
-              ? "Create an organization account"
-              : "Already have an account? Sign in"}
-          </Button>
-        )}
+        </div>
       </div>
     </section>
   );
