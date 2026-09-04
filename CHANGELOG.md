@@ -4,6 +4,9 @@ This project follows [Semantic Versioning](https://semver.org/). Released change
 
 ## Unreleased
 
+- Unified upload and processing into one document workflow, reused open compute sessions for newly added jobs, and removed completed jobs from the live queue.
+- Added batch retry for failed indexing jobs while retaining automatic server-side compute safeguards.
+
 ## 0.4.7 - 2026-09-02
 
 ## 0.4.6 - 2026-08-31

@@ -130,6 +130,7 @@ class IngestionJobRecord(Base):
     stage: Mapped[str] = mapped_column(String(32), default="held")
     progress: Mapped[int] = mapped_column(Integer, default=0)
     message: Mapped[str] = mapped_column(String(500), default="GPU processing is off; document saved and waiting.")
+    operation: Mapped[str] = mapped_column(String(32), default="index", server_default=text("'index'"), index=True)
     document_name: Mapped[str] = mapped_column(String(255))
     document_type: Mapped[str | None] = mapped_column(String(96), nullable=True, index=True)
     content_type: Mapped[str] = mapped_column(String(255))

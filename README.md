@@ -101,13 +101,13 @@ The command prompts for the password and never accepts it through arguments or e
 
 `POST /v1/documents` saves `text/plain`, PDF, DOCX, PPTX, XLSX, PNG, JPEG, or WebP request bodies as durable `held_for_compute` jobs. It never starts GPU capacity. An authenticated administrator must explicitly enable dispatch, open a bounded compute session, and release selected jobs. MinerU and model inference run only after that release.
 
-Indexing is idempotent per tenant and file content. Releasing a repeat upload rebuilds vectors under the existing document ID and updates its metadata and ACLs.
+Indexing is idempotent per tenant and file content. Uploading the same file again—with or without deleting its current document first—rebuilds vectors under the existing document ID and reruns automatic classification, field extraction, metadata, and ACL updates. The admin console's **Upload and index** action uploads sequentially and releases all successful files into one bounded compute session. For a document whose automatic classification is `unclassified` or `failed`, `POST /v1/admin/documents/{id}/classification` queues the retained source with a manual type and completes field extraction through indexing; confirmed and review-required documents are rejected by that endpoint.
 
 - `X-Document-Name` (required)
 - `X-Allowed-Roles`: comma-separated role list
 - `X-Allowed-Users`: comma-separated user IDs
 
-`POST /v1/query` and `/v1/query/stream` use the always-available local model runtime whenever GPU dispatch is enabled with `COMPUTE_PROVIDER=local_docker`; they do not require an administrator to open a document-processing session. `POST /v1/documents/stream` emits a completion event after the durable held job is created. Admin endpoints under `/v1/admin/compute-sessions` open, release, drain, cancel, and report bounded document-processing sessions. `GET /v1/admin/ingestion-jobs?state=held_for_compute` lists selectable work.
+`POST /v1/query` and `/v1/query/stream` use the always-available local model runtime whenever GPU dispatch is enabled with `COMPUTE_PROVIDER=local_docker`; they do not require an administrator to open a document-processing session. `POST /v1/documents/stream` emits a completion event after the durable held job is created. `POST /v1/admin/compute-sessions/release` adds jobs to the tenant's open document-processing session or creates one automatically. New uploads can join while that session is running, and the worker processes the expanded queue sequentially. `GET /v1/admin/ingestion-jobs` lists held, failed, and historical work.
 
 Chat conversations are stored in PostgreSQL and scoped to the authenticated tenant and user. `GET /v1/chats` lists the current user's recent conversations, while `GET /v1/chats/{chat_id}` restores its messages. Pass the returned `chat_id` in subsequent query requests to continue the same conversation.
 
@@ -119,9 +119,9 @@ Chat conversations are stored in PostgreSQL and scoped to the authenticated tena
 
 `GPU_DISPATCH_ENABLED=false` is the default. Provider configuration and dispatch activation are separate. `COMPUTE_PROVIDER=local_docker` runs released jobs serially through the local stack. The optional Runpod adapter implements submit, status, and cancellation for an existing serverless endpoint, but this repository never provisions an endpoint or configures a minimum worker count. Hosted artifact exchange remains fail-closed until configured; no paid provider was contacted while implementing or testing this support.
 
-Every session requires `max_jobs` and `max_gpu_minutes`, plus an optional `max_estimated_cost_usd`. The dispatcher stops at its bounds, returns retryable failures to held state, and closes the session when released work drains. The initial profile targets a quantized Qwen3-VL-4B on a 16 GB NVIDIA pool, with a configurable 24 GB fallback for out-of-memory retries.
+The normal upload workflow is document-count driven: the API creates a session for pending documents, reuses it for new arrivals, and expands its server-derived safety ceiling as work is appended. Administrators do not calculate or submit GPU minutes. The dispatcher still retains automatic cost and runtime safeguards, returns retryable failures to held state, and closes the session when its document queue drains. The initial profile targets a quantized Qwen3-VL-4B on a 16 GB NVIDIA pool, with a configurable 24 GB fallback for out-of-memory retries.
 
-For large uploads, the admin console automatically selects the files that were just uploaded. Administrators can also select or clear every waiting document with one action. The selected document count and conservative GPU-minute estimate are recalculated from the current selection and shown as read-only values. Compute stops as soon as the selected work finishes.
+For large uploads, the admin console starts indexing the files that were successfully uploaded from the same primary action. Held and failed documents can be restarted as one batch in the shared session. Completed jobs are removed from the visible processing queue as status polling updates.
 
 ## Chat UI
 

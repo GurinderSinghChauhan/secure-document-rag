@@ -51,10 +51,16 @@ class HeldIngestResponse(BaseModel):
     job_id: str
     state: str = "held_for_compute"
     message: str
+    recommended_gpu_minutes: int
+
+
+class ClassifyDocumentRequest(BaseModel):
+    document_type: str = Field(min_length=1, max_length=96)
 
 
 class IngestionJobResponse(BaseModel):
     job_id: str
+    operation: str = "index"
     document_name: str
     document_type: str | None = None
     content_type: str

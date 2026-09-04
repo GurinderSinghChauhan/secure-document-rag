@@ -1,10 +1,12 @@
+import { useState } from "react";
 import { useQueries } from "@tanstack/react-query";
 import { AppShell } from "../../components/layout/AppShell";
 import {
   ComputeQueue,
   computeKeys,
-  listHeldJobs,
+  listQueueJobs,
 } from "../../features/compute";
+import { Panel, PanelHeader } from "../../components/ui";
 import {
   DocumentLibrary,
   DocumentUploader,
@@ -20,9 +22,10 @@ import { useAuth } from "../../features/auth";
 
 export default function AdminRoute() {
   const { user } = useAuth();
-  const [held, documents, members] = useQueries({
+  const [computeSessionId, setComputeSessionId] = useState<string | null>(null);
+  const [queue, documents, members] = useQueries({
     queries: [
-      { queryKey: computeKeys.held, queryFn: listHeldJobs },
+      { queryKey: computeKeys.queue, queryFn: listQueueJobs },
       { queryKey: documentKeys.indexed, queryFn: listDocuments },
       { queryKey: organizationKeys.members, queryFn: listMembers },
     ],
@@ -41,10 +44,7 @@ export default function AdminRoute() {
           <p className="admin-nav-label">Manage</p>
           <nav className="primary-nav" aria-label="Admin sections">
             <a className="nav-item" href="#documents">
-              Documents
-            </a>
-            <a className="nav-item" href="#compute">
-              Compute
+              Upload & processing
             </a>
             <a className="nav-item" href="#indexed-documents">
               Indexed library
@@ -62,16 +62,16 @@ export default function AdminRoute() {
             <span className="section-kicker">Organization administration</span>
             <h1>Workspace control center</h1>
             <p>
-              Bring knowledge in, control when compute runs, and keep access
-              accountable.
+              Upload, index, and monitor documents in one place while keeping
+              access accountable.
             </p>
           </div>
         </header>
         <section className="admin-overview" aria-label="Workspace overview">
           <Overview label="Plan" value={trialText} />
           <Overview
-            label="Waiting for compute"
-            value={String(held.data?.length ?? "—")}
+            label="Indexing queue"
+            value={String(queue.data?.length ?? "—")}
           />
           <Overview
             label="Indexed documents"
@@ -83,9 +83,30 @@ export default function AdminRoute() {
           />
         </section>
         <div className="admin-grid">
-          <DocumentUploader disabled={trialDisabled} />
-          <ComputeQueue disabled={trialDisabled} />
-          <DocumentLibrary />
+          <Panel
+            id="documents"
+            className="workflow-card document-workflow-card"
+            labelledBy="document-workflow-title"
+          >
+            <PanelHeader
+              step="01"
+              kicker="Document workflow"
+              title="Upload and index"
+              titleId="document-workflow-title"
+            />
+            <div className="document-workflow-layout">
+              <DocumentUploader
+                disabled={trialDisabled}
+                onComputeStarted={setComputeSessionId}
+              />
+              <ComputeQueue
+                disabled={trialDisabled}
+                sessionId={computeSessionId}
+                onSessionIdChange={setComputeSessionId}
+              />
+            </div>
+          </Panel>
+          <DocumentLibrary onComputeStarted={setComputeSessionId} />
           <OrganizationAccess />
           <section className="trust-note admin-trust">
             <div className="trust-note-heading">

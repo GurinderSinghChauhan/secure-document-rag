@@ -62,6 +62,33 @@
   height: auto;
 }
 
+.document-workflow-card {
+  grid-column: 1 / -1;
+}
+
+.document-workflow-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.12fr) minmax(340px, 0.88fr);
+  gap: 28px;
+  margin-top: 20px;
+}
+
+.upload-pane,
+.processing-pane {
+  min-width: 0;
+}
+
+.processing-pane {
+  padding-left: 28px;
+  border-left: 1px solid var(--border);
+}
+
+.workflow-subheading h3 {
+  margin: 3px 0 0;
+  font-size: 17px;
+  letter-spacing: -0.02em;
+}
+
 .admin-overview {
   display: grid;
   grid-template-columns: 1.5fr repeat(3, 1fr);
@@ -249,8 +276,37 @@
   gap: 16px;
   margin: 10px 0;
 }
-.indexed-document-toolbar span {
-  max-width: 680px;
+.indexed-document-selection,
+.indexed-document-bulk-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.indexed-document-selection label {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+}
+.indexed-document-selection input,
+.indexed-document-select {
+  width: 16px;
+  height: 16px;
+  min-width: 16px;
+  padding: 0;
+  accent-color: #3159d5;
+}
+.indexed-document-selection strong {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+.indexed-document-delete-note {
+  display: block;
+  margin: -5px 0 10px;
   color: var(--text-tertiary);
   font-size: 11px;
   line-height: 1.45;
@@ -326,6 +382,19 @@
   border: 1px solid var(--border);
   border-radius: 12px;
   background: linear-gradient(135deg, #fbfcff, #f7f9ff);
+}
+
+.compute-job-card.failed {
+  border-color: #f0c4c4;
+  background: linear-gradient(135deg, #fffafa, #fff5f5);
+}
+
+.compute-job-card.failed .compute-job-stage > span {
+  color: var(--danger);
+}
+
+.queue-batch-action {
+  margin-top: 12px;
 }
 
 .compute-job-card > header {
@@ -439,6 +508,30 @@
   width: 100%;
   padding-left: 40px;
 }
+.indexed-document-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-bottom: 12px;
+}
+.indexed-document-filter {
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--text-secondary);
+  background: var(--surface);
+  font-size: 12px;
+  font-weight: 700;
+}
+.indexed-document-filter:hover {
+  border-color: var(--border-strong);
+  background: var(--surface-subtle);
+}
+.indexed-document-filter[aria-pressed="true"] {
+  border-color: #3159d5;
+  color: #2448b8;
+  background: var(--primary-subtle);
+}
 .indexed-document-list {
   max-height: min(460px, 55vh);
   overflow-x: hidden;
@@ -456,11 +549,18 @@
   padding: 14px 16px;
   border-bottom: 1px solid var(--border);
 }
+.indexed-document-row.selected {
+  background: var(--primary-subtle);
+}
+.indexed-document-select {
+  flex: 0 0 16px;
+}
 .indexed-document-row:last-child {
   border-bottom: 0;
 }
 .indexed-document-main {
   display: grid;
+  flex: 1 1 auto;
   gap: 4px;
   min-width: 0;
 }
@@ -469,6 +569,18 @@
 }
 .indexed-document-main small {
   color: var(--text-tertiary);
+}
+.indexed-document-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: min(100%, 540px);
+}
+.indexed-document-actions select {
+  flex: 1 1 210px;
+  min-width: 0;
 }
 .empty-admin-list {
   margin: 0;
@@ -579,6 +691,17 @@
   .admin-grid {
     grid-template-columns: 1fr;
   }
+
+  .document-workflow-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .processing-pane {
+    padding-top: 24px;
+    padding-left: 0;
+    border-top: 1px solid var(--border);
+    border-left: 0;
+  }
 }
 
 @media (max-width: 860px) {
@@ -612,6 +735,23 @@
 
   .indexed-document-row {
     align-items: flex-start;
+    display: grid;
+    grid-template-columns: 16px minmax(0, 1fr);
+  }
+
+  .indexed-document-actions {
+    grid-column: 1 / -1;
+  }
+
+  .indexed-document-actions {
+    align-items: stretch;
+    flex-direction: column;
+    width: 100%;
+  }
+
+  .indexed-document-actions button {
+    justify-content: center;
+    width: 100%;
   }
 
   .compute-selection-toolbar,
@@ -625,9 +765,8 @@
     margin-left: 0;
   }
 
-  .indexed-document-toolbar .danger-action {
+  .indexed-document-bulk-actions {
     width: 100%;
-    justify-content: center;
   }
 }
 @media (max-width: 720px) {
@@ -638,6 +777,7 @@
   }
   .members-card,
   .indexed-documents-card,
+  .document-workflow-card,
   .admin-trust {
     grid-column: auto;
   }

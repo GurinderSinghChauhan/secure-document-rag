@@ -2,44 +2,53 @@ import { api } from "../../api/client";
 import type { ComputeSession, IngestionJob } from "../../api/types";
 
 export const computeKeys = {
-  held: ["compute", "held-jobs"] as const,
+  queue: ["compute", "queue"] as const,
+  active: ["compute", "active-session"] as const,
   session: (id: string) => ["compute", "session", id] as const,
 };
-export async function listHeldJobs() {
+async function listJobsByState(state: "held_for_compute" | "failed") {
   const pageSize = 500;
   const jobs: IngestionJob[] = [];
   for (let offset = 0; ; offset += pageSize) {
     const page = await api.json<IngestionJob[]>(
-      `/v1/admin/ingestion-jobs?state=held_for_compute&limit=${pageSize}&offset=${offset}`,
+      `/v1/admin/ingestion-jobs?state=${state}&limit=${pageSize}&offset=${offset}`,
       {},
-      "Unable to load held documents.",
+      "Unable to load the indexing queue.",
     );
     jobs.push(...page);
     if (page.length < pageSize) return jobs;
   }
 }
+export const listHeldJobs = () => listJobsByState("held_for_compute");
+export async function listQueueJobs() {
+  const jobs = (
+    await Promise.all([
+      listJobsByState("held_for_compute"),
+      listJobsByState("failed"),
+    ])
+  ).flat();
+  return jobs.sort((left, right) =>
+    right.created_at.localeCompare(left.created_at),
+  );
+}
 export const getComputeSession = (id: string) =>
   api.json<ComputeSession>(`/v1/admin/compute-sessions/${id}`);
-export async function releaseJobs(jobIds: string[], maxGpuMinutes: number) {
-  const session = await api.json<ComputeSession>(
-    "/v1/admin/compute-sessions",
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        max_jobs: jobIds.length,
-        max_gpu_minutes: maxGpuMinutes,
-      }),
-    },
-    "Unable to open compute session.",
+export const getActiveComputeSession = () =>
+  api.json<ComputeSession | null>("/v1/admin/compute-sessions/active");
+export const retryIngestionJob = (jobId: string) =>
+  api.json<IngestionJob>(
+    `/v1/admin/ingestion-jobs/${jobId}/retry`,
+    { method: "POST" },
+    "Unable to retry document indexing.",
   );
+export async function releaseJobs(jobIds: string[]) {
   return api.json<ComputeSession>(
-    `/v1/admin/compute-sessions/${session.session_id}/release`,
+    "/v1/admin/compute-sessions/release",
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ job_ids: jobIds }),
     },
-    "Unable to release jobs.",
+    "Unable to add documents to compute.",
   );
 }

@@ -42,6 +42,7 @@ export interface UploadProgress {
 }
 export interface UploadResult {
   job_id: string;
+  recommended_gpu_minutes: number;
 }
 
 export function batchUploadPercentage(
@@ -80,13 +81,17 @@ export function uploadDocument(
           percentage?: number;
           message?: string;
           job_id?: string;
+          recommended_gpu_minutes?: number;
         };
         if (event.type === "error")
           streamError = new Error(
             event.detail || "Unable to save the document.",
           );
         if (event.type === "complete" && event.job_id)
-          complete = { job_id: event.job_id };
+          complete = {
+            job_id: event.job_id,
+            recommended_gpu_minutes: event.recommended_gpu_minutes ?? 1,
+          };
         if (event.type === "progress")
           onProgress({
             phase: "securing",
@@ -150,3 +155,14 @@ export function uploadDocument(
     request.send(file);
   });
 }
+
+export const classifyDocument = (id: string, documentType: string) =>
+  api.json<UploadResult>(
+    `/v1/admin/documents/${id}/classification`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ document_type: documentType }),
+    },
+    "Unable to classify the document.",
+  );

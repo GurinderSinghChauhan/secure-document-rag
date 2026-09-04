@@ -1,7 +1,7 @@
 import { vi } from "vitest";
 import { api } from "../../api/client";
 import type { IngestionJob } from "../../api/types";
-import { listHeldJobs } from "./api";
+import { listHeldJobs, releaseJobs } from "./api";
 
 function job(index: number): IngestionJob {
   return { job_id: `job-${index}` } as IngestionJob;
@@ -22,12 +22,29 @@ test("loads every held-job page beyond the first 500 records", async () => {
     1,
     "/v1/admin/ingestion-jobs?state=held_for_compute&limit=500&offset=0",
     {},
-    "Unable to load held documents.",
+    "Unable to load the indexing queue.",
   );
   expect(request).toHaveBeenNthCalledWith(
     2,
     "/v1/admin/ingestion-jobs?state=held_for_compute&limit=500&offset=500",
     {},
-    "Unable to load held documents.",
+    "Unable to load the indexing queue.",
+  );
+});
+
+test("adds documents through the automatic shared-session endpoint", async () => {
+  const response = { session_id: "session-1" };
+  const request = vi.spyOn(api, "json").mockResolvedValue(response);
+
+  expect(await releaseJobs(["job-1", "job-2"])).toBe(response);
+  expect(request).toHaveBeenCalledOnce();
+  expect(request).toHaveBeenCalledWith(
+    "/v1/admin/compute-sessions/release",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ job_ids: ["job-1", "job-2"] }),
+    },
+    "Unable to add documents to compute.",
   );
 });

@@ -87,6 +87,7 @@ async def reserve_pdf_trial_slot(session: AsyncSession, principal: Principal) ->
     used = await session.scalar(
         select(func.count()).select_from(IngestionJobRecord).where(
             IngestionJobRecord.tenant_id == principal.tenant_id,
+            IngestionJobRecord.operation == "index",
             or_(IngestionJobRecord.content_type.ilike("application/pdf%"), func.lower(IngestionJobRecord.document_name).like("%.pdf")),
             IngestionJobRecord.created_at >= day_start,
             IngestionJobRecord.created_at < day_end,
