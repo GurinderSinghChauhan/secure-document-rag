@@ -10,7 +10,7 @@ COPY frontend ./
 RUN npm run build
 
 FROM ghcr.io/astral-sh/uv:0.6.5 AS uv
-FROM python:3.12-slim
+FROM python:3.14-slim
 
 ARG APP_COMMIT=unknown
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PATH="/service/.venv/bin:$PATH" APP_COMMIT=$APP_COMMIT
