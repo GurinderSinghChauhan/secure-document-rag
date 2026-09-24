@@ -9,7 +9,7 @@ RUN npm ci
 COPY frontend ./
 RUN npm run build
 
-FROM ghcr.io/astral-sh/uv:0.6.5 AS uv
+FROM ghcr.io/astral-sh/uv:0.12.18 AS uv
 FROM python:3.12-slim
 
 ARG APP_COMMIT=unknown
