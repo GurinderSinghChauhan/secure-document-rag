@@ -93,7 +93,11 @@ export function AppShell({ section, children, sidebar }: AppShellProps) {
             <div className="secondary-nav" aria-label="Admin sections">
               <span className="secondary-nav-label">Manage</span>
               {adminSubNav.map((item) => (
-                <a className="nav-item secondary-nav-item" href={item.href} key={item.href}>
+                <a
+                  className="nav-item secondary-nav-item"
+                  href={item.href}
+                  key={item.href}
+                >
                   <span>{item.label}</span>
                 </a>
               ))}

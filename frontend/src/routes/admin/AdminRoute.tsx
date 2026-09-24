@@ -45,8 +45,8 @@ export default function AdminRoute() {
             <h1>Executive operations center</h1>
             <p>
               Monitor intake, enforce policy boundaries, and keep the knowledge
-              estate available to the right teams without sacrificing operational
-              control.
+              estate available to the right teams without sacrificing
+              operational control.
             </p>
           </div>
         </header>

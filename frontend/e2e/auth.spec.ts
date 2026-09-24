@@ -95,7 +95,7 @@ test("an administrator navigates across lazy routes without reloading the sessio
 
   await page.goto("/admin");
   await expect(
-    page.getByRole("heading", { name: "Workspace control center" }),
+    page.getByRole("heading", { name: "Executive operations center" }),
   ).toBeVisible();
   await expectNoAccessibilityViolations(page);
   await page.evaluate(() => {
@@ -104,7 +104,7 @@ test("an administrator navigates across lazy routes without reloading the sessio
 
   await page.getByRole("link", { name: "Ask" }).click();
   await expect(
-    page.getByRole("heading", { name: "Ask your documents" }),
+    page.getByRole("heading", { name: "Ask the operational record" }),
   ).toBeVisible();
   await page.getByRole("link", { name: "Platform Admin" }).click();
   await expect(
@@ -194,7 +194,7 @@ test("phone layout keeps role-appropriate navigation and admin actions available
   ).toBeVisible();
   await mobileNavigation.getByRole("link", { name: "Admin" }).click();
   await expect(
-    page.getByRole("heading", { name: "Workspace control center" }),
+    page.getByRole("heading", { name: "Executive operations center" }),
   ).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Delete all documents" }),

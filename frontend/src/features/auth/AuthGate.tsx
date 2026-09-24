@@ -142,7 +142,9 @@ export function AuthGate() {
             <span className="auth-eyebrow">
               Enterprise knowledge operations
             </span>
-            <h2>Answer critical questions from the documents that matter most.</h2>
+            <h2>
+              Answer critical questions from the documents that matter most.
+            </h2>
             <p>
               Bring policy-controlled document intelligence into one governed
               workspace so teams can search, classify, and act on trusted
