@@ -43,6 +43,7 @@ jobs:
         working-directory: frontend
         run: |
           npm ci
+          npm audit --omit=dev --audit-level=high
           npm run check
 
       - name: Run browser navigation tests
@@ -55,6 +56,12 @@ jobs:
         run: |
           uv run python tools/version.py --check
           uv lock --check
+
+      - name: Audit Python dependencies
+        run: |
+          uv export --frozen --no-dev --format requirements-txt --no-emit-project |
+            uvx --from pip-audit==2.10.1 pip-audit \
+              --requirement /dev/stdin --no-deps --disable-pip
 
       - name: Run test suite
         run: |
@@ -70,3 +77,12 @@ jobs:
 
       - name: Build API image
         run: docker build --build-arg APP_COMMIT="$GITHUB_SHA" -t secure-document-rag:ci .
+
+      - name: Scan API image
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: secure-document-rag:ci
+          format: table
+          exit-code: "1"
+          ignore-unfixed: true
+          severity: CRITICAL,HIGH

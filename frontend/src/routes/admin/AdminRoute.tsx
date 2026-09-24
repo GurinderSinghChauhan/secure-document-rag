@@ -6,7 +6,7 @@ import {
   computeKeys,
   listQueueJobs,
 } from "../../features/compute";
-import { Panel, PanelHeader } from "../../components/ui";
+import { Icon, type IconName, Panel, PanelHeader } from "../../components/ui";
 import {
   DocumentLibrary,
   DocumentUploader,
@@ -37,48 +37,34 @@ export default function AdminRoute() {
       ? `Free trial · ends ${new Date(user.trial.ends_at).toLocaleDateString()}`
       : "Trial ended · processing unavailable";
   return (
-    <AppShell
-      section="Admin"
-      sidebar={
-        <>
-          <p className="admin-nav-label">Manage</p>
-          <nav className="primary-nav" aria-label="Admin sections">
-            <a className="nav-item" href="#documents">
-              Upload & processing
-            </a>
-            <a className="nav-item" href="#indexed-documents">
-              Indexed library
-            </a>
-            <a className="nav-item" href="#members">
-              Members
-            </a>
-          </nav>
-        </>
-      }
-    >
-      <main className="admin-content">
+    <AppShell section="Admin">
+      <main id="main-content" className="admin-content">
         <header className="admin-page-header">
           <div>
             <span className="section-kicker">Organization administration</span>
-            <h1>Workspace control center</h1>
+            <h1>Executive operations center</h1>
             <p>
-              Upload, index, and monitor documents in one place while keeping
-              access accountable.
+              Monitor intake, enforce policy boundaries, and keep the knowledge
+              estate available to the right teams without sacrificing
+              operational control.
             </p>
           </div>
         </header>
         <section className="admin-overview" aria-label="Workspace overview">
-          <Overview label="Plan" value={trialText} />
+          <Overview icon="building" label="Access plan" value={trialText} />
           <Overview
-            label="Indexing queue"
+            icon="queue"
+            label="Active jobs"
             value={String(queue.data?.length ?? "—")}
           />
           <Overview
-            label="Indexed documents"
+            icon="documents"
+            label="Indexed docs"
             value={String(documents.data?.length ?? "—")}
           />
           <Overview
-            label="Organization members"
+            icon="members"
+            label="Authorized users"
             value={String(members.data?.length ?? "—")}
           />
         </section>
@@ -114,10 +100,11 @@ export default function AdminRoute() {
                 ✓
               </span>
               <div>
-                <strong>Security by design</strong>
+                <strong>Trust and governance</strong>
                 <small>
-                  Organization isolation, admin authorization, rotating
-                  sessions, and bounded compute are enforced by the API.
+                  Tenant isolation, role enforcement, activity visibility, and
+                  bounded processing keep the environment suitable for regulated
+                  teams.
                 </small>
               </div>
             </div>
@@ -128,11 +115,19 @@ export default function AdminRoute() {
   );
 }
 
-function Overview({ label, value }: { label: string; value: string }) {
+function Overview({
+  icon,
+  label,
+  value,
+}: {
+  icon: IconName;
+  label: string;
+  value: string;
+}) {
   return (
     <div className="overview-card">
       <span className="overview-icon" aria-hidden="true">
-        ●
+        <Icon name={icon} />
       </span>
       <div>
         <small>{label}</small>

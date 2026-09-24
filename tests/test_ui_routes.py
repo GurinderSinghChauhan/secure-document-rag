@@ -1,8 +1,10 @@
 from pathlib import Path
 
 import pytest
+from fastapi import Request, Response
 
-from app.main import admin_ui, ask_ui, chat_ui, insights_ui, super_admin_ui
+from app.config import Settings
+from app.main import admin_ui, ask_ui, chat_ui, insights_ui, security_headers, super_admin_ui
 
 
 FRONTEND = Path("frontend")
@@ -95,6 +97,54 @@ def test_production_build_is_node_free_and_uses_hashed_asset_caching():
     assert 'command === "build" ? "/assets/spa/" : "/"' in vite
     assert 'request.url.path.startswith("/assets/spa/assets/")' in server
     assert '"public, max-age=31536000, immutable"' in server
+    assert "sourcemap: false" in vite
+
+
+def test_container_build_preserves_release_identity_and_minimizes_build_context():
+    dockerfile = Path("Dockerfile").read_text(encoding="utf-8")
+    dockerignore = Path(".dockerignore").read_text(encoding="utf-8").splitlines()
+
+    assert "ARG APP_COMMIT" in dockerfile
+    assert "org.opencontainers.image.revision=$APP_COMMIT" in dockerfile
+    assert "uv cache clean" in dockerfile
+    assert "--no-server-header" in dockerfile
+    assert ".env" in dockerignore
+    assert ".git" in dockerignore
+
+
+@pytest.mark.asyncio
+async def test_customer_responses_receive_defensive_security_headers(monkeypatch):
+    settings = Settings()
+    monkeypatch.setattr("app.main.get_settings", lambda: settings)
+    request = Request(
+        {
+            "type": "http",
+            "method": "GET",
+            "path": "/",
+            "query_string": b"",
+            "headers": [],
+            "scheme": "http",
+            "server": ("localhost", 8080),
+            "client": ("127.0.0.1", 10000),
+        }
+    )
+
+    async def empty_response(_: Request) -> Response:
+        return Response()
+
+    response = await security_headers(request, empty_response)
+
+    assert response.headers["Content-Security-Policy"].startswith("default-src 'self'")
+    assert response.headers["Permissions-Policy"]
+    assert response.headers["Cross-Origin-Opener-Policy"] == "same-origin"
+    assert response.headers["Cross-Origin-Resource-Policy"] == "same-origin"
+    assert "Strict-Transport-Security" not in response.headers
+
+    settings.environment = "production"
+    production_response = await security_headers(request, empty_response)
+    assert production_response.headers["Strict-Transport-Security"] == (
+        "max-age=63072000; includeSubDomains"
+    )
 
 
 def test_platform_migration_adds_only_explicit_authority_fields():

@@ -113,6 +113,9 @@ GitHub Actions uses one workflow with dependent jobs. The validation job has rea
 | `PASSWORD_RESET_DELIVERY` | `disabled` creates no reset token or email; `email` enables the email reset flow |
 | `EMAIL_SENDER` | `console` for development or `resend` for production |
 | `RESEND_API_KEY` | Required with secure cookies and non-development signing keys in production |
+| `ALLOWED_HOSTS` | Comma-separated public hostnames accepted by the API; wildcards and loopback hosts are rejected in production |
+| `FORWARDED_ALLOW_IPS` | Explicit reverse-proxy IPs whose forwarded headers Uvicorn may trust; defaults to loopback only |
+| `VITE_VOICE_INPUT_ENABLED` | Build-time browser speech-recognition switch; defaults to `false` pending a deployment-specific audio data-flow review |
 | `DATABASE_URL` | SQLAlchemy async PostgreSQL connection URL |
 | `QDRANT_URL` | Private Qdrant endpoint |
 | `MODEL_SERVER_URL` | OpenAI-compatible endpoint for the self-hosted model server |
@@ -135,7 +138,6 @@ GitHub Actions uses one workflow with dependent jobs. The validation job has rea
 | `MIN_RETRIEVAL_SCORE` | Minimum Qdrant similarity score used for answer context |
 | `CLASSIFICATION_AUTO_ACCEPT_THRESHOLD` | Minimum automatic classification confidence accepted without review; defaults to `0.85` |
 | `CLASSIFICATION_REVIEW_THRESHOLD` | Minimum confidence retained as a provisional type requiring review; defaults to `0.60` and must be lower than the auto-accept threshold |
-| `ALLOWED_HOSTS` | Comma-separated hostnames accepted by the API |
 
 ## Operations
 

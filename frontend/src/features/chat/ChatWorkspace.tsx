@@ -32,7 +32,11 @@ export function ChatWorkspace() {
   const [composerStatus, setComposerStatus] = useState("Ready to search");
   const logRef = useRef<HTMLDivElement>(null);
   const changeQuestion = useCallback((value: string) => setQuestion(value), []);
-  const voice = useVoiceInput(question, changeQuestion);
+  const voice = useVoiceInput(
+    question,
+    changeQuestion,
+    __VOICE_INPUT_ENABLED__,
+  );
 
   async function load(chatId: string) {
     if (busy) return;
@@ -154,7 +158,7 @@ export function ChatWorkspace() {
   );
   return (
     <AppShell section="Ask" sidebar={sidebar}>
-      <main className="content">
+      <main id="main-content" className="content">
         <section
           className="assistant-workspace"
           aria-labelledby="assistant-title"
@@ -162,10 +166,10 @@ export function ChatWorkspace() {
           <header className="assistant-header">
             <div>
               <span className="section-kicker">Authorized knowledge</span>
-              <h1 id="assistant-title">Ask your documents</h1>
+              <h1 id="assistant-title">Ask the operational record</h1>
               <p>
-                Get grounded answers from information you are permitted to
-                access.
+                Search only the documents and context your role is allowed to
+                access, then turn them into grounded answers for action.
               </p>
             </div>
             <div className="scope-label">
@@ -181,8 +185,8 @@ export function ChatWorkspace() {
             {!messages.length && (
               <EmptyState
                 icon="✓"
-                title="What would you like to know?"
-                description="Ask a focused question and the assistant will search only documents available to your tenant and role."
+                title="What do you need to verify?"
+                description="Ask a focused question and the assistant will search only the documents available to your tenant, role, and policy scope."
               >
                 <div
                   className="prompt-suggestions"

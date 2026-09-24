@@ -70,7 +70,7 @@ test("restores one shared session and exposes role-appropriate navigation", asyn
   );
   renderApplication();
   expect(
-    await screen.findByRole("heading", { name: "Document dashboard" }),
+    await screen.findByRole("heading", { name: "Operations dashboard" }),
   ).toBeVisible();
   const primaryNavigation = within(screen.getByLabelText("Primary navigation"));
   expect(primaryNavigation.getByRole("link", { name: "Ask" })).toHaveAttribute(
@@ -83,6 +83,11 @@ test("restores one shared session and exposes role-appropriate navigation", asyn
   expect(
     primaryNavigation.queryByRole("link", { name: "Platform Admin" }),
   ).not.toBeInTheDocument();
+  expect(
+    screen.getByRole("link", { name: "Skip to main content" }),
+  ).toHaveAttribute("href", "#main-content");
+  expect(document.querySelector("main#main-content")).toBeInTheDocument();
+  expect(screen.getByText(`Arcline v${__APP_VERSION__}`)).toBeVisible();
 });
 
 test("renders authorized document coverage and schema-driven metadata", async () => {
@@ -214,7 +219,7 @@ test("renders authorized document coverage and schema-driven metadata", async ()
   renderApplication();
 
   expect(
-    await screen.findByRole("heading", { name: "Document dashboard" }),
+    await screen.findByRole("heading", { name: "Operations dashboard" }),
   ).toBeVisible();
   expect(
     await screen.findByText(

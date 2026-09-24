@@ -1,20 +1,19 @@
-from collections import defaultdict, deque
 from datetime import UTC, datetime, timedelta
+from hashlib import sha256
 import re
-from time import monotonic
 from urllib.parse import urlparse
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from pydantic import BaseModel, Field, field_validator
-from sqlalchemy import func, select, update
+from sqlalchemy import func, select, text, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .audit import record
 from .auth import create_access_token, hash_password, hash_token, normalize_email, random_token, require_admin, require_principal, verify_password
 from .config import get_settings
-from .database import AccountTokenRecord, MembershipRecord, OrganizationRecord, RefreshSessionRecord, UserRecord, get_session
+from .database import AccountTokenRecord, MembershipRecord, OrganizationRecord, RefreshSessionRecord, RequestLimitRecord, UserRecord, get_session
 from .email_sender import send_account_email
 from .models import Principal
 from .trials import new_trial_window, trial_payload
@@ -22,7 +21,6 @@ from .trials import new_trial_window, trial_payload
 router = APIRouter(prefix="/v1")
 GENERIC_EMAIL_MESSAGE = "If the account is eligible, an email has been sent."
 REFRESH_COOKIE = "secure_rag_refresh"
-limits: dict[str, deque[float]] = defaultdict(deque)
 
 
 class RegisterRequest(BaseModel):
@@ -92,15 +90,41 @@ class AuthResponse(BaseModel):
     user: dict[str, object]
 
 
-def rate_limit(request: Request, bucket: str, maximum: int = 10, window: int = 60) -> None:
+async def rate_limit(
+    session: AsyncSession,
+    request: Request,
+    bucket: str,
+    maximum: int = 10,
+    window: int = 60,
+) -> None:
     key = f"{bucket}:{request.client.host if request.client else 'unknown'}"
-    now = monotonic()
-    entries = limits[key]
-    while entries and entries[0] < now - window:
-        entries.popleft()
-    if len(entries) >= maximum:
+    lock_key = int.from_bytes(sha256(key.encode()).digest()[:8], signed=True)
+    await session.execute(
+        text("SELECT pg_advisory_xact_lock(:lock_key)"),
+        {"lock_key": lock_key},
+    )
+    now = datetime.now(UTC)
+    record = await session.get(RequestLimitRecord, key)
+    if record is None:
+        session.add(
+            RequestLimitRecord(
+                limit_key=key,
+                window_started_at=now,
+                request_count=1,
+            )
+        )
+        await session.commit()
+        return
+    if record.window_started_at <= now - timedelta(seconds=window):
+        record.window_started_at = now
+        record.request_count = 1
+        await session.commit()
+        return
+    if record.request_count >= maximum:
+        await session.rollback()
         raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail="Too many requests; try again later")
-    entries.append(now)
+    record.request_count += 1
+    await session.commit()
 
 
 def validate_cookie_origin(request: Request) -> None:
@@ -168,7 +192,7 @@ async def available_organization_slug(session: AsyncSession, name: str) -> str:
 
 @router.post("/auth/register", status_code=202)
 async def register(payload: RegisterRequest, request: Request, session: AsyncSession = Depends(get_session)) -> dict[str, str]:
-    rate_limit(request, "register", 5, 3600)
+    await rate_limit(session, request, "register", 5, 3600)
     settings = get_settings()
     organization_id, user_id = str(uuid4()), str(uuid4())
     slug = await available_organization_slug(session, payload.organization_name)
@@ -211,7 +235,7 @@ async def verify_email(payload: TokenRequest, session: AsyncSession = Depends(ge
 
 @router.post("/auth/login", response_model=AuthResponse)
 async def login(payload: LoginRequest, request: Request, response: Response, session: AsyncSession = Depends(get_session)) -> AuthResponse:
-    rate_limit(request, "login", 10, 300)
+    await rate_limit(session, request, "login", 10, 300)
     user = await session.scalar(select(UserRecord).where(UserRecord.email == normalize_email(payload.email)))
     if user is None or not verify_password(user.password_hash, payload.password) or not user.active or not user.email_verified:
         if user is not None:
@@ -227,7 +251,7 @@ async def login(payload: LoginRequest, request: Request, response: Response, ses
 
 @router.post("/auth/refresh", response_model=AuthResponse)
 async def refresh(request: Request, response: Response, session: AsyncSession = Depends(get_session)) -> AuthResponse:
-    rate_limit(request, "refresh", 30, 60)
+    await rate_limit(session, request, "refresh", 30, 60)
     validate_cookie_origin(request)
     raw = request.cookies.get(REFRESH_COOKIE)
     stored = await session.scalar(select(RefreshSessionRecord).where(RefreshSessionRecord.token_hash == hash_token(raw or "")))
@@ -281,7 +305,7 @@ async def logout(request: Request, response: Response, session: AsyncSession = D
 
 @router.post("/auth/forgot-password", status_code=202)
 async def forgot_password(payload: ForgotPasswordRequest, request: Request, session: AsyncSession = Depends(get_session)) -> dict[str, str]:
-    rate_limit(request, "forgot", 5, 3600)
+    await rate_limit(session, request, "forgot", 5, 3600)
     settings = get_settings()
     if settings.password_reset_delivery == "disabled":
         return {"message": "Password recovery is currently disabled. Contact your organization administrator."}
@@ -327,7 +351,7 @@ async def me(principal: Principal = Depends(require_principal), session: AsyncSe
 @router.post("/admin/organization/invitations", status_code=202)
 async def invite(payload: InvitationCreateRequest, request: Request, principal: Principal = Depends(require_principal), session: AsyncSession = Depends(get_session)) -> dict[str, str]:
     require_admin(principal)
-    rate_limit(request, f"invite:{principal.tenant_id}", 30, 3600)
+    await rate_limit(session, request, f"invite:{principal.tenant_id}", 30, 3600)
     email = normalize_email(payload.email)
     settings = get_settings()
     response_payload = {

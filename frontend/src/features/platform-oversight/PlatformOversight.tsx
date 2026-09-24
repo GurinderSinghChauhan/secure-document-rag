@@ -57,7 +57,7 @@ export function PlatformOversight() {
     (organization) => organization.users,
   );
   return (
-    <main className="platform-content">
+    <main id="main-content" className="platform-content">
       <header className="admin-page-header">
         <div>
           <span className="section-kicker">Platform administration</span>

@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 export function useVoiceInput(
   value: string,
   onChange: (value: string) => void,
+  enabled = false,
 ) {
   const [listening, setListening] = useState(false);
   const [status, setStatus] = useState("Ready to search");
@@ -10,6 +11,7 @@ export function useVoiceInput(
   const base = useRef("");
 
   useEffect(() => {
+    if (!enabled) return;
     const Constructor =
       window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!Constructor) return;
@@ -56,7 +58,7 @@ export function useVoiceInput(
       instance.stop();
       recognition.current = null;
     };
-  }, [onChange]);
+  }, [enabled, onChange]);
 
   function toggle() {
     if (listening) {
@@ -73,7 +75,7 @@ export function useVoiceInput(
 
   return {
     available: Boolean(
-      window.SpeechRecognition || window.webkitSpeechRecognition,
+      enabled && (window.SpeechRecognition || window.webkitSpeechRecognition),
     ),
     listening,
     status,

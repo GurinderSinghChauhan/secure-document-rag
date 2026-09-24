@@ -70,6 +70,7 @@ app.mount("/assets", StaticFiles(directory="app/static"), name="assets")
 @app.middleware("http")
 async def security_headers(request: Request, call_next):
     response = await call_next(request)
+    settings = get_settings()
     response.headers["Cache-Control"] = (
         "public, max-age=31536000, immutable"
         if request.url.path.startswith("/assets/spa/assets/")
@@ -78,19 +79,35 @@ async def security_headers(request: Request, call_next):
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["Referrer-Policy"] = "no-referrer"
+    response.headers["Content-Security-Policy"] = (
+        "default-src 'self'; base-uri 'self'; object-src 'none'; "
+        "frame-ancestors 'none'; form-action 'self'; "
+        "img-src 'self' data: blob:; font-src 'self'; style-src 'self'; "
+        "script-src 'self'; connect-src 'self'; media-src 'self' blob:; "
+        "worker-src 'self' blob:; manifest-src 'self'"
+    )
+    response.headers["Permissions-Policy"] = (
+        "camera=(), geolocation=(), microphone=(self), payment=(), usb=(), "
+        "browsing-topics=()"
+    )
+    response.headers["Cross-Origin-Opener-Policy"] = "same-origin"
+    response.headers["Cross-Origin-Resource-Policy"] = "same-origin"
+    response.headers["X-Permitted-Cross-Domain-Policies"] = "none"
+    if settings.environment == "production":
+        response.headers["Strict-Transport-Security"] = "max-age=63072000; includeSubDomains"
     return response
 
 
 def parse_acl(value: str | None) -> list[str]:
     values = [item.strip() for item in (value or "").split(",") if item.strip()]
     if len(values) != len(set(values)):
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="ACL values must be unique")
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="ACL values must be unique")
     return values
 
 
 def validate_document_name(document_name: str) -> str:
     if PurePath(document_name).name != document_name or any(character in document_name for character in "\r\n\x00"):
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Invalid document name")
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="Invalid document name")
     return document_name
 
 
@@ -98,7 +115,7 @@ def validate_document_type(document_type: str | None) -> str | None:
     try:
         schema = require_document_schema(document_type)
     except ValueError as error:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(error)) from error
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(error)) from error
     return schema.key if schema else None
 
 
@@ -316,10 +333,10 @@ async def index_document_events(
 
     index_text = "\n\n".join(text_sections)
     if not index_text.strip():
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Document has no indexable text, tables, or visuals")
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="Document has no indexable text, tables, or visuals")
     chunks = chunk_text(index_text) if index_vectors else []
     if index_vectors and len(chunks) > settings.max_document_chunks:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Document exceeds configured chunk limit")
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="Document exceeds configured chunk limit")
 
     existing_classification_is_complete = (
         existing_document is not None
@@ -848,7 +865,7 @@ async def ingest_document(
     document_type = validate_document_type(x_document_type)
     content = await read_limited_body(request)
     if not content:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Document cannot be empty")
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="Document cannot be empty")
     content_type = request.headers.get("content-type", "")
     require_active_trial(principal)
     if is_pdf(document_name, content_type):
@@ -874,7 +891,7 @@ async def stream_ingest_document(
     document_type = validate_document_type(x_document_type)
     content = await read_limited_body(request)
     if not content:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Document cannot be empty")
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="Document cannot be empty")
     content_type = request.headers.get("content-type", "")
     require_active_trial(principal)
     if is_pdf(document_name, content_type):
@@ -1003,7 +1020,7 @@ async def classify_document_manually(
         )
     document_type = validate_document_type(payload.document_type)
     if document_type is None:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Document type is required")
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="Document type is required")
     source = await get_latest_document_source(session, principal.tenant_id, document_id)
     if source is None:
         raise HTTPException(
@@ -1080,7 +1097,7 @@ async def release_jobs_into_session(
     if record_.status != "open":
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Compute session is not open")
     if len(payload.job_ids) != len(set(payload.job_ids)):
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Job IDs must be unique")
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="Job IDs must be unique")
     jobs = list(await session.scalars(select(IngestionJobRecord).where(IngestionJobRecord.job_id.in_(payload.job_ids), IngestionJobRecord.tenant_id == principal.tenant_id)))
     if len(jobs) != len(payload.job_ids):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="One or more jobs were not found")

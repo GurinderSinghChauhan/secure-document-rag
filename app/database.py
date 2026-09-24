@@ -77,6 +77,14 @@ class AccountTokenRecord(Base):
     created_at: Mapped[object] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
+class RequestLimitRecord(Base):
+    __tablename__ = "request_limits"
+
+    limit_key: Mapped[str] = mapped_column(String(255), primary_key=True)
+    window_started_at: Mapped[object] = mapped_column(DateTime(timezone=True), index=True)
+    request_count: Mapped[int] = mapped_column(Integer, default=0)
+
+
 class DocumentRecord(Base):
     __tablename__ = "documents"
     __table_args__ = (UniqueConstraint("tenant_id", "content_sha256", name="uq_document_tenant_content_hash"),)

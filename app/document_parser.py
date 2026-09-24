@@ -110,7 +110,7 @@ def extract_document(content: bytes, content_type: str, max_visuals: int = 40) -
     except HTTPException:
         raise
     except Exception as error:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Unable to parse document") from error
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="Unable to parse document") from error
     raise HTTPException(
         status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
         detail="This document type requires the configured MinerU parser",

@@ -34,7 +34,15 @@ class VectorStore:
         collection = self.collection_name(principal.tenant_id)
         if not await self.client.collection_exists(collection):
             return []
-        return await self.client.search(collection_name=collection, query_vector=embedding, query_filter=access_filter, limit=limit, score_threshold=get_settings().min_retrieval_score, with_payload=True)
+        response = await self.client.query_points(
+            collection_name=collection,
+            query=embedding,
+            query_filter=access_filter,
+            limit=limit,
+            score_threshold=get_settings().min_retrieval_score,
+            with_payload=True,
+        )
+        return response.points
 
     async def delete_document(self, tenant_id: str, document_id: str) -> None:
         await self.delete_documents(tenant_id, [document_id])
