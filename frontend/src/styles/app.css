@@ -13,6 +13,7 @@
   --border: #dfe6ef;
   --border-strong: #c9d3e2;
   --primary: #2f5ae0;
+  --primary-hover: #244bc4;
   --primary-strong: #1f3eba;
   --primary-subtle: #edf3ff;
   --success: #1c8e63;
@@ -112,10 +113,16 @@
 }
 .secondary-button {
   border: 1px solid #ccd2da;
+  color: var(--text-primary);
   background: #fff;
   border-radius: 7px;
   padding: 7px 10px;
   cursor: pointer;
+}
+
+.secondary-button:active {
+  color: var(--text-primary);
+  background: var(--surface-subtle);
 }
 @media (max-width: 560px) {
   .compute-limits {
@@ -1208,6 +1215,8 @@ textarea:focus {
 
 .send-button:active,
 .primary-button:active {
+  color: #ffffff;
+  background: linear-gradient(180deg, #3152bd, var(--primary-strong));
   transform: translateY(1px);
 }
 
@@ -2135,6 +2144,11 @@ textarea:focus {
 
 .text-button:hover {
   color: var(--primary-hover);
+}
+
+.text-button:active {
+  color: var(--primary-strong);
+  background: transparent;
 }
 
 .auth-form > .text-button {

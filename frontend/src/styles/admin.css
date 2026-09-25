@@ -270,6 +270,11 @@
   background: #e8eefc;
 }
 
+.icon-text-button:active {
+  color: #2448b8;
+  background: #dce5fb;
+}
+
 .auto-refresh-badge {
   display: inline-flex;
   align-items: center;
