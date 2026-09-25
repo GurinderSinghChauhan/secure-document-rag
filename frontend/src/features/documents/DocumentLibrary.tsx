@@ -33,7 +33,7 @@ export function DocumentLibrary({
 }) {
   const [search, setSearch] = useState("");
   const [classificationFilter, setClassificationFilter] = useState<
-    "all" | "needs_classification"
+    "all" | "confirmed" | "review_required" | "failed"
   >("all");
   const [selectedDocumentIds, setSelectedDocumentIds] = useState<Set<string>>(
     () => new Set(),
@@ -144,13 +144,33 @@ export function DocumentLibrary({
   });
   const needsClassification = (document: { classification_status: string }) =>
     document.classification_status === "unclassified" ||
-    document.classification_status === "failed";
-  const needsClassificationCount = (documents.data ?? []).filter(
-    needsClassification,
+    document.classification_status === "failed" ||
+    document.classification_status === "review_required";
+  const confirmedCount = (documents.data ?? []).filter(
+    (document) => document.classification_status === "confirmed",
   ).length;
+  const reviewCount = (documents.data ?? []).filter(
+    (document) => document.classification_status === "review_required",
+  ).length;
+  const failedCount = (documents.data ?? []).filter(
+    (document) =>
+      document.classification_status === "failed" ||
+      document.classification_status === "unclassified",
+  ).length;
+  const matchesClassificationFilter = (document: {
+    classification_status: string;
+  }) => {
+    if (classificationFilter === "all") return true;
+    if (classificationFilter === "failed")
+      return (
+        document.classification_status === "failed" ||
+        document.classification_status === "unclassified"
+      );
+    return document.classification_status === classificationFilter;
+  };
   const matches = (documents.data ?? []).filter(
     (document) =>
-      (classificationFilter === "all" || needsClassification(document)) &&
+      matchesClassificationFilter(document) &&
       [
         document.document_name,
         document.content_type,
@@ -167,15 +187,15 @@ export function DocumentLibrary({
   const selectedClassifiableDocuments = (documents.data ?? []).filter(
     (document) =>
       selectedDocumentIds.has(document.document_id) &&
-      (document.classification_status === "unclassified" ||
-        document.classification_status === "failed"),
+      needsClassification(document),
   );
   const selectedDocumentsReadyToClassify =
     selectedClassifiableDocuments.length > 0 &&
     selectedClassifiableDocuments.length ===
       selectedAvailableDocumentIds.length &&
     selectedClassifiableDocuments.every(
-      (document) => classificationChoices[document.document_id],
+      (document) =>
+        classificationChoices[document.document_id] || document.document_type,
     );
   const visibleDocumentIds = matches.map((document) => document.document_id);
   const selectedVisibleCount = visibleDocumentIds.filter((documentId) =>
@@ -251,15 +271,41 @@ export function DocumentLibrary({
         <Button
           variant="text"
           className="indexed-document-filter"
-          aria-pressed={classificationFilter === "needs_classification"}
+          aria-pressed={classificationFilter === "confirmed"}
           onClick={() => {
-            setClassificationFilter("needs_classification");
+            setClassificationFilter("confirmed");
             setSelectedDocumentIds(new Set());
             setBulkDeleteError("");
             setBulkClassifyError("");
           }}
         >
-          Needs classification ({needsClassificationCount})
+          Classified ({confirmedCount})
+        </Button>
+        <Button
+          variant="text"
+          className="indexed-document-filter"
+          aria-pressed={classificationFilter === "review_required"}
+          onClick={() => {
+            setClassificationFilter("review_required");
+            setSelectedDocumentIds(new Set());
+            setBulkDeleteError("");
+            setBulkClassifyError("");
+          }}
+        >
+          Review required ({reviewCount})
+        </Button>
+        <Button
+          variant="text"
+          className="indexed-document-filter"
+          aria-pressed={classificationFilter === "failed"}
+          onClick={() => {
+            setClassificationFilter("failed");
+            setSelectedDocumentIds(new Set());
+            setBulkDeleteError("");
+            setBulkClassifyError("");
+          }}
+        >
+          Failed / unclassified ({failedCount})
         </Button>
       </div>
       <div className="indexed-document-toolbar">
@@ -322,7 +368,9 @@ export function DocumentLibrary({
                 selectedClassifiableDocuments.map((document) => ({
                   documentId: document.document_id,
                   documentType:
-                    classificationChoices[document.document_id] ?? "",
+                    classificationChoices[document.document_id] ??
+                    document.document_type ??
+                    "",
                 })),
               );
             }}
@@ -425,8 +473,7 @@ export function DocumentLibrary({
               </small>
             </div>
             <div className="indexed-document-actions">
-              {(document.classification_status === "unclassified" ||
-                document.classification_status === "failed") && (
+              {needsClassification(document) && (
                 <Select
                   aria-label={`Classification for ${document.document_name}`}
                   disabled={
@@ -434,7 +481,11 @@ export function DocumentLibrary({
                     deletionPending ||
                     classifySelected.isPending
                   }
-                  value={classificationChoices[document.document_id] ?? ""}
+                  value={
+                    classificationChoices[document.document_id] ??
+                    document.document_type ??
+                    ""
+                  }
                   onChange={(event) => {
                     setBulkClassifyError("");
                     setClassificationChoices((current) => ({

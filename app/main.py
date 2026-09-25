@@ -2,6 +2,7 @@ import asyncio
 from contextlib import asynccontextmanager
 from hashlib import sha256
 import json
+import logging
 from pathlib import PurePath
 from time import monotonic
 from uuid import uuid4
@@ -36,6 +37,7 @@ model_server = ModelClient()
 mineru = MinerUClient()
 vectors = VectorStore()
 compute_tasks: dict[str, asyncio.Task[None]] = {}
+logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
@@ -396,7 +398,12 @@ async def index_document_events(
                 auto_accept_threshold,
                 review_threshold,
             )
-        except HTTPException:
+        except HTTPException as error:
+            logger.warning(
+                "Automatic classification failed for document %s: %s",
+                document_name,
+                error.detail,
+            )
             classification_status = "failed"
 
     extracted_metadata: dict[str, object] = {}
@@ -1013,10 +1020,14 @@ async def classify_document_manually(
     document = await get_document(session, principal.tenant_id, document_id)
     if document is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
-    if (document.classification_status or "unclassified") not in {"unclassified", "failed"}:
+    if (document.classification_status or "unclassified") not in {
+        "unclassified",
+        "failed",
+        "review_required",
+    }:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="Only unclassified documents or documents with failed automatic classification can be classified manually",
+            detail="Only unclassified, review-required, or failed documents can be classified manually",
         )
     document_type = validate_document_type(payload.document_type)
     if document_type is None:

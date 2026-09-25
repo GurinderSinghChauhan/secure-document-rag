@@ -106,7 +106,35 @@ Candidates: {candidate_catalog}
                     json={
                         "model": self.settings.chat_model,
                         "temperature": 0,
-                        "max_tokens": 128,
+                        "max_tokens": 512,
+                        "response_format": {
+                            "type": "json_schema",
+                            "json_schema": {
+                                "name": "document_classification",
+                                "strict": True,
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "document_type": {
+                                            "type": "string",
+                                            "enum": [candidate[0] for candidate in candidates],
+                                        },
+                                        "confidence": {
+                                            "type": "number",
+                                            "minimum": 0,
+                                            "maximum": 1,
+                                        },
+                                        "evidence": {
+                                            "type": "array",
+                                            "items": {"type": "string", "maxLength": 160},
+                                            "maxItems": 5,
+                                        },
+                                    },
+                                    "required": ["document_type", "confidence", "evidence"],
+                                    "additionalProperties": False,
+                                },
+                            },
+                        },
                         "messages": [{"role": "user", "content": prompt}],
                     },
                 )
@@ -131,14 +159,14 @@ Candidates: {candidate_catalog}
                 raise ValueError("Classification confidence is outside the accepted range")
             if not isinstance(evidence, list) or len(evidence) > 5:
                 raise ValueError("Classification evidence is not a valid list")
-            normalized_source = source_text.casefold()
+            normalized_source = " ".join(source_text.casefold().split())
             normalized_evidence: set[str] = set()
             for excerpt in evidence:
                 if not isinstance(excerpt, str) or not excerpt.strip() or len(excerpt) > 160:
-                    raise ValueError("Classification evidence contains an invalid excerpt")
-                normalized_excerpt = excerpt.strip().casefold()
+                    continue
+                normalized_excerpt = " ".join(excerpt.casefold().split())
                 if normalized_excerpt not in normalized_source:
-                    raise ValueError("Classification evidence is not grounded in the document")
+                    continue
                 normalized_evidence.add(normalized_excerpt)
             evidence_cap = (0.59, 0.74, 0.89, 0.97)[min(len(normalized_evidence), 3)]
             calibrated_confidence = round(min(confidence_value, evidence_cap), 2)

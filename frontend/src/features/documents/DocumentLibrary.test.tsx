@@ -212,6 +212,24 @@ test("extracts data for selected document types in one compute session", async (
           created_by: "admin-1",
           created_at: "2030-01-03T00:00:00Z",
         },
+        {
+          document_id: "document-4",
+          document_name: "review-invoice.pdf",
+          document_type: "accounts_payable.invoice",
+          schema_version: 2,
+          classification_status: "review_required",
+          classification_source: "automatic",
+          classification_confidence: 0.72,
+          extraction_status: "completed",
+          extracted_metadata: {},
+          content_type: "application/pdf",
+          size_bytes: 1024,
+          chunk_count: 3,
+          allowed_roles: ["admin"],
+          allowed_users: [],
+          created_by: "admin-1",
+          created_at: "2030-01-04T00:00:00Z",
+        },
       ]),
     ),
     http.post(
@@ -250,10 +268,11 @@ test("extracts data for selected document types in one compute session", async (
   expect(await screen.findByText("invoice.pdf")).toBeVisible();
   expect(screen.getByText("classified-policy.pdf")).toBeVisible();
   await userEvent.click(
-    screen.getByRole("button", { name: "Needs classification (2)" }),
+    screen.getByRole("button", { name: "Failed / unclassified (2)" }),
   );
   expect(screen.queryByText("classified-policy.pdf")).not.toBeInTheDocument();
-  expect(screen.getByText("2 of 3 searchable documents shown.")).toBeVisible();
+  expect(screen.queryByText("review-invoice.pdf")).not.toBeInTheDocument();
+  expect(screen.getByText("2 of 4 searchable documents shown.")).toBeVisible();
   await userEvent.click(screen.getByLabelText("Select all shown"));
   expect(screen.getByText("2 selected")).toBeVisible();
   const classifyButton = screen.getByRole("button", {
@@ -280,4 +299,16 @@ test("extracts data for selected document types in one compute session", async (
     expect(releasedJobIds.sort()).toEqual(["job-document-1", "job-document-2"]);
     expect(onComputeStarted).toHaveBeenCalledWith("session-1");
   });
+
+  await userEvent.click(
+    screen.getByRole("button", { name: "Review required (1)" }),
+  );
+  expect(screen.getByText("review-invoice.pdf")).toBeVisible();
+  await userEvent.click(screen.getByLabelText("Select all shown"));
+  expect(
+    screen.getByLabelText("Classification for review-invoice.pdf"),
+  ).toHaveValue("accounts_payable.invoice");
+  expect(
+    screen.getByRole("button", { name: "Apply types & extract data" }),
+  ).toBeEnabled();
 });

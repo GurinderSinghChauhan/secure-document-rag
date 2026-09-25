@@ -76,6 +76,13 @@ async def test_document_classification_is_constrained_to_registered_candidates(m
     assert "verbatim excerpts" in prompt
     assert '"industry":"Accounts Payable"' in prompt
     assert "Determine the document's industry context" in prompt
+    assert captured["payload"]["max_tokens"] == 512
+    response_schema = captured["payload"]["response_format"]["json_schema"]
+    assert response_schema["strict"] is True
+    assert response_schema["schema"]["properties"]["document_type"]["enum"] == [
+        "accounts_payable.invoice",
+        "contract_intelligence.msa",
+    ]
 
 
 @pytest.mark.asyncio
@@ -110,6 +117,45 @@ async def test_document_classification_caps_stock_high_confidence_with_weak_evid
     result = await ModelClient().classify_document(
         (("accounts_payable.invoice", "Invoice"),),
         "Invoice",
+    )
+
+    assert result == ("accounts_payable.invoice", 0.74)
+
+
+@pytest.mark.asyncio
+async def test_document_classification_ignores_ungrounded_evidence_and_normalizes_whitespace(
+    monkeypatch,
+):
+    class FakeResponse:
+        is_error = False
+
+        @staticmethod
+        def json():
+            return {
+                "choices": [
+                    {
+                        "message": {
+                            "content": '{"document_type":"accounts_payable.invoice","confidence":0.98,"evidence":["Invoice   number INV-7","invented excerpt"]}'
+                        }
+                    }
+                ]
+            }
+
+    class FakeClient:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_):
+            return None
+
+        async def post(self, _path, _json=None, **_kwargs):
+            return FakeResponse()
+
+    monkeypatch.setattr("app.providers.httpx.AsyncClient", lambda **_: FakeClient())
+
+    result = await ModelClient().classify_document(
+        (("accounts_payable.invoice", "Invoice"),),
+        "Invoice\nnumber INV-7",
     )
 
     assert result == ("accounts_payable.invoice", 0.74)

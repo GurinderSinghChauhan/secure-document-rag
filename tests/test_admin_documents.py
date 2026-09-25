@@ -274,6 +274,72 @@ async def test_failed_document_can_be_classified_manually(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_review_required_document_can_be_confirmed_manually(monkeypatch):
+    document = DocumentRecord(
+        document_id="document-review",
+        tenant_id="org-a",
+        document_name="invoice-review.pdf",
+        content_type="application/pdf",
+        content_sha256="b" * 64,
+        size_bytes=1024,
+        chunk_count=4,
+        document_type="accounts_payable.invoice",
+        classification_status="review_required",
+        classification_confidence=0.72,
+        allowed_roles=["admin"],
+        allowed_users=[],
+        created_by="admin-a",
+    )
+    source = type("Source", (), {"content": b"source-pdf"})()
+    queued_job = type(
+        "QueuedJob",
+        (),
+        {
+            "job_id": "job-review",
+            "state": "held_for_compute",
+            "message": "Document saved and waiting.",
+            "content_type": "application/pdf",
+            "size_bytes": len(source.content),
+        },
+    )()
+    calls = {}
+
+    async def find_document(*_):
+        return document
+
+    async def find_source(*_):
+        return source
+
+    async def queue_job(**kwargs):
+        calls["job"] = kwargs
+        return queued_job
+
+    async def audit(*_, **__):
+        return None
+
+    monkeypatch.setattr("app.main.get_document", find_document)
+    monkeypatch.setattr("app.main.get_latest_document_source", find_source)
+    monkeypatch.setattr("app.main.create_held_job", queue_job)
+    monkeypatch.setattr("app.main.record", audit)
+
+    result = await classify_document_manually(
+        "document-review",
+        ClassifyDocumentRequest(document_type="accounts_payable.invoice"),
+        Principal(
+            tenant_id="org-a",
+            user_id="admin-a",
+            roles=["admin"],
+            is_super_admin=True,
+        ),
+        object(),
+    )
+
+    assert result.job_id == "job-review"
+    assert calls["job"]["document_type"] == "accounts_payable.invoice"
+    assert calls["job"]["operation"] == "metadata_extraction"
+
+
+@pytest.mark.asyncio
 async def test_confirmed_document_cannot_be_manually_reclassified(monkeypatch):
     document = DocumentRecord(
         document_id="document-a",
@@ -295,7 +361,7 @@ async def test_confirmed_document_cannot_be_manually_reclassified(monkeypatch):
 
     monkeypatch.setattr("app.main.get_document", find_document)
 
-    with pytest.raises(Exception, match="Only unclassified documents"):
+    with pytest.raises(Exception, match="Only unclassified, review-required, or failed documents"):
         await classify_document_manually(
             "document-a",
             ClassifyDocumentRequest(document_type="accounts_payable.invoice"),
