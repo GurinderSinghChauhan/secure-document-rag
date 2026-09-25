@@ -162,6 +162,11 @@ textarea {
   font: inherit;
 }
 
+button {
+  appearance: none;
+  -webkit-appearance: none;
+}
+
 button,
 a,
 label[for] {
