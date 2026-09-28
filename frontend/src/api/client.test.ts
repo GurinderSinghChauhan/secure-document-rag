@@ -1,5 +1,5 @@
 import { http, HttpResponse } from "msw";
-import { ApiClient, SessionExpiredError, api } from "./client";
+import { ApiClient, SessionExpiredError, api, errorMessage } from "./client";
 import { server } from "../test/server";
 import type { AuthResponse } from "./types";
 
@@ -21,6 +21,15 @@ const auth: AuthResponse = {
     },
   },
 };
+
+test("removes internal parser names from API errors shown in the UI", () => {
+  expect(
+    errorMessage(
+      { detail: "MinerU document parser is unavailable" },
+      "Unable to process document.",
+    ),
+  ).toBe("Document parser is unavailable");
+});
 
 test("refreshes once after a 401 and retries with the new in-memory token", async () => {
   let protectedCalls = 0;

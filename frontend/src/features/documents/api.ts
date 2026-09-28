@@ -1,5 +1,6 @@
 import { api, errorMessage } from "../../api/client";
 import type { IndexedDocument, IndustrySchema } from "../../api/types";
+import { publicProcessingMessage } from "../../utils/publicMessage";
 
 export const documentKeys = { indexed: ["documents", "indexed"] as const };
 export const schemaKeys = { all: ["document-schemas"] as const };
@@ -85,7 +86,9 @@ export function uploadDocument(
         };
         if (event.type === "error")
           streamError = new Error(
-            event.detail || "Unable to save the document.",
+            event.detail
+              ? publicProcessingMessage(event.detail)
+              : "Unable to save the document.",
           );
         if (event.type === "complete" && event.job_id)
           complete = {
@@ -96,7 +99,9 @@ export function uploadDocument(
           onProgress({
             phase: "securing",
             percentage: 100,
-            message: event.message || `Securing ${file.name}…`,
+            message: event.message
+              ? publicProcessingMessage(event.message)
+              : `Securing ${file.name}…`,
           });
       }
     }

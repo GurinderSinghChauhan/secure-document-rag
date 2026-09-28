@@ -1,4 +1,5 @@
 import type { AuthResponse } from "./types";
+import { publicProcessingMessage } from "../utils/publicMessage";
 
 export class ApiError extends Error {
   constructor(
@@ -25,10 +26,10 @@ async function payload(response: Response): Promise<unknown> {
 export function errorMessage(value: unknown, fallback: string): string {
   if (!value || typeof value !== "object") return fallback;
   const detail = (value as { detail?: unknown }).detail;
-  if (typeof detail === "string") return detail;
+  if (typeof detail === "string") return publicProcessingMessage(detail);
   if (Array.isArray(detail) && detail[0] && typeof detail[0] === "object") {
     const message = (detail[0] as { msg?: unknown }).msg;
-    if (typeof message === "string") return message;
+    if (typeof message === "string") return publicProcessingMessage(message);
   }
   return fallback;
 }

@@ -90,8 +90,9 @@ test("shows compute as the single authoritative processing stage", async () => {
 
   expect(await screen.findByText("Extracting content")).toBeVisible();
   expect(
-    screen.getByText("MinerU is extracting document content"),
+    screen.getByText("Document parser is extracting document content"),
   ).toBeVisible();
+  expect(screen.queryByText(/mineru/i)).not.toBeInTheDocument();
   expect(screen.getByText("13%")).toBeVisible();
   expect(screen.getByText("Auto-updating")).toBeVisible();
   expect(
@@ -127,8 +128,9 @@ test("restores an active indexing session after a page reload", async () => {
 
   expect(await screen.findByText("Extracting content")).toBeVisible();
   expect(
-    screen.getByText("MinerU is extracting document content"),
+    screen.getByText("Document parser is extracting document content"),
   ).toBeVisible();
+  expect(screen.queryByText(/mineru/i)).not.toBeInTheDocument();
   expect(screen.getByText("13%")).toBeVisible();
   expect(screen.queryByText("finished.pdf")).not.toBeInTheDocument();
   expect(screen.queryByRole("button")).not.toBeInTheDocument();

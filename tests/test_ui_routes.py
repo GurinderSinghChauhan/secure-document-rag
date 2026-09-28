@@ -1,13 +1,66 @@
 from pathlib import Path
+from datetime import UTC, datetime
 
 import pytest
-from fastapi import Request, Response
+from fastapi import HTTPException, Request, Response
 
 from app.config import Settings
-from app.main import admin_ui, ask_ui, chat_ui, insights_ui, security_headers, super_admin_ui
+from app.main import (
+    admin_ui,
+    ask_ui,
+    chat_ui,
+    encode_event,
+    insights_ui,
+    job_response,
+    public_http_exception_handler,
+    security_headers,
+    super_admin_ui,
+)
+from app.database import IngestionJobRecord
 
 
 FRONTEND = Path("frontend")
+
+
+@pytest.mark.asyncio
+async def test_http_boundary_hides_internal_parser_name():
+    response = await public_http_exception_handler(
+        Request({"type": "http", "method": "GET", "path": "/", "headers": []}),
+        HTTPException(status_code=503, detail="MinerU document parser is unavailable"),
+    )
+
+    assert response.body == b'{"detail":"Document parser is unavailable"}'
+    assert "MinerU" not in encode_event({"type": "error", "detail": "MinerU failed"})
+
+
+def test_ingestion_job_response_hides_internal_parser_name():
+    job = IngestionJobRecord(
+        job_id="job-1",
+        tenant_id="tenant-1",
+        created_by="user-1",
+        document_name="report.pdf",
+        content_type="application/pdf",
+        size_bytes=100,
+        content_sha256="a" * 64,
+        content=b"encrypted",
+        allowed_roles=["admin"],
+        allowed_users=[],
+        state="failed",
+        stage="failed",
+        progress=10,
+        message="MinerU failed",
+        error_message="MinerU document parser is unavailable",
+        chunks_indexed=0,
+        tables_indexed=0,
+        visuals_indexed=0,
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
+    )
+
+    response = job_response(job)
+
+    assert response.message == "Document parser failed"
+    assert response.error_message == "Document parser is unavailable"
 
 
 @pytest.mark.asyncio

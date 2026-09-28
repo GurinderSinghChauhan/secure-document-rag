@@ -45,6 +45,7 @@ test("moves a fast upload from byte progress to securing state", async () => {
 
   class FakeXMLHttpRequest {
     responseText =
+      '{"type":"progress","percentage":20,"message":"MinerU is extracting document content"}\n' +
       '{"type":"complete","job_id":"job-1","state":"held_for_compute","recommended_gpu_minutes":6}\n';
     status = 200;
     upload = {
@@ -93,6 +94,11 @@ test("moves a fast upload from byte progress to securing state", async () => {
       phase: "securing",
       percentage: 100,
       message: "Upload complete. Securing invoice.pdf…",
+    },
+    {
+      phase: "securing",
+      percentage: 100,
+      message: "Document parser is extracting document content",
     },
   ]);
 });

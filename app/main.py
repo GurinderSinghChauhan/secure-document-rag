@@ -9,7 +9,7 @@ from uuid import uuid4
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request, status
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError
@@ -67,6 +67,25 @@ app.include_router(accounts_router)
 app.include_router(super_admin_router)
 app.add_middleware(TrustedHostMiddleware, allowed_hosts=get_settings().allowed_host_list)
 app.mount("/assets", StaticFiles(directory="app/static"), name="assets")
+
+
+def public_message(value: object) -> object:
+    if isinstance(value, str):
+        return value.replace("MinerU document parser", "Document parser").replace("MinerU", "Document parser")
+    if isinstance(value, list):
+        return [public_message(item) for item in value]
+    if isinstance(value, dict):
+        return {key: public_message(item) for key, item in value.items()}
+    return value
+
+
+@app.exception_handler(HTTPException)
+async def public_http_exception_handler(_: Request, error: HTTPException) -> JSONResponse:
+    return JSONResponse(
+        status_code=error.status_code,
+        content={"detail": public_message(error.detail)},
+        headers=error.headers,
+    )
 
 
 @app.middleware("http")
@@ -139,7 +158,7 @@ def classification_decision(
 
 
 def encode_event(event: dict[str, object]) -> str:
-    return json.dumps(event) + "\n"
+    return json.dumps(public_message(event)) + "\n"
 
 
 def existing_document_event(document: DocumentRecord) -> dict[str, object]:
@@ -157,6 +176,8 @@ def existing_document_event(document: DocumentRecord) -> dict[str, object]:
 
 def job_response(job: IngestionJobRecord) -> IngestionJobResponse:
     values = {column.name: getattr(job, column.name) for column in IngestionJobRecord.__table__.columns}
+    values["message"] = public_message(values["message"])
+    values["error_message"] = public_message(values["error_message"])
     values["operation"] = values.get("operation") or "index"
     values["recommended_gpu_minutes"] = recommended_gpu_minutes(job.content_type, job.size_bytes)
     return IngestionJobResponse.model_validate(values)
@@ -166,7 +187,7 @@ def held_ingest_response(job: IngestionJobRecord) -> HeldIngestResponse:
     return HeldIngestResponse(
         job_id=job.job_id,
         state=job.state,
-        message=job.message,
+        message=str(public_message(job.message)),
         recommended_gpu_minutes=recommended_gpu_minutes(job.content_type, job.size_bytes),
     )
 

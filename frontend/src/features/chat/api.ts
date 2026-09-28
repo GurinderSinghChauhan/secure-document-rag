@@ -1,5 +1,6 @@
 import { api, errorMessage } from "../../api/client";
 import type { ChatDetail, ChatSummary } from "../../api/types";
+import { publicProcessingMessage } from "../../utils/publicMessage";
 
 export const chatKeys = {
   all: ["chats"] as const,
@@ -50,7 +51,11 @@ export async function streamAnswer(
       if (!line.trim()) continue;
       const event: StreamEvent = JSON.parse(line) as StreamEvent;
       if (event.type === "error")
-        throw new Error(event.detail || "Unable to generate an answer.");
+        throw new Error(
+          event.detail
+            ? publicProcessingMessage(event.detail)
+            : "Unable to generate an answer.",
+        );
       onEvent(event);
     }
     if (done) break;

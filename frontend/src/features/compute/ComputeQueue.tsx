@@ -10,6 +10,7 @@ import {
 } from "./api";
 import type { IngestionJob } from "../../api/types";
 import { Button, ProgressBar, StatusMessage } from "../../components/ui";
+import { publicProcessingMessage } from "../../utils/publicMessage";
 
 function formatBytes(size: number) {
   if (size < 1024) return `${size} B`;
@@ -172,7 +173,9 @@ export function ComputeQueue({
               <div className="compute-job-stage">
                 <span>{formatStage(job.stage, job.operation ?? "index")}</span>
                 <small>
-                  {failed ? job.error_message || job.message : job.message}
+                  {publicProcessingMessage(
+                    failed ? job.error_message || job.message : job.message,
+                  )}
                 </small>
                 {!sessionId && (
                   <small>
