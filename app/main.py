@@ -40,23 +40,25 @@ compute_tasks: dict[str, asyncio.Task[None]] = {}
 logger = logging.getLogger(__name__)
 
 
+async def recover_compute_sessions() -> None:
+    """Resume any open/draining sessions that still have work queued in the database."""
+    async with SessionFactory() as session:
+        records = list(await session.scalars(
+            select(ComputeSessionRecord)
+            .where(ComputeSessionRecord.status.in_(["open", "draining"]))
+        ))
+        for record in records:
+            task = compute_tasks.get(record.session_id)
+            if task is not None and not task.done():
+                continue
+            compute_tasks[record.session_id] = asyncio.create_task(run_local_compute_session(record.session_id))
+        await session.commit()
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     await initialize_database()
-    # A control-plane restart never wakes compute. Interrupted local work becomes
-    # safely retryable and must be released by an administrator again.
-    async with SessionFactory() as session:
-        await session.execute(
-            update(IngestionJobRecord)
-            .where(IngestionJobRecord.state.in_(["provider_queued", "cold_start", "processing", "retrying"]))
-            .values(state="held_for_compute", stage="held", progress=0, message="Processing was interrupted; document is safely held for retry.")
-        )
-        await session.execute(
-            update(ComputeSessionRecord)
-            .where(ComputeSessionRecord.status.in_(["open", "draining"]))
-            .values(status="closed", closed_at=func.now())
-        )
-        await session.commit()
+    await recover_compute_sessions()
     yield
     await vectors.close()
     await dispose_database()

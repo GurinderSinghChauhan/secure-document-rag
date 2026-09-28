@@ -1,3 +1,4 @@
+import asyncio
 from datetime import UTC, datetime
 
 import httpx
@@ -312,6 +313,53 @@ def test_chat_compute_fails_closed_when_dispatch_is_disabled(monkeypatch):
 
     with pytest.raises(HTTPException, match="enable dispatch"):
         main.require_compute_for_query()
+
+
+@pytest.mark.asyncio
+async def test_recover_compute_sessions_restarts_stale_orphaned_work(monkeypatch):
+    created = []
+
+    class FakeSession:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+        async def scalars(self, statement):
+            return [ComputeSessionRecord(
+                session_id="session-1",
+                tenant_id="tenant",
+                provider="local_docker",
+                status="open",
+                max_jobs=10,
+                max_gpu_minutes=60,
+                max_estimated_cost_usd=None,
+                released_job_count=1,
+                gpu_seconds=0,
+                estimated_cost_usd=0,
+                created_by="admin",
+            )]
+
+        async def commit(self):
+            return None
+
+    class FakeTask:
+        def done(self):
+            return True
+
+    async def fake_run(session_id, job_ids=None):
+        created.append((session_id, job_ids))
+
+    monkeypatch.setattr(main, "SessionFactory", lambda: FakeSession())
+    monkeypatch.setattr(main, "run_local_compute_session", fake_run)
+    main.compute_tasks.clear()
+
+    await main.recover_compute_sessions()
+    await asyncio.sleep(0)
+
+    assert created == [("session-1", None)]
+    assert "session-1" in main.compute_tasks
 
 
 def test_chat_compute_rejects_asynchronous_provider(monkeypatch):
