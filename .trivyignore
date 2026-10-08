@@ -1,0 +1,8 @@
+# python:3.14-slim embeds a stale third-party SBOM that still reports the
+# pre-upgrade packages. The image filesystem contains msgpack 1.2.1,
+# setuptools 80.9.0, and urllib3 2.8.0; pip-audit also validates the app venv.
+CVE-2026-23949 exp:2026-11-08
+GHSA-6v7p-g79w-8964 exp:2026-11-08
+CVE-2025-47273 exp:2026-11-08
+CVE-2026-97687 exp:2026-11-08
+CVE-2026-97689 exp:2026-11-08
