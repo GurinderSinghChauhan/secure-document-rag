@@ -12,6 +12,13 @@ RUN npm run build
 FROM ghcr.io/astral-sh/uv:0.12.22 AS uv
 FROM python:3.14-slim
 
+# Refresh packages bundled in the base image so its Python environment does
+# not retain vulnerabilities that are absent from the application lock file.
+RUN python -m pip install --no-cache-dir --upgrade \
+    "msgpack==1.2.1" \
+    "setuptools==80.9.0" \
+    "urllib3==2.8.0"
+
 ARG APP_COMMIT=unknown
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PATH="/service/.venv/bin:$PATH" APP_COMMIT=$APP_COMMIT
 LABEL org.opencontainers.image.revision=$APP_COMMIT
