@@ -45,6 +45,7 @@ export interface ChatDetail extends ChatSummary {
 }
 
 export interface IngestionJob {
+  page_count?: number | null;
   job_id: string;
   operation: "index" | "metadata_extraction";
   document_name: string;
@@ -68,6 +69,7 @@ export interface IngestionJob {
 }
 
 export interface IndexedDocument {
+  page_count?: number | null;
   document_id: string;
   document_name: string;
   document_type: string | null;

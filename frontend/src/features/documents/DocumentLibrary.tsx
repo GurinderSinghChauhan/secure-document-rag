@@ -456,8 +456,11 @@ export function DocumentLibrary({
             <div className="indexed-document-main">
               <strong>{document.document_name}</strong>
               <small>
-                {formatBytes(document.size_bytes)} · {document.chunk_count}{" "}
-                chunks · indexed{" "}
+                {formatBytes(document.size_bytes)}
+                {document.page_count != null
+                  ? ` · ${document.page_count} pages`
+                  : ""}{" "}
+                · {document.chunk_count} chunks · indexed{" "}
                 {new Date(document.created_at).toLocaleDateString()}
               </small>
               <small>

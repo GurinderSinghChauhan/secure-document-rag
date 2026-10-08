@@ -1,14 +1,24 @@
 from datetime import UTC, datetime
+from io import BytesIO
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from pypdf import PdfWriter
 
 from app import main
 from app.database import ComputeSessionRecord, DocumentRecord, IngestionJobRecord
 from app.main import existing_document_event
 from app.models import Principal
 from app.repository import get_document_by_content_hash
+
+
+def valid_pdf() -> bytes:
+    writer = PdfWriter()
+    writer.add_blank_page(width=72, height=72)
+    output = BytesIO()
+    writer.write(output)
+    return output.getvalue()
 
 
 def test_existing_document_event_returns_existing_document_as_success() -> None:
@@ -106,7 +116,7 @@ async def test_deleted_duplicate_is_purged_before_reupload_and_reclassifies(monk
     events = [
         event
         async for event in main.index_document_events(
-            b"restored content",
+            valid_pdf(),
             "application/pdf",
             "a" * 64,
             "restored.pdf",
@@ -198,7 +208,7 @@ async def test_reupload_without_delete_keeps_completed_classification_and_update
     events = [
         event
         async for event in main.index_document_events(
-            b"invoice content",
+            valid_pdf(),
             "application/pdf",
             "b" * 64,
             "unknown.pdf",
@@ -216,6 +226,7 @@ async def test_reupload_without_delete_keeps_completed_classification_and_update
     assert document.classification_confidence == 0.91
     assert document.extraction_status == "completed"
     assert document.extracted_metadata == {"invoice_number": "INV-42"}
+    assert document.page_count == 1
     assert [event.get("stage") for event in events if event.get("type") == "progress"][:3] == [
         "extracting",
         "metadata_extraction",

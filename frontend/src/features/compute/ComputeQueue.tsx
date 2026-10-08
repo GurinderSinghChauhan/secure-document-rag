@@ -179,7 +179,11 @@ export function ComputeQueue({
                 </small>
                 {!sessionId && (
                   <small>
-                    {formatBytes(job.size_bytes)} · ready for compute
+                    {formatBytes(job.size_bytes)}
+                    {job.page_count != null
+                      ? ` · ${job.page_count} pages`
+                      : ""}{" "}
+                    · ready for compute
                   </small>
                 )}
               </div>

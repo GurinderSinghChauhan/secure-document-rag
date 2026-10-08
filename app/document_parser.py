@@ -24,6 +24,22 @@ class ParsedDocument:
     described_visual_count: int = 0
 
 
+def count_document_pages(content: bytes, content_type: str) -> int | None:
+    """Count physical PDF pages; never guess pagination for reflowable formats."""
+    if content_type.split(";", 1)[0].strip().lower() != "application/pdf":
+        return None
+    try:
+        reader = PdfReader(BytesIO(content))
+        if reader.is_encrypted:
+            raise ValueError("Encrypted PDF")
+        count = len(reader.pages)
+        if count < 1:
+            raise ValueError("Empty PDF")
+        return count
+    except Exception as error:
+        raise HTTPException(status_code=422, detail="Unable to count PDF pages; provide a valid, unencrypted PDF") from error
+
+
 def _cell_text(value: object) -> str:
     return " ".join(str(value or "").replace("|", "\\|").split())
 

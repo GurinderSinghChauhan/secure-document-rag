@@ -59,6 +59,7 @@ class ClassifyDocumentRequest(BaseModel):
 
 
 class IngestionJobResponse(BaseModel):
+    page_count: int | None = None
     job_id: str
     operation: str = "index"
     document_name: str
@@ -115,6 +116,7 @@ class BulkDeleteResponse(BaseModel):
 
 
 class IndexedDocumentResponse(BaseModel):
+    page_count: int | None = None
     document_id: str
     document_name: str
     document_type: str | None = None

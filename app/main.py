@@ -22,7 +22,7 @@ from .chunking import chunk_text
 from .config import get_settings
 from .compute import assert_release_within_limits, recommended_gpu_minutes
 from .database import ComputeSessionRecord, DocumentRecord, IngestionJobRecord, SessionFactory, dispose_database, get_session, initialize_database
-from .document_parser import VisualAsset, extract_document
+from .document_parser import VisualAsset, count_document_pages, extract_document
 from .document_schemas import DOCUMENT_SCHEMAS, INDUSTRIES, SCHEMA_VERSION, require_document_schema, schema_catalog
 from .mineru import MinerUClient, supports_mineru
 from .models import BulkDeleteResponse, ChatDetail, ChatMessage, ChatSummary, ClassifyDocumentRequest, ComputeSessionCreate, ComputeSessionRelease, ComputeSessionResponse, DashboardDocumentListResponse, DashboardDocumentResponse, DashboardIndustryResponse, DashboardResponse, DeleteResponse, HeldIngestResponse, IndexedDocumentResponse, IndustrySchemaResponse, IngestionJobResponse, Principal, QueryRequest, QueryResponse, ReadinessResponse, VersionResponse
@@ -217,6 +217,7 @@ async def create_held_job(
         message=waiting_message, document_name=document_name,
         operation=operation, document_type=document_type,
         content_type=content_type, content_sha256=sha256(content).hexdigest(), content=content, size_bytes=len(content),
+        page_count=count_document_pages(content, content_type),
         allowed_roles=allowed_roles, allowed_users=allowed_users, created_by=principal.user_id,
         retry_limit=get_settings().compute_retry_limit, result_document_id=result_document_id,
     )
@@ -295,6 +296,7 @@ async def index_document_events(
 ):
     settings = get_settings()
     yield {"type": "progress", "percentage": 5, "stage": "extracting", "message": "Extracting text, tables, and visual content"}
+    page_count = count_document_pages(content, content_type) if index_vectors else None
     if settings.mineru_enabled and supports_mineru(content_type):
         parse_task = asyncio.create_task(mineru.parse(content, content_type, document_name, settings.max_visuals_per_document))
         parsing_percentage = 5
@@ -494,9 +496,12 @@ async def index_document_events(
             if soft_deleted_duplicate is not None and soft_deleted_duplicate.deleted_at is not None:
                 await session.delete(soft_deleted_duplicate)
                 await session.flush()
-            session.add(DocumentRecord(document_id=document_id, tenant_id=principal.tenant_id, document_name=document_name, document_type=resolved_document_type, schema_version=SCHEMA_VERSION, classification_status=classification_status, classification_source=classification_source, classification_confidence=classification_confidence, extraction_status=extraction_status, extracted_metadata=extracted_metadata, content_type=content_type, content_sha256=content_sha256, size_bytes=len(content), chunk_count=len(chunks), allowed_roles=allowed_roles, allowed_users=allowed_users, created_by=principal.user_id))
+            # Persist the count in the same metadata transaction as successful indexing.
+            # Retries update this document rather than incrementing a usage counter.
+            session.add(DocumentRecord(document_id=document_id, tenant_id=principal.tenant_id, document_name=document_name, document_type=resolved_document_type, schema_version=SCHEMA_VERSION, classification_status=classification_status, classification_source=classification_source, classification_confidence=classification_confidence, extraction_status=extraction_status, extracted_metadata=extracted_metadata, content_type=content_type, content_sha256=content_sha256, size_bytes=len(content), page_count=page_count, chunk_count=len(chunks), allowed_roles=allowed_roles, allowed_users=allowed_users, created_by=principal.user_id))
         else:
             existing_document.document_name = document_name
+            existing_document.page_count = page_count
             existing_document.document_type = resolved_document_type
             existing_document.schema_version = SCHEMA_VERSION
             existing_document.classification_status = classification_status
