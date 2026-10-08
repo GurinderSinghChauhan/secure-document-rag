@@ -5,7 +5,7 @@ import { server } from "./server";
 import { api } from "../api/client";
 import { queryClient } from "../app/queryClient";
 
-beforeAll(() => server.listen({ onUnhandledRequest: "error" }));
+beforeAll(() => server.listen({ onUnhandledFrame: "error" }));
 afterEach(() => {
   cleanup();
   server.resetHandlers();

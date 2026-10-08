@@ -16,7 +16,6 @@ export const getDashboard = () =>
 export async function searchDashboardDocuments(query: string) {
   const pageSize = 100;
   const documents: DashboardDocumentList["documents"] = [];
-  let total = 0;
   for (let offset = 0; ; offset += pageSize) {
     const parameters = new URLSearchParams({
       limit: String(pageSize),
@@ -28,7 +27,7 @@ export async function searchDashboardDocuments(query: string) {
       {},
       "Unable to load dashboard documents.",
     );
-    total = page.total;
+    const total = page.total;
     documents.push(...page.documents);
     if (documents.length >= total || page.documents.length < pageSize) {
       return { total, documents };

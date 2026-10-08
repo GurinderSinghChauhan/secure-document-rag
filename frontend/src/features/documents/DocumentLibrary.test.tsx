@@ -44,7 +44,7 @@ test("selects multiple visible documents and deletes them together", async () =>
       });
     }),
   );
-  vi.spyOn(window, "confirm").mockReturnValue(true);
+  const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
@@ -63,7 +63,7 @@ test("selects multiple visible documents and deletes them together", async () =>
     screen.getByRole("button", { name: "Delete selected" }),
   );
 
-  expect(window.confirm).toHaveBeenCalledWith(
+  expect(confirmSpy).toHaveBeenCalledWith(
     expect.stringContaining("Delete 2 selected documents"),
   );
   await waitFor(() =>
@@ -111,7 +111,7 @@ test("confirms and deletes every organization document in one request", async ()
       return HttpResponse.json({ deleted_count: 1, status: "deleted" });
     }),
   );
-  vi.spyOn(window, "confirm").mockReturnValue(true);
+  const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
@@ -126,7 +126,7 @@ test("confirms and deletes every organization document in one request", async ()
     screen.getByRole("button", { name: "Delete all documents" }),
   );
 
-  expect(window.confirm).toHaveBeenCalledWith(
+  expect(confirmSpy).toHaveBeenCalledWith(
     expect.stringContaining("Delete all indexed documents"),
   );
   await waitFor(() => expect(deleteRequests).toBe(1));
