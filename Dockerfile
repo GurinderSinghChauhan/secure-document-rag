@@ -16,8 +16,8 @@ FROM python:3.14-slim
 # not retain vulnerabilities that are absent from the application lock file.
 RUN python -m pip install --no-cache-dir --upgrade \
     "msgpack==1.2.1" \
-    "setuptools==80.9.0" \
-    "urllib3==2.8.0"
+    "urllib3==2.8.0" && \
+    python -m pip uninstall --yes setuptools
 
 ARG APP_COMMIT=unknown
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PATH="/service/.venv/bin:$PATH" APP_COMMIT=$APP_COMMIT
