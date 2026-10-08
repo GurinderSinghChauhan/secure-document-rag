@@ -10,7 +10,14 @@ COPY frontend ./
 RUN npm run build
 
 FROM ghcr.io/astral-sh/uv:0.12.22 AS uv
-FROM python:3.12-slim
+FROM python:3.14-slim
+
+# Refresh packages bundled in the base image so its Python environment does
+# not retain vulnerabilities that are absent from the application lock file.
+RUN python -m pip install --no-cache-dir --upgrade \
+    "msgpack==1.2.1" \
+    "urllib3==2.8.0" && \
+    python -m pip uninstall --yes setuptools
 
 ARG APP_COMMIT=unknown
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PATH="/service/.venv/bin:$PATH" APP_COMMIT=$APP_COMMIT
