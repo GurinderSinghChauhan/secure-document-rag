@@ -1,6 +1,6 @@
 # Pipeline-only MinerU runtime. The official all-backend image uses vLLM, but
 # this service runs the pipeline backend and only needs PyTorch with CUDA.
-FROM pytorch/pytorch:2.7.1-cuda12.8-cudnn9-runtime
+FROM pytorch/pytorch:2.11.0-cuda12.8-cudnn9-runtime
 
 ENV DEBIAN_FRONTEND=noninteractive
 
