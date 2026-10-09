@@ -9,7 +9,7 @@ RUN npm ci
 COPY frontend ./
 RUN npm run build
 
-FROM ghcr.io/astral-sh/uv:0.12.22 AS uv
+FROM ghcr.io/astral-sh/uv:0.12.24 AS uv
 FROM python:3.14-slim
 
 # Refresh packages bundled in the base image so its Python environment does
