@@ -31,6 +31,8 @@ from .super_admin import router as super_admin_router
 from .trials import is_pdf, require_active_trial, reserve_pdf_trial_slot, reserve_question_trial_slot
 from .repository import add_chat_message, create_chat, database_is_ready, delete_document_record, get_chat, get_document, get_document_by_content_hash, get_latest_document_source, list_authorized_documents, list_chat_messages, list_chats, list_documents, mark_documents_deleted, search_authorized_documents
 from .vector_store import VectorStore
+from .conversation import bounded_history
+from .repository import list_recent_chat_messages
 from .version import APP_COMMIT, APP_VERSION
 
 model_server = ModelClient()
@@ -254,6 +256,20 @@ def require_compute_for_query() -> None:
 def chat_title(question: str) -> str:
     normalized = " ".join(question.split())
     return normalized[:77] + "..." if len(normalized) > 80 else normalized
+
+
+async def conversation_history(payload: QueryRequest, principal: Principal, session: AsyncSession) -> list[dict[str, str]]:
+    if not payload.chat_id:
+        return []
+    # Check ownership before reading any persisted conversation content.
+    chat = await get_chat(session, principal.tenant_id, principal.user_id, payload.chat_id)
+    if chat is None:
+        raise HTTPException(status_code=404, detail="Chat not found")
+    settings = get_settings()
+    if not settings.chat_memory_messages or not settings.chat_memory_characters:
+        return []
+    messages = await list_recent_chat_messages(session, chat.chat_id, settings.chat_memory_messages)
+    return bounded_history(messages, settings.chat_memory_characters)
 
 
 async def resolve_chat(payload: QueryRequest, principal: Principal, session: AsyncSession):
@@ -1339,8 +1355,10 @@ async def query_documents(
 ) -> QueryResponse:
     require_active_trial(principal)
     require_compute_for_query()
+    history = await conversation_history(payload, principal, session)
     chat = await resolve_chat(payload, principal, session)
-    embedding = (await model_server.embed([payload.question]))[0]
+    search_question = await model_server.resolve_follow_up(payload.question, history)
+    embedding = (await model_server.embed([search_question]))[0]
     matches = await vectors.search(principal, embedding, payload.top_k)
     if not matches:
         await record(session, "query_completed", principal.tenant_id, principal.user_id, result_count=0)
@@ -1355,7 +1373,7 @@ async def query_documents(
             break
         context_parts.append(source)
         context_size += len(source)
-    answer = await model_server.answer(payload.question, "\n\n".join(context_parts))
+    answer = await model_server.answer(payload.question, "\n\n".join(context_parts), history)
     await add_chat_message(session, chat, "assistant", answer)
     await record(session, "query_completed", principal.tenant_id, principal.user_id, result_count=len(context_parts))
     return QueryResponse(answer=answer, chat_id=chat.chat_id)
@@ -1369,8 +1387,10 @@ async def stream_query_documents(
 ) -> StreamingResponse:
     require_active_trial(principal)
     require_compute_for_query()
+    history = await conversation_history(payload, principal, session)
     chat = await resolve_chat(payload, principal, session)
-    embedding = (await model_server.embed([payload.question]))[0]
+    search_question = await model_server.resolve_follow_up(payload.question, history)
+    embedding = (await model_server.embed([search_question]))[0]
     matches = await vectors.search(principal, embedding, payload.top_k)
     context_parts: list[str] = []
     context_size = 0
@@ -1392,7 +1412,7 @@ async def stream_query_documents(
             return
         try:
             answer_parts: list[str] = []
-            async for content in model_server.answer_stream(payload.question, "\n\n".join(context_parts)):
+            async for content in model_server.answer_stream(payload.question, "\n\n".join(context_parts), history):
                 answer_parts.append(content)
                 yield encode_event({"type": "delta", "text": content})
             answer = "".join(answer_parts).strip()

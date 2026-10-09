@@ -18,6 +18,29 @@ sum ingestion jobs for billing: retries and metadata extraction can reference
 the same source. A billing policy still needs to define whether charges apply
 per unique source, per successful indexing run, or per billing period.
 
+## Conversation memory
+
+Both query endpoints include recent user and assistant messages from the same
+user-owned chat. The default window is 12 messages and at most 8,000 characters;
+whole messages outside the window remain in saved history but are not sent to
+the model. Configure `CHAT_MEMORY_MESSAGES` and `CHAT_MEMORY_CHARACTERS` to
+adjust the window; setting either to zero disables memory. No database migration
+is needed for conversation memory.
+
+Follow-up questions such as "explain point two" are rewritten into standalone
+search questions using that window. If rewriting fails, search uses the original
+question. This adds one model call for chats with usable prior messages.
+Answers receive the original question and recent conversation, but previous
+answers are not document evidence. Retrieval still applies current tenant and
+document ACL restrictions. With no retrieved sources, the app declines to answer
+even if an old answer exists. Reopening a chat restores its recent memory;
+starting a new chat does not inherit another chat's messages.
+
+To check manually, ask a document question that produces numbered points, then
+ask "Explain point two" in that same chat. Verify the answer addresses the
+correct point and is grounded in accessible documents. Reopen the chat and try
+another follow-up. Start a new chat and verify the earlier points are not known.
+
 ## Languages and financial reports
 
 Answers are instructed to use the question's language, unless another language

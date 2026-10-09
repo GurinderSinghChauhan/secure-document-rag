@@ -28,6 +28,8 @@ class Settings(BaseSettings):
     vision_max_tokens: int = Field(default=512, ge=128, le=2_048)
     embedding_batch_size: int = Field(default=128, ge=1, le=256)
     max_context_characters: int = 24_000
+    chat_memory_messages: int = Field(default=12, ge=0, le=40)
+    chat_memory_characters: int = Field(default=8_000, ge=0, le=24_000)
     min_retrieval_score: float = Field(default=0.25, ge=-1, le=1)
     classification_auto_accept_threshold: float = Field(default=0.85, ge=0, le=1)
     classification_review_threshold: float = Field(default=0.60, ge=0, le=1)

@@ -187,6 +187,16 @@ async def list_chats(session: AsyncSession, tenant_id: str, user_id: str, limit:
     return list(result)
 
 
+async def list_recent_chat_messages(session: AsyncSession, chat_id: str, limit: int) -> list[ChatMessageRecord]:
+    result = await session.scalars(
+        select(ChatMessageRecord)
+        .where(ChatMessageRecord.chat_id == chat_id)
+        .order_by(ChatMessageRecord.created_at.desc(), ChatMessageRecord.message_id.desc())
+        .limit(limit)
+    )
+    return list(reversed(list(result)))
+
+
 async def list_chat_messages(session: AsyncSession, chat_id: str) -> list[ChatMessageRecord]:
     result = await session.scalars(
         select(ChatMessageRecord)
