@@ -19,9 +19,10 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/*
 
 # MinerU 3.2.1 expects the iterable page-character API removed in pdftext 0.7.
-RUN python3 -m pip install --no-cache-dir \
+RUN python3 -m pip install --break-system-packages --no-cache-dir \
         'mineru[core]==3.2.1' \
-        'pdftext==0.6.3' && \
+        'pdftext==0.6.3' \
+        'click>=8.1.7,<8.4,!=8.3.0' && \
     python3 -m pip check
 
 ENV MINERU_MODEL_SOURCE=local
