@@ -182,3 +182,37 @@ test("uploads and starts indexing from the same button", async () => {
   ).toBeVisible();
   expect(onComputeStarted).toHaveBeenCalledWith("session-1");
 });
+
+test("shows the API validation reason when an upload fails", async () => {
+  const requestListeners = new Map<string, (event: ProgressEvent) => void>();
+  class FakeXMLHttpRequest {
+    responseText = JSON.stringify({
+      detail: "Unable to count PDF pages; provide a valid, unencrypted PDF",
+    });
+    status = 422;
+    upload = { addEventListener() {} };
+    open() {}
+    setRequestHeader() {}
+    addEventListener(type: string, listener: (event: ProgressEvent) => void) {
+      requestListeners.set(type, listener);
+    }
+    send() {
+      requestListeners.get("load")?.(new ProgressEvent("load"));
+    }
+  }
+  vi.stubGlobal("XMLHttpRequest", FakeXMLHttpRequest);
+  server.use(http.get("/v1/document-schemas", () => HttpResponse.json([])));
+  renderUploader();
+  const document = new File(["invalid"], "invoice.pdf", {
+    type: "application/pdf",
+  });
+
+  fireEvent.change(screen.getByLabelText("Choose individual documents"), {
+    target: { files: [document] },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Upload and index" }));
+
+  expect(await screen.findByRole("status")).toHaveTextContent(
+    "invoice.pdf: Unable to count PDF pages; provide a valid, unencrypted PDF",
+  );
+});

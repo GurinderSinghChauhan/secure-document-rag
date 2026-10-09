@@ -86,7 +86,7 @@ export function DocumentUploader({
     if (!files.length) return;
     setBusy(true);
     setStatusTone("neutral");
-    const failed: File[] = [];
+    const failed: { file: File; error: Error }[] = [];
     const uploaded: UploadResult[] = [];
     for (const [index, file] of files.entries()) {
       try {
@@ -110,8 +110,14 @@ export function DocumentUploader({
             }),
         );
         uploaded.push(result);
-      } catch {
-        failed.push(file);
+      } catch (error) {
+        failed.push({
+          file,
+          error:
+            error instanceof Error
+              ? error
+              : new Error("Unable to save the document."),
+        });
       }
     }
     let releaseError: Error | null = null;
@@ -134,8 +140,11 @@ export function DocumentUploader({
         `${uploadedCount} ${uploadedCount === 1 ? "document was" : "documents were"} uploaded but remain held. ${releaseError.message}`,
       );
     } else if (failed.length) {
+      const failureDetails = failed
+        .map(({ file, error }) => `${file.name}: ${error.message}`)
+        .join(" ");
       setStatus(
-        `${uploadedCount} of ${files.length} uploaded and indexing. Retry: ${failed.map((file) => file.name).join(", ")}.`,
+        `${uploadedCount} of ${files.length} uploaded and indexing. ${failureDetails}`,
       );
     } else {
       setStatus(
@@ -143,7 +152,7 @@ export function DocumentUploader({
       );
     }
     setStatusTone(releaseError || failed.length ? "error" : "success");
-    setFiles(failed);
+    setFiles(failed.map(({ file }) => file));
     if (!failed.length) {
       setSelectionSource(null);
       setFolderName("");
