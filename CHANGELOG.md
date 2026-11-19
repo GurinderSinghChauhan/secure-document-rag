@@ -4,6 +4,8 @@ This project follows [Semantic Versioning](https://semver.org/). Released change
 
 ## Unreleased
 
+## 0.7.0 - 2026-11-19
+
 - Update Pillow, pypdf, and certifi to resolve dependency audit findings.
 
 - Add Google sign-in for existing verified organization accounts, retaining organization permissions and secure refresh sessions.
