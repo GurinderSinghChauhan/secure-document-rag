@@ -10,7 +10,7 @@ COPY frontend ./
 RUN npm run build
 
 FROM ghcr.io/astral-sh/uv:0.12.22 AS uv
-FROM python:3.14-slim
+FROM python:3.15-slim
 
 RUN apt-get update && apt-get install --only-upgrade --yes --no-install-recommends zlib1g && rm -rf /var/lib/apt/lists/*
 
