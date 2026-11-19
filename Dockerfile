@@ -12,10 +12,12 @@ RUN npm run build
 FROM ghcr.io/astral-sh/uv:0.12.22 AS uv
 FROM python:3.14-slim
 
+RUN apt-get update && apt-get install --only-upgrade --yes --no-install-recommends zlib1g && rm -rf /var/lib/apt/lists/*
+
 # Refresh packages bundled in the base image so its Python environment does
 # not retain vulnerabilities that are absent from the application lock file.
 RUN python -m pip install --no-cache-dir --upgrade \
-    "msgpack==1.2.1" \
+    "msgpack==1.2.3" \
     "urllib3==2.8.0" && \
     python -m pip uninstall --yes setuptools
 
