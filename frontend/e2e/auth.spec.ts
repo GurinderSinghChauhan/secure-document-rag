@@ -309,3 +309,47 @@ test("insights remain polished and usable on a phone viewport", async ({
     ),
   ).toBe(true);
 });
+
+test("Google sign-in is accessible on desktop and phone and starts OAuth", async ({
+  page,
+}) => {
+  await page.route("**/v1/auth/refresh", (route) =>
+    route.fulfill({
+      status: 401,
+      contentType: "application/json",
+      body: JSON.stringify({ detail: "No active session" }),
+    }),
+  );
+  await page.route("**/v1/auth/google/config", (route) =>
+    route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({ enabled: true }),
+    }),
+  );
+  await page.route("**/v1/auth/google/start", (route) =>
+    route.fulfill({
+      contentType: "text/plain",
+      body: "Google sign-in redirect",
+    }),
+  );
+  await page.goto("/");
+  const google = page.getByRole("button", { name: "Continue with Google" });
+  for (const width of [1280, 390]) {
+    await page.setViewportSize({ width, height: 900 });
+    await expect(google).toBeVisible();
+    await google.focus();
+    await expect(google).toBeFocused();
+    await expectNoAccessibilityViolations(page);
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth,
+      ),
+    ).toBe(true);
+    await page.screenshot({
+      path: test.info().outputPath(`google-sign-in-${width}.png`),
+      fullPage: true,
+    });
+  }
+  await google.click();
+  await expect(page).toHaveURL(/\/v1\/auth\/google\/start$/);
+});

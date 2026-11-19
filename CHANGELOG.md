@@ -4,6 +4,9 @@ This project follows [Semantic Versioning](https://semver.org/). Released change
 
 ## Unreleased
 
+- Update compatible Python, frontend, container, and GitHub Actions dependencies; retain TypeScript 6 for linter compatibility and refresh dependency lock files.
+- Improve Google sign-in with a full-width branded button, clear email separator, and accessible responsive styling.
+
 ## 0.7.0 - 2026-11-19
 
 - Update Pillow, pypdf, and certifi to resolve dependency audit findings.
