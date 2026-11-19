@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from .audit import record
 from .accounts import router as accounts_router
+from .google_auth import router as google_auth_router
 from .auth import require_admin, require_principal
 from .chunking import chunk_text
 from .config import get_settings
@@ -66,6 +67,7 @@ async def lifespan(_: FastAPI):
 
 app = FastAPI(title="Secure Document RAG", version=APP_VERSION, docs_url=None, redoc_url=None, lifespan=lifespan)
 app.include_router(accounts_router)
+app.include_router(google_auth_router)
 app.include_router(super_admin_router)
 app.add_middleware(TrustedHostMiddleware, allowed_hosts=get_settings().allowed_host_list)
 app.mount("/assets", StaticFiles(directory="app/static"), name="assets")

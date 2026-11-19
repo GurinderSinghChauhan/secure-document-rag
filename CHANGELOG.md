@@ -4,6 +4,8 @@ This project follows [Semantic Versioning](https://semver.org/). Released change
 
 ## Unreleased
 
+- Add Google sign-in for existing verified organization accounts, retaining organization permissions and secure refresh sessions.
+
 ## 0.6.0 - 2026-10-09
 
 ## 0.5.2 - 2026-10-09

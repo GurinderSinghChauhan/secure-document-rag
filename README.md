@@ -89,6 +89,14 @@ docker compose exec api python -m tools.bootstrap_organization_admin <organizati
 
 The command prompts for the password and never accepts it through arguments or environment variables.
 
+## Google sign-in
+
+Create a **Web application** OAuth client in Google Cloud and configure its consent screen and test users as needed. Set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` in `.env`, and register the exact redirect URI `${PUBLIC_APP_URL}/v1/auth/google/callback` (for example, `http://localhost:8080/v1/auth/google/callback`). Restart the API after running `uv run alembic upgrade head`. The login screen displays **Continue with Google** when both credentials are configured. Use the app at `PUBLIC_APP_URL` when testing redirects.
+
+Google login uses the [server-side OpenID Connect flow](https://developers.google.com/identity/openid-connect/openid-connect), with one-time browser-bound state, PKCE, nonce and signed ID-token validation. Credentials stay on the server; the browser restores its existing HTTP-only refresh session after redirect. No Google access or refresh tokens are retained.
+
+Accounts must already exist, be active and email verified. First sign-in matches Gmail or verified Google Workspace email addresses, then binds the account to Google's stable subject ID. Other Google account email providers are not automatically linked. Create an organization or accept an invitation first; Google login never creates organizations, grants roles, bypasses suspensions, or accepts invitations. Existing password login remains available. Google OAuth credentials are required for live end-to-end verification.
+
 ## Production hardening
 
 - Terminate TLS at an internal gateway; enforce mTLS between gateway and API where required. Set `ALLOWED_HOSTS` to the gateway's hostname.

@@ -50,6 +50,8 @@ class Settings(BaseSettings):
     access_token_minutes: int = Field(default=15, ge=1, le=60)
     refresh_token_days: int = Field(default=30, ge=1, le=90)
     public_app_url: str = "http://localhost:8080"
+    google_client_id: str | None = None
+    google_client_secret: str | None = None
     cookie_secure: bool = False
     email_verification_required: bool = False
     invitation_delivery: str = "manual"

@@ -24,13 +24,38 @@ export function AuthGate() {
         : "login";
   });
   const [message, setMessage] = useState(
-    mode === "reset"
-      ? "Choose a new password for your account."
-      : mode === "invite"
-        ? "Create your invited organization account."
-        : "Use your organization account.",
+    new URLSearchParams(location.search).has("google_error")
+      ? "Google sign-in failed. Use an active, verified organization account with a Gmail or Google Workspace address, or sign in with your password."
+      : mode === "reset"
+        ? "Choose a new password for your account."
+        : mode === "invite"
+          ? "Create your invited organization account."
+          : "Use your organization account.",
   );
   const [busy, setBusy] = useState(false);
+  const [googleEnabled, setGoogleEnabled] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    void api
+      .authRequest<{ enabled: boolean }>("/v1/auth/google/config")
+      .then((result) => {
+        if (active) setGoogleEnabled(result.enabled);
+      })
+      .catch(() => undefined);
+    const params = new URLSearchParams(location.search);
+    if (params.has("google_error")) {
+      params.delete("google_error");
+      history.replaceState(
+        {},
+        "",
+        location.pathname + (params.size ? `?${params}` : ""),
+      );
+    }
+    return () => {
+      active = false;
+    };
+  }, []);
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -202,6 +227,18 @@ export function AuthGate() {
                   : "Reset your password"}
           </h1>
           <StatusMessage>{message}</StatusMessage>
+          {mode === "login" && googleEnabled && (
+            <Button
+              type="button"
+              disabled={busy}
+              onClick={() => {
+                setBusy(true);
+                window.location.assign("/v1/auth/google/start");
+              }}
+            >
+              Continue with Google
+            </Button>
+          )}
           <form className="auth-form" onSubmit={(event) => void submit(event)}>
             {(mode === "register" || mode === "invite") && (
               <FormField label="Your name">
