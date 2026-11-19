@@ -4,6 +4,8 @@ This project follows [Semantic Versioning](https://semver.org/). Released change
 
 ## Unreleased
 
+## 0.7.2 - 2026-11-19
+
 - Complete follow-up Node, React Query, and frontend development dependency updates.
 
 ## 0.7.1 - 2026-11-19
