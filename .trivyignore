@@ -6,3 +6,5 @@ GHSA-6v7p-g79w-8964 exp:2026-12-19
 CVE-2025-47273 exp:2026-12-19
 CVE-2026-97687 exp:2026-12-19
 CVE-2026-97689 exp:2026-12-19
+# CI verifies msgpack 1.2.3 metadata is clean; the inherited SBOM still lists 1.1.2.
+CVE-2026-114613 exp:2026-12-19
