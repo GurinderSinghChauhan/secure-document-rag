@@ -2119,6 +2119,74 @@ textarea:focus {
   color: var(--text-secondary);
 }
 
+.auth-social {
+  margin-top: 28px;
+}
+
+.google-sign-in {
+  display: flex;
+  width: 100%;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 10px 16px;
+  border: 1px solid var(--border-strong);
+  border-radius: 9px;
+  background: #fff;
+  color: #1f1f1f;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background 150ms ease,
+    border-color 150ms ease;
+}
+
+.google-sign-in:hover:not(:disabled) {
+  border-color: #a8b3c2;
+  background: #f8faff;
+}
+
+.google-sign-in:focus-visible {
+  outline: 3px solid var(--primary);
+  outline-offset: 3px;
+}
+
+.google-sign-in:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.google-sign-in-icon {
+  stroke: none;
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+}
+
+.auth-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 22px;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.auth-divider::before,
+.auth-divider::after {
+  height: 1px;
+  flex: 1;
+  background: var(--border-strong);
+  content: "";
+}
+
+.auth-social + .auth-form {
+  margin-top: 22px;
+}
+
 .auth-form {
   gap: 16px;
   margin-top: 28px;

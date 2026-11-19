@@ -1,4 +1,4 @@
-FROM node:26.10.0-slim AS frontend
+FROM node:26.13.0-slim AS frontend
 ARG APP_COMMIT=development
 ARG VITE_VOICE_INPUT_ENABLED=false
 ENV VITE_APP_COMMIT=$APP_COMMIT VITE_VOICE_INPUT_ENABLED=$VITE_VOICE_INPUT_ENABLED
@@ -9,7 +9,7 @@ RUN npm ci
 COPY frontend ./
 RUN npm run build
 
-FROM ghcr.io/astral-sh/uv:0.12.22 AS uv
+FROM ghcr.io/astral-sh/uv:0.13.9 AS uv
 FROM python:3.14-slim
 
 RUN apt-get update && apt-get install --only-upgrade --yes --no-install-recommends zlib1g && rm -rf /var/lib/apt/lists/*
