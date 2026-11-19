@@ -2160,6 +2160,7 @@ textarea:focus {
 }
 
 .google-sign-in-icon {
+  stroke: none;
   width: 20px;
   height: 20px;
   flex-shrink: 0;

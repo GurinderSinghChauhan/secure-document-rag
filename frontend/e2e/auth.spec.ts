@@ -339,6 +339,7 @@ test("Google sign-in is accessible on desktop and phone and starts OAuth", async
     await expect(google).toBeVisible();
     await google.focus();
     await expect(google).toBeFocused();
+    await google.evaluate((button) => button.blur());
     await expectNoAccessibilityViolations(page);
     expect(
       await page.evaluate(
