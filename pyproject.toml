@@ -4,13 +4,13 @@ version = "0.7.2"
 description = "Self-hosted, multi-tenant RAG for regulated documents"
 requires-python = ">=3.12"
 dependencies = [
-    "fastapi==0.163.1",
+    "fastapi==0.165.0",
     "httpx==0.28.1",
     "pydantic-settings==2.16.3",
-    "pypdf==7.1.0",
+    "pypdf==7.1.1",
     "python-docx==1.2.0",
     "qdrant-client==1.20.0",
-    "sqlalchemy[asyncio]==2.1.8",
+    "sqlalchemy[asyncio]==2.1.9",
     "asyncpg==0.32.0",
     "uvicorn[standard]==0.54.0",
     "pillow==13.0.0",
